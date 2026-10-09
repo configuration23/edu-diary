@@ -1,5 +1,3 @@
-import { randomUUID } from 'node:crypto';
-
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -17,9 +15,17 @@ import {
  * Контракты Этапа 2: группы, зачисления, назначения, справочники и брендинг.
  * Проверяются ровно те границы, которые сервер обязан отвергать: даты, коды,
  * ссылки на изображения.
+ *
+ * Идентификаторы подставляет собственный счётчик, а не `node:crypto`: пакет
+ * `contracts` общий для сервера и браузера, и типов Node в нём нет намеренно.
  */
 
-const id = () => randomUUID();
+let sequence = 0;
+
+function id(): string {
+  sequence += 1;
+  return `00000000-0000-4000-8000-${String(sequence).padStart(12, '0')}`;
+}
 
 describe('studyGroupSchema', () => {
   const valid = {
@@ -49,7 +55,7 @@ describe('studyGroupSchema', () => {
 
 describe('createGroupRequestSchema', () => {
   const base = {
-    academicYearId: randomUUID(),
+    academicYearId: id(),
     name: 'ИС-31',
     startsOn: '2025-09-01',
     endsOn: '2026-06-30',
@@ -75,8 +81,7 @@ describe('createGroupRequestSchema', () => {
 describe('зачисления и перевод', () => {
   it('требует ученика и дату зачисления', () => {
     expect(
-      enrollStudentRequestSchema.safeParse({ studentId: randomUUID(), joinedOn: '2025-09-01' })
-        .success,
+      enrollStudentRequestSchema.safeParse({ studentId: id(), joinedOn: '2025-09-01' }).success,
     ).toBe(true);
     expect(enrollStudentRequestSchema.safeParse({ joinedOn: '2025-09-01' }).success).toBe(false);
   });
@@ -84,7 +89,7 @@ describe('зачисления и перевод', () => {
   it('для перевода требует группу и дату', () => {
     expect(
       transferStudentRequestSchema.safeParse({
-        studyGroupId: randomUUID(),
+        studyGroupId: id(),
         transferOn: '2026-01-12',
       }).success,
     ).toBe(true);
@@ -96,9 +101,9 @@ describe('зачисления и перевод', () => {
 
 describe('назначения', () => {
   const base = {
-    teacherUserId: randomUUID(),
-    subjectId: randomUUID(),
-    studyGroupId: randomUUID(),
+    teacherUserId: id(),
+    subjectId: id(),
+    studyGroupId: id(),
     startsOn: '2025-09-01',
   };
 
