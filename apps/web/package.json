@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && node ../../tools/quality/check-bundle-domains.mjs dist",
+    "build": "node ../../tools/quality/check-build-env.mjs && vite build && node ../../tools/quality/check-bundle-domains.mjs dist",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },

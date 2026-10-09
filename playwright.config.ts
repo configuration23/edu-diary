@@ -7,12 +7,20 @@ import { defineConfig, devices } from '@playwright/test';
  * фронтенда (порт 4173, как в apps/web/vite.config.ts). Проверяется тот же
  * путь, что и в compose: браузер → фронтенд → /api → база.
  *
- * Нужна доступная PostgreSQL: строку подключения API берёт из окружения
- * (локально — из .env при NODE_ENV=development), миграции применяются заранее
- * командой `npm run migrate`.
+ * Нужна доступная PostgreSQL: миграции применяются заранее командой
+ * `npm run migrate`. Локально секреты и строку подключения API берёт из `.env`
+ * (файл читается здесь и передаётся серверу через окружение), в CI они приходят
+ * из окружения процесса.
  *
  * `stdout`/`stderr: 'ignore'` — чтобы серверы не занимали каналы вывода.
  */
+try {
+  // Node 22: файла может не быть (CI) — это норма.
+  process.loadEnvFile();
+} catch {
+  // Нет .env — работаем на переменных окружения.
+}
+
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: false,
@@ -30,6 +38,8 @@ export default defineConfig({
     {
       command: 'node apps/api/dist/main.js',
       url: 'http://127.0.0.1:3000/api/health',
+      // API в e2e работает как в проде: без чтения .env и с JSON-логами.
+      env: { NODE_ENV: 'production' },
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,
       stdout: 'ignore',
