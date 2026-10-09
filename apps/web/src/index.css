@@ -1,0 +1,18 @@
+@import 'tailwindcss';
+
+/* Шрифты только системные: обращение к внешним шрифтовым сервисам запрещено
+   (SECURITY.md §3.8). */
+@theme {
+  --font-sans:
+    ui-sans-serif, system-ui, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  @apply bg-slate-50 text-slate-900 antialiased;
+}

@@ -1,0 +1,31 @@
+{
+  "name": "@edu-diary/api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "API edu-diary: Fastify, модульный монолит",
+  "type": "module",
+  "main": "dist/main.js",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "build": "node build.mjs",
+    "start": "node dist/main.js",
+    "migrate": "tsx src/migrate.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "db:generate": "drizzle-kit generate",
+    "db:check": "drizzle-kit check"
+  },
+  "dependencies": {
+    "@edu-diary/contracts": "*",
+    "@edu-diary/domain": "*",
+    "drizzle-orm": "^0.45.4",
+    "fastify": "^5.6.1",
+    "postgres": "^3.4.7",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.31.5",
+    "esbuild": "^0.25.10",
+    "pino-pretty": "^13.2.0",
+    "tsx": "^4.20.6"
+  }
+}

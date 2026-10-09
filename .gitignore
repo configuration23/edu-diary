@@ -1,0 +1,29 @@
+# Зависимости и результаты сборки
+node_modules/
+dist/
+coverage/
+.vite/
+*.tsbuildinfo
+
+# Секреты: в репозитории их нет. .env.example остаётся в репозитории.
+.env
+.env.local
+.env.*.local
+
+# Playwright
+playwright-report/
+test-results/
+blob-report/
+.playwright/
+e2e/.auth/
+
+# Логи
+*.log
+npm-debug.log*
+
+# Редакторы и ОС
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json

@@ -1,0 +1,16 @@
+{
+  "name": "@edu-diary/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Zod-схемы и типы API edu-diary, общие для сервера и клиента",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "zod": "^4.1.12"
+  }
+}

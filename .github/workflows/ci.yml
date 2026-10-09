@@ -1,0 +1,153 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SESSION_SECRET: ci-session-secret-with-more-than-32-characters-long
+  # 32 байта в base64 — проверка ключа шифрования хранилища при старте.
+  STORAGE_ENCRYPTION_KEY: AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=
+
+jobs:
+  quality:
+    name: Проверки, тесты, сборка
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Установка зависимостей
+        run: npm ci --no-audit --no-fund
+
+      - name: Форматирование
+        run: npm run format:check
+
+      - name: Типы
+        run: npm run typecheck
+
+      - name: Границы модулей
+        run: npm run check:architecture
+
+      - name: Утечка секретов
+        run: npm run check:secrets
+
+      - name: Сборка (падает при внешнем домене в бандле)
+        run: npm run build
+
+      - name: Тесты
+        run: npm test
+
+      - name: Отказ старта без секретов
+        run: npm run check:startup-secrets
+
+      - name: Уязвимости зависимостей
+        run: npm audit --audit-level=high
+
+  e2e:
+    name: Сквозные сценарии
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: edu_diary
+          POSTGRES_PASSWORD: ci-postgres-password
+          POSTGRES_DB: edu_diary
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U edu_diary"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgres://edu_diary:ci-postgres-password@127.0.0.1:5432/edu_diary
+      TEST_DATABASE_URL: postgres://edu_diary:ci-postgres-password@127.0.0.1:5432/edu_diary
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Установка зависимостей
+        run: npm ci --no-audit --no-fund
+
+      - name: Браузер для Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Сборка
+        run: npm run build
+
+      - name: Миграции
+        run: npm run migrate
+
+      - name: Интеграционные тесты с базой
+        run: npm test
+
+      - name: Сквозные сценарии
+        run: npm run test:e2e
+
+      - name: Отчёт Playwright при падении
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+  docker:
+    name: Стек docker compose
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Установка зависимостей
+        run: npm ci --no-audit --no-fund
+
+      - name: Создание .env со случайными секретами
+        run: npm run bootstrap:env
+
+      - name: Проверка конфигурации compose
+        run: docker compose config --quiet
+
+      - name: Подъём стека
+        run: docker compose up -d --build
+
+      - name: Ожидание готовности /api/health
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://localhost:8080/api/health > /tmp/health.json; then
+              cat /tmp/health.json
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Стек не поднялся за 5 минут"
+          docker compose logs --no-color
+          exit 1
+
+      - name: Состояние стека при падении
+        if: failure()
+        run: docker compose ps && docker compose logs --no-color
+
+      - name: Остановка стека
+        if: always()
+        run: docker compose down -v
