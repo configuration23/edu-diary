@@ -7,9 +7,11 @@ import { buildAuthService, createAuthModule, SESSION_COOKIE_NAME } from './modul
 import { createHealthModule } from './modules/health';
 import { buildIamServices, createIamModule, type SessionRevokerPort } from './modules/iam';
 import { createGuardiansRepository } from './modules/iam/iam.guardians.repository';
+import { createUsersRepository } from './modules/iam/iam.users.repository';
 import { buildPrivacyService, createPrivacyModule } from './modules/privacy';
 import { buildSecurityService, createSecurityModule } from './modules/security';
 import { createSettingsRepository, createSettingsService } from './modules/settings';
+import { createAssignmentUsagePort, createStaffingModule } from './modules/staffing';
 import {
   buildSetupService,
   createSetupModule,
@@ -67,7 +69,25 @@ export async function buildApp({
   // Порт доступа к привязкам родителей: репозиторий вместо сервиса iam, иначе
   // сборка зависимостей замкнулась бы в кольцо.
   const guardiansRepository = createGuardiansRepository(db);
-  const academics = buildAcademicsService({ db, audit, security, guardians: guardiansRepository });
+  // Порт «справочник используется в назначениях»: отвечает модуль staffing.
+  const assignmentUsage = createAssignmentUsagePort(db);
+  // Порт проверки пользователя (куратор группы): читает репозиторий iam.
+  const usersRepository = createUsersRepository(db);
+  const userLookup = {
+    async findActiveUser(userId: string) {
+      const user = await usersRepository.findById(userId);
+      return user === null || !user.isActive ? null : { id: user.id, fullName: user.fullName };
+    },
+  };
+
+  const academics = buildAcademicsService({
+    db,
+    audit,
+    security,
+    guardians: guardiansRepository,
+    assignments: assignmentUsage,
+    users: userLookup,
+  });
 
   let authService: SessionRevokerPort | null = null;
   const sessionsPort: SessionRevokerPort = {
@@ -141,6 +161,7 @@ export async function buildApp({
   await app.register(createAuthModule({ auth }), { prefix: '/api' });
   await app.register(createIamModule({ services: iam }), { prefix: '/api' });
   await app.register(createAcademicsModule({ academics }), { prefix: '/api' });
+  await app.register(createStaffingModule(), { prefix: '/api' });
   await app.register(createAuditModule({ audit }), { prefix: '/api' });
   await app.register(createSecurityModule({ security, audit }), { prefix: '/api' });
   await app.register(createPrivacyModule({ privacy }), { prefix: '/api' });
