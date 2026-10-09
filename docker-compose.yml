@@ -11,6 +11,14 @@
 
 name: edu-diary
 
+# Внешние образы закреплены дайджестами: версия не «уплывёт» между сборками.
+# Префикс реестра настраивается переменной DOCKER_REGISTRY — она нужна там, где
+# доступ к Docker Hub ограничен и используется зеркало
+# (например, DOCKER_REGISTRY=mirror.example.ru/library/). По умолчанию — Docker Hub.
+x-postgres-image: &postgres-image ${DOCKER_REGISTRY:-}postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
+x-caddy-image: &caddy-image ${DOCKER_REGISTRY:-}caddy:2-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f
+x-nginx-image: &nginx-image ${DOCKER_REGISTRY:-}nginx:stable-alpine@sha256:0985e772fb9f729e6fa0980da05fca5d9c468e870eed43071545afa9d2e27d94
+
 x-api-environment: &api-environment
   NODE_ENV: production
   HOST: 0.0.0.0
@@ -23,7 +31,7 @@ x-api-environment: &api-environment
 
 services:
   postgres:
-    image: postgres:16-alpine
+    image: *postgres-image
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
@@ -83,7 +91,7 @@ services:
     networks: [internal]
 
   caddy:
-    image: caddy:2-alpine
+    image: *caddy-image
     restart: unless-stopped
     depends_on: [api, web]
     ports:

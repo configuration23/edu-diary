@@ -114,6 +114,10 @@ jobs:
   docker:
     name: Стек docker compose
     runs-on: ubuntu-latest
+    env:
+      # Пусто, если секреты не заданы: шаг входа в реестр тогда пропускается.
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -131,18 +135,20 @@ jobs:
       - name: Проверка конфигурации compose
         run: docker compose config --quiet
 
-      # Сеть и Docker Hub на раннере иногда отказывают: одна повторная попытка
-      # отделяет сбой окружения от настоящей ошибки сборки. Если и она не
-      # прошла — печатаем состояние стека, чтобы причина была видна в логе.
+      # Анонимные скачивания из Docker Hub ограничены по IP раннера, а IP у
+      # GitHub-hosted раннеров общий: без входа в реестр сборка падает с
+      # `toomanyrequests` / `429 Too Many Requests` (наблюдалось в этом
+      # репозитории). Если секреты DOCKERHUB_* заданы, лимит становится
+      # персональным; без секретов шаг пропускается и сборка работает как раньше.
+      - name: Вход в Docker Hub (если заданы секреты)
+        if: ${{ env.DOCKERHUB_USERNAME != '' }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ env.DOCKERHUB_TOKEN }}
+
       - name: Подъём стека
-        run: |
-          if docker compose up -d --build; then
-            exit 0
-          fi
-          echo "Первая попытка не удалась, повторяем"
-          docker compose ps || true
-          docker compose logs --no-color || true
-          docker compose up -d --build
+        run: docker compose up -d --build
 
       - name: Ожидание готовности /api/health
         run: |
