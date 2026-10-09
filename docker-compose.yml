@@ -91,7 +91,10 @@ services:
       # Если 8080 занят, достаточно поменять HTTP_PORT и SITE_ADDRESS.
       - '${HTTP_PORT:-8080}:${HTTP_PORT:-8080}'
     environment:
-      SITE_ADDRESS: ${SITE_ADDRESS:-http://localhost:8080}
+      # `:8080` — «любой хост на порту 8080»: стек открывается и по IP стенда.
+      # На сервере с доменом укажите SITE_ADDRESS=diary.example.ru (тогда Caddy
+      # получит сертификат и будет слушать 80/443 — см. docker-compose.prod.yml).
+      SITE_ADDRESS: ${SITE_ADDRESS:-:8080}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
