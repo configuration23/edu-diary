@@ -1,5 +1,6 @@
 import type { ErrorCode, ErrorResponse } from '@edu-diary/contracts';
 import type { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { ZodError } from 'zod';
 
 /**
  * Единый формат ошибок API: `{ error: { code, message, details? } }`
@@ -63,6 +64,22 @@ export function toErrorResponse(error: unknown): { statusCode: number; body: Err
           code: error.code,
           message: error.message,
           ...(error.details === undefined ? {} : { details: error.details }),
+        },
+      },
+    };
+  }
+
+  if (error instanceof ZodError) {
+    return {
+      statusCode: HTTP_STATUS_BY_CODE.VALIDATION_FAILED,
+      body: {
+        error: {
+          code: 'VALIDATION_FAILED',
+          message: 'Запрос не прошёл проверку',
+          details: error.issues.map((issue) => ({
+            path: issue.path.join('.'),
+            message: issue.message,
+          })),
         },
       },
     };

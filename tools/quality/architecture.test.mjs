@@ -154,6 +154,32 @@ describe('слои пакетов и приложений', () => {
     expect(violations).toEqual([]);
   });
 
+  it('разрешает contracts переиспользовать чистую логику domain', () => {
+    const violations = checkFiles({
+      repoRoot: repositoryRoot,
+      files: [
+        file('packages/contracts/src/common.ts', "import { isISODate } from '@edu-diary/domain';"),
+      ],
+    });
+
+    expect(violations).toEqual([]);
+  });
+
+  it('запрещает domain зависеть от zod и от contracts', () => {
+    const violations = checkFiles({
+      repoRoot: repositoryRoot,
+      files: [
+        file('packages/domain/src/date.ts', "import { z } from 'zod';"),
+        file(
+          'packages/domain/src/index.ts',
+          "import { healthResponseSchema } from '@edu-diary/contracts';",
+        ),
+      ],
+    });
+
+    expect(rulesOf(violations)).toEqual([RULES.packageLayering, RULES.packageLayering]);
+  });
+
   it('запрещает фронтенду импортировать бэкенд', () => {
     const violations = checkFiles({
       repoRoot: repositoryRoot,

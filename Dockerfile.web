@@ -19,8 +19,10 @@ COPY apps/web apps/web
 COPY packages packages
 COPY tools tools
 
-# Сборка падает, если в бандле появится адрес внешнего сервиса (SECURITY.md §3.8).
-RUN npm run build -w apps/web
+# Сборка клиента идёт в production-режиме: при NODE_ENV=development Vite
+# подключил бы development-сборки зависимостей. Сборка падает, если в бандле
+# появится адрес внешнего сервиса (SECURITY.md §3.8).
+RUN NODE_ENV=production npm run build -w apps/web
 
 
 FROM nginx:stable-alpine AS runtime

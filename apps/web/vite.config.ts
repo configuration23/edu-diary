@@ -38,5 +38,8 @@ export default defineConfig({
     outDir: 'dist',
     target: 'es2022',
     sourcemap: true,
+    // Приложение внутреннее и небольшое: один бандл удобнее, чем дробление.
+    // Порог поднят, чтобы предупреждение о размере не шумело в CI.
+    chunkSizeWarningLimit: 900,
   },
 });

@@ -150,7 +150,13 @@ function checkFile(file, context) {
       if (packageName !== null && !isTestFile) {
         const allowedForPackage =
           specifier.startsWith(NODE_BUILTIN_PREFIX) ||
-          (packageName === 'contracts' && (specifier === 'zod' || specifier.startsWith('zod/')));
+          (packageName === 'contracts' &&
+            (specifier === 'zod' ||
+              specifier.startsWith('zod/') ||
+              // contracts описывают API и переиспользуют чистые проверки из domain
+              // (календарные даты, политика паролей), чтобы сервер и клиент
+              // валидировали одинаково.
+              specifier === '@edu-diary/domain'));
 
         if (!allowedForPackage) {
           violations.push(
@@ -159,7 +165,7 @@ function checkFile(file, context) {
               file: relativePath,
               line,
               specifier,
-              message: `пакет packages/${packageName} не должен зависеть от других пакетов (кроме zod в contracts)`,
+              message: `пакет packages/${packageName} не должен зависеть от других пакетов (contracts может использовать zod и @edu-diary/domain)`,
             }),
           );
         }

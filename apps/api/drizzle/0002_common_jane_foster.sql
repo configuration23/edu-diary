@@ -1,0 +1,1 @@
+ALTER TABLE "student" ADD COLUMN "user_id" uuid;
