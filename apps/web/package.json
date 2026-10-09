@@ -1,0 +1,26 @@
+{
+  "name": "@edu-diary/web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Веб-интерфейс edu-diary: React + Vite + Tailwind",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && node ../../tools/quality/check-bundle-domains.mjs dist",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@edu-diary/contracts": "*",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.14",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.1",
+    "@vitejs/plugin-react": "^5.0.4",
+    "tailwindcss": "^4.1.14",
+    "vite": "^8.3.4"
+  }
+}

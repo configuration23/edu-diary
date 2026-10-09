@@ -1,0 +1,18 @@
+# Продовый запуск: HTTPS с автоматическим сертификатом.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Требуется SITE_ADDRESS с настоящим доменом (например diary.example.ru):
+# Caddy сам получит сертификат Let's Encrypt и будет слушать 80 и 443.
+# Порт 8080 из базового файла в этом режиме не используется — Caddy его не слушает.
+
+services:
+  caddy:
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?SITE_ADDRESS is required (домен для HTTPS)}
+      # Почта для ACME, если нужны уведомления об истечении сертификата:
+      # добавьте email в глобальный блок Caddyfile.

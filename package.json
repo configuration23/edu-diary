@@ -1,0 +1,41 @@
+{
+  "name": "edu-diary",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Электронный дневник колледжа: журнал, посещаемость, домашние задания, аналитика",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "bootstrap:env": "node tools/bootstrap-env.mjs",
+    "dev": "npm run dev -w apps/api",
+    "dev:web": "npm run dev -w apps/web",
+    "build": "npm run check:architecture && npm run build -w apps/api && npm run build -w apps/web",
+    "typecheck": "tsc --noEmit -p tsconfig.json && npm run typecheck --workspaces --if-present",
+    "migrate": "npm run migrate -w apps/api",
+    "db:generate": "npm run db:generate -w apps/api",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "check": "npm run typecheck && npm run check:architecture && npm run check:secrets",
+    "check:architecture": "node tools/quality/check-architecture.mjs",
+    "check:bundle-domains": "node tools/quality/check-bundle-domains.mjs apps/web/dist",
+    "check:secrets": "node tools/quality/scan-secrets.mjs",
+    "check:startup-secrets": "node tools/quality/check-startup-secrets.mjs",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.0",
+    "@types/node": "^26.6.4",
+    "prettier": "^3.9.9",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
+  }
+}

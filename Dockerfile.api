@@ -1,0 +1,55 @@
+# syntax=docker/dockerfile:1
+# Образ API edu-diary. Контекст сборки — корень репозитория.
+#
+# Список манифестов рабочих пространств перечислен явно: npm workspaces требует,
+# чтобы все пакеты из package-lock.json существовали на момент `npm ci`.
+# При добавлении нового рабочего пространства его package.json нужно добавить и здесь.
+
+FROM node:22-bookworm-slim AS dependencies
+WORKDIR /app
+ENV NODE_ENV=development
+
+COPY package.json package-lock.json ./
+COPY apps/api/package.json apps/api/
+COPY apps/web/package.json apps/web/
+COPY packages/contracts/package.json packages/contracts/
+COPY packages/domain/package.json packages/domain/
+
+RUN npm ci --no-audit --no-fund
+
+
+FROM dependencies AS build
+WORKDIR /app
+
+COPY tsconfig.base.json ./
+COPY apps/api apps/api
+COPY packages packages
+COPY tools tools
+
+RUN node apps/api/build.mjs
+
+
+FROM node:22-bookworm-slim AS runtime
+WORKDIR /app
+ENV NODE_ENV=production
+
+COPY package.json package-lock.json ./
+COPY apps/api/package.json apps/api/
+COPY apps/web/package.json apps/web/
+COPY packages/contracts/package.json packages/contracts/
+COPY packages/domain/package.json packages/domain/
+
+# Только production-зависимости: dev-инструменты (esbuild, drizzle-kit, tsx) в образ не попадают.
+RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
+
+COPY --from=build /app/apps/api/dist apps/api/dist
+COPY --from=build /app/apps/api/drizzle apps/api/drizzle
+COPY --from=build /app/apps/api/scripts apps/api/scripts
+
+USER node
+EXPOSE 3000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD ["node", "apps/api/scripts/healthcheck.mjs"]
+
+CMD ["node", "apps/api/dist/main.js"]

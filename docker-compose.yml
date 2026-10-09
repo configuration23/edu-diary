@@ -1,0 +1,108 @@
+# Стек edu-diary: postgres + api + web + caddy (ARCHITECTURE.md §12).
+#
+# Значения секретов в этом файле отсутствуют намеренно: они приходят из .env
+# (создаётся командой `npm run bootstrap:env`) и обязательны — без них compose
+# останавливается с понятным сообщением (SECURITY.md §3.2).
+#
+# Локальный запуск:   npm run bootstrap:env && docker compose up
+# Прод:               docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# Только база для разработки:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d postgres
+
+name: edu-diary
+
+x-api-environment: &api-environment
+  NODE_ENV: production
+  HOST: 0.0.0.0
+  PORT: '3000'
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  # Внутри compose база доступна по имени сервиса, а не по localhost.
+  DATABASE_URL: postgres://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB is required}
+  SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET is required - run npm run bootstrap:env}
+  STORAGE_ENCRYPTION_KEY: ${STORAGE_ENCRYPTION_KEY:?STORAGE_ENCRYPTION_KEY is required - run npm run bootstrap:env}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # Наружу не публикуется: доступ только из внутренней сети Docker (SECURITY.md §3.2).
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    networks: [internal]
+
+  # Миграции применяются отдельным шагом, а не при старте API (ARCHITECTURE.md §12).
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    image: edu-diary-api:local
+    restart: 'no'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment: *api-environment
+    command: ['node', 'apps/api/dist/migrate.js']
+    networks: [internal]
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    image: edu-diary-api:local
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment: *api-environment
+    healthcheck:
+      test: ['CMD', 'node', 'apps/api/scripts/healthcheck.mjs']
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+    networks: [internal]
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    image: edu-diary-web:local
+    restart: unless-stopped
+    depends_on: [api]
+    networks: [internal]
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on: [api, web]
+    ports:
+      # Порт задаётся в .env; он же должен быть указан в SITE_ADDRESS.
+      # Если 8080 занят, достаточно поменять HTTP_PORT и SITE_ADDRESS.
+      - '${HTTP_PORT:-8080}:${HTTP_PORT:-8080}'
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-http://localhost:8080}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [internal]
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:
+
+networks:
+  internal:
+    driver: bridge

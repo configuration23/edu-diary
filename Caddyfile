@@ -1,0 +1,39 @@
+# Caddy: HTTPS и маршрутизация.
+#
+# Локально:  SITE_ADDRESS=http://localhost:8080 — обычный HTTP без сертификата.
+# На сервере: SITE_ADDRESS=diary.example.ru  — Caddy сам получит сертификат
+#             Let's Encrypt и будет слушать 80/443 (см. docker-compose.prod.yml).
+#
+# Чтобы получать письма об истечении сертификата, добавьте в глобальный блок
+# ниже строку: email you@example.ru
+
+{
+	admin off
+}
+
+{$SITE_ADDRESS} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "same-origin"
+		-X-Powered-By
+		-Server
+	}
+
+	# API обслуживает Fastify.
+	handle /api/* {
+		reverse_proxy api:3000
+	}
+
+	# Всё остальное — статика React.
+	handle {
+		reverse_proxy web:80
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}
