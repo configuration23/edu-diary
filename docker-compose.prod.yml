@@ -13,6 +13,6 @@ services:
       - '443:443'
       - '443:443/udp'
     environment:
-      SITE_ADDRESS: ${SITE_ADDRESS:?SITE_ADDRESS is required (домен для HTTPS)}
+      SITE_ADDRESS: ${SITE_ADDRESS:?SITE_ADDRESS is required (домен для HTTPS, например diary.example.ru)}
       # Почта для ACME, если нужны уведомления об истечении сертификата:
       # добавьте email в глобальный блок Caddyfile.

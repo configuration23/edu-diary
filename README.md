@@ -37,7 +37,10 @@ docker compose up        # собирает образы и поднимает �
 
 Остановить: `docker compose down`. Удалить данные: `docker compose down -v`.
 
-Если порт 8080 занят, задайте в `.env` другой `HTTP_PORT` — и тот же порт в `SITE_ADDRESS`.
+По умолчанию `SITE_ADDRESS=:8080` — это «любой хост на порту 8080», поэтому стенд открывается и
+по IP, и по имени машины: `http://192.168.1.70:8080`. Если порт 8080 занят, задайте в `.env`
+другой `HTTP_PORT` — и тот же порт в `SITE_ADDRESS`. Для домена с HTTPS укажите
+`SITE_ADDRESS=diary.example.ru` и запускайте с `-f docker-compose.prod.yml`.
 
 `npm run bootstrap:env` обязателен: секретов в репозитории нет, и приложение намеренно не
 стартует, если `DATABASE_URL`, `SESSION_SECRET` или `STORAGE_ENCRYPTION_KEY` не заданы или
