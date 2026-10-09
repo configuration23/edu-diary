@@ -30,6 +30,8 @@ export function createFakeDatabase(
     }) as unknown as Database['sql'],
     orm: {} as unknown as Database['orm'],
     ping: overrides.ping ?? (async () => ({ ok: true, latencyMs: 1 })),
+    // Заглушка транзакции: выполняет операцию с тем же пустым исполнителем.
+    transaction: (operation) => operation({} as unknown as Database['orm']),
     close: overrides.close ?? (async () => {}),
   };
 }

@@ -1,6 +1,13 @@
 import type { HealthResponse } from '@edu-diary/contracts';
 
-import type { HealthState } from '../lib/api';
+/**
+ * Состояние связи с сервером: загрузка, ответ сервера или недоступность.
+ * Проверка ответа выполняется схемой из `packages/contracts` (см. lib/queries).
+ */
+export type HealthState =
+  | { kind: 'loading' }
+  | { kind: 'ready'; health: HealthResponse }
+  | { kind: 'unreachable'; message: string };
 
 const STATUS_LABELS: Record<HealthResponse['status'], string> = {
   ok: 'Сервер и база данных доступны',

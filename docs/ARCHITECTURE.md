@@ -54,6 +54,7 @@ apps/
       homework/            # задания, решения, проверка, вложения
       analytics/           # средний балл, отчёты, выгрузки
       settings/            # брендинг, параметры системы, хранилище файлов
+      privacy/             # согласия законных представителей и редакции политики (ADR-025)
       storage/             # абстракция файлового хранилища (адаптеры)
   web/                     # React-приложение
 packages/
@@ -139,7 +140,8 @@ app_user(id uuid pk, username citext unique, password_hash text, full_name text,
          email citext, phone text, is_active bool, must_change_password bool,
          failed_login_count int, locked_until timestamptz,
          created_at timestamptz, updated_at timestamptz)
-student(id uuid pk, full_name text, short_name text, birth_date date, note text)
+student(id uuid pk, user_id uuid null /* учётная запись ученика, ADR-027 */,
+        full_name text, short_name text, birth_date date, note text)
 student_enrollment(id uuid pk, student_id fk, study_group_id fk, joined_on date, left_on date)
 guardian_link(id uuid pk, student_id fk, guardian_user_id fk, relation text /* mother|father|other */)
 role(id uuid pk, code text unique, title text, is_system bool)

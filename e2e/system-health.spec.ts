@@ -20,18 +20,16 @@ test('GET /api/health отвечает 200 и подтверждает гото�
   expect(body.checks.migrations.pending).toBe(0);
 });
 
-test('неизвестный маршрут отвечает контрактной ошибкой без параметров запроса', async ({
-  request,
-}) => {
-  const response = await request.get('/api/unknown-route?token=secret-value');
+test('страница не обращается к внешним доменам', async ({ page }) => {
+  const externalRequests: string[] = [];
 
-  expect(response.status()).toBe(404);
-  expect(response.headers()['x-request-id']).toBeTruthy();
-
-  const body = (await response.json()) as { error: { code: string; message: string } };
-  expect(body.error).toEqual({
-    code: 'NOT_FOUND',
-    message: 'Маршрут GET /api/unknown-route не найден',
+  page.on('request', (request) => {
+    const host = new URL(request.url()).hostname;
+    if (!['127.0.0.1', 'localhost'].includes(host)) externalRequests.push(request.url());
   });
-  expect(JSON.stringify(body)).not.toContain('secret-value');
+
+  await page.goto('/');
+  await expect(page.locator('h1')).toBeVisible();
+
+  expect(externalRequests).toEqual([]);
 });

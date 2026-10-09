@@ -7,7 +7,13 @@ import { createFakeDatabase, createTestEnv } from './helpers';
 const apps: Array<Awaited<ReturnType<typeof buildApp>>> = [];
 
 async function buildTestApp(): Promise<Awaited<ReturnType<typeof buildApp>>> {
-  const app = await buildApp({ env: createTestEnv(), db: createFakeDatabase(), version: 'test' });
+  const app = await buildApp({
+    env: createTestEnv(),
+    db: createFakeDatabase(),
+    version: 'test',
+    // Гейт «система настроена» в этом файле не проверяется: он читал бы базу.
+    systemState: { isInitialized: async () => true },
+  });
 
   app.get('/api/boom', async () => {
     throw new AppError('CONFLICT', 'Учебный год уже существует');

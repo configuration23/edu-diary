@@ -19,11 +19,24 @@ export interface PingOptions {
   timeoutMs?: number;
 }
 
+/**
+ * Исполнитель запросов: обычное подключение или транзакция.
+ *
+ * Репозитории принимают его необязательным параметром, поэтому один и тот же
+ * метод работает и сам по себе, и внутри транзакции вместе с записью в аудит.
+ */
+export type Executor = PostgresJsDatabase<Record<string, never>>;
+
 export interface Database {
   readonly sql: Sql;
-  readonly orm: PostgresJsDatabase<Record<string, never>>;
+  readonly orm: Executor;
   /** Проверка соединения для healthcheck: ошибки не бросаются, а возвращаются. */
   ping(options?: PingOptions): Promise<DatabasePing>;
+  /**
+   * Транзакция: изменение и запись в аудит должны происходить вместе (ADR-012).
+   * Репозитории принимают `Executor`, поэтому внутри транзакции используется тот же код.
+   */
+  transaction<T>(operation: (executor: Executor) => Promise<T>): Promise<T>;
   close(): Promise<void>;
 }
 
@@ -80,6 +93,12 @@ export function createDatabase(databaseUrl: string, options: CreateDatabaseOptio
       } catch (error) {
         return { ok: false, latencyMs: null, message: describeError(error) };
       }
+    },
+
+    async transaction<T>(operation: (executor: Executor) => Promise<T>): Promise<T> {
+      // Тип транзакции Drizzle отличается от типа подключения, но набор методов
+      // запросов у них общий — этого достаточно для репозиториев.
+      return orm.transaction((tx) => operation(tx as unknown as Executor));
     },
 
     async close(): Promise<void> {
