@@ -23,6 +23,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "e2e:isolated": "node tools/dev/run-e2e-isolated.mjs",
     "check": "npm run typecheck && npm run check:architecture && npm run check:secrets",
     "check:architecture": "node tools/quality/check-architecture.mjs",
     "check:bundle-domains": "node tools/quality/check-bundle-domains.mjs apps/web/dist",

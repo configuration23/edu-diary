@@ -169,7 +169,9 @@ teaching_assignment(id uuid pk, teacher_user_id uuid /* без FK, как studen
 
 - `.env` отличается от примера: `HTTP_PORT=8081`, `POSTGRES_PORT=15432`; база `edu_diary` уже инициализирована, поэтому локально виден экран входа, а не мастер.
 - PostgreSQL поднимается `docker compose up -d postgres` (порт наружу отдан на 15432); в CI-прогонах переменные приходят из окружения.
-- `npm test` без `TEST_DATABASE_URL` пропускает 41 интеграционный тест. Полный прогон (156 тестов) локально:
-  `TEST_DATABASE_URL=postgres://edu_diary:<пароль>@localhost:15432/edu_diary_test npm test`.
+- `npm test` без `TEST_DATABASE_URL` пропускает 41 интеграционный тест: vitest не читает `.env`, переменную нужно передать из окружения. Полный прогон (156 тестов + новые): `TEST_DATABASE_URL=postgres://edu_diary:<пароль>@localhost:15432/edu_diary_test npm test`.
 - `npm run build`, `npm test`, `npm run db:generate`, `docker compose` в песочнице падают с `EPERM` (дочерние процессы Vite/esbuild и именованные каналы Docker) — лечится разовым расширением доступа на ту же команду.
-- Сквозные сценарии Playwright ожидают пустую базу: локально прогонять их на отдельной базе (`DATABASE_URL` в окружении), а не на `edu_diary`.
+- Сквозные сценарии Playwright ожидают пустую базу, поэтому для них есть отдельная команда:
+  `npm run e2e:isolated` — создаёт (при необходимости) базу `edu_diary_e2e`, применяет к ней миграции и запускает
+  Playwright, не затрагивая базу разработки. Проверено на этой машине: 10 сценариев зелёные.
+  Флаги: `--keep` (не пересоздавать существующую базу), `--fresh` (пересоздать), имя базы — `E2E_DATABASE_NAME`.
