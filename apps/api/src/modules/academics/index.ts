@@ -30,7 +30,16 @@ export {
   type MutationOptions,
   type StudentViewer,
 } from './academics.service';
-export { academicYear, period, student } from './academics.schema';
+export {
+  academicYear,
+  gradeCategory,
+  period,
+  room,
+  student,
+  studentEnrollment,
+  studyGroup,
+  subject,
+} from './academics.schema';
 
 export function createAcademicsModule(dependencies: {
   academics: AcademicsService;
