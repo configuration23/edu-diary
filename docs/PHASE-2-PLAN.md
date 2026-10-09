@@ -178,3 +178,27 @@ teaching_assignment(id uuid pk, teacher_user_id uuid /* без FK, как studen
   `npm run e2e:isolated` — создаёт (при необходимости) базу `edu_diary_e2e`, применяет к ней миграции и запускает
   Playwright, не затрагивая базу разработки. Проверено на этой машине: 10 сценариев зелёные.
   Флаги: `--keep` (не пересоздавать существующую базу), `--fresh` (пересоздать), имя базы — `E2E_DATABASE_NAME`.
+
+## 8. Состояние на 10.10.2026 (продолжать отсюда)
+
+Сделано и влито в `main`: Шаги 1–3.
+
+| Шаг | Состояние | Где смотреть |
+|---|---|---|
+| 1. Домен и контракты | готов | `packages/domain/src/date-range.ts`, `packages/contracts/src/academics.ts` |
+| 2. Схема БД и миграция | готов | `apps/api/drizzle/0003_academic_structure.sql`, `modules/staffing/staffing.schema.ts` |
+| 3. API academics | готов | `modules/academics/*`, `apps/api/test/academics.test.ts` (13 тестов) |
+| 4–8 | не начаты | шаги 4–8 выше |
+
+Проверки: 200 тестов Vitest, 10 сценариев Playwright, локально зелёные `format:check`,
+`typecheck`, `check:architecture`, `check:secrets`, `build`, `check:startup-secrets`.
+В CI джоба «Проверки, тесты, сборка» зелёная; «Стек docker compose» и «Сквозные
+сценарии» падали по лимиту анонимных скачиваний Docker Hub (`toomanyrequests`, `429`)
+— лечение: секреты `DOCKERHUB_USERNAME` и `DOCKERHUB_TOKEN` в настройках репозитория
+(access token только на чтение), подробности в `README.md`.
+
+Открытый вопрос процесса: пушить ветку этапа сразу после каждого шага или одним PR в конце.
+
+Дальше: Шаг 4 — модуль `staffing`: назначения «преподаватель ↔ предмет ↔ группа»,
+`GET /api/assignments/mine` для преподавателя, аудит, запрет удаления используемого
+назначениями справочника (порт уже проложен).
