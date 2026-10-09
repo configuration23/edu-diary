@@ -123,9 +123,10 @@ teaching_assignment(id uuid pk, teacher_user_id uuid /* без FK, как studen
 - [ ] Права `iam.catalog.ts`: переиспользуем `academics:read/write` (учитель — только чтение); каталог меняется лишь если проверка покажет нехватку.
 
 ### Шаг 2. Схема БД и миграция
-- [ ] `academics.schema.ts`: `study_group`, `student_enrollment`, `subject`, `room`, `grade_category`.
-- [ ] `staffing.schema.ts`: `teaching_assignment`.
-- [ ] `npm run db:generate` → миграция только вперёд; проверить `npm run migrate` на тестовой БД.
+- [x] `academics.schema.ts`: `study_group`, `student_enrollment`, `subject`, `room`, `grade_category`.
+- [x] `staffing.schema.ts`: `teaching_assignment` (плюс `note` — причина закрытия или правки).
+- [x] Миграция `0003_academic_structure` (только вперёд) применена к тестовой и пустой базе; ограничения проверены вручную.
+- Отличия от первоначального наброска: `subject.name` и `room.name` объявлены уникальными (защита от дублей), `teaching_assignment.note` добавлен для причины закрытия.
 
 ### Шаг 3. API academics (группы, зачисления, справочники)
 - [ ] Репозиторий: SQL только здесь; листинги с фильтрами и подсчётом зависимостей.
