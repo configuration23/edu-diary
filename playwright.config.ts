@@ -23,6 +23,9 @@ try {
 
 export default defineConfig({
   testDir: './e2e',
+  // Сквозные сценарии Этапа 2 длиннее: несколько разделов подряд, каждая
+  // проверка ждёт перезапроса данных. 30 секунд по умолчанию не хватает.
+  timeout: 120_000,
   fullyParallel: false,
   workers: 1,
   forbidOnly: Boolean(process.env.CI),

@@ -39,17 +39,6 @@ export interface SetupServiceDependencies {
 export function createSetupService(dependencies: SetupServiceDependencies): SetupService {
   const { db, settings, users, roles, academics, audit } = dependencies;
 
-  const readBranding = async () => {
-    const [title, shortName, signature, logoDataUrl] = await Promise.all([
-      settings.get<string | null>(SETTING_KEYS.brandingTitle),
-      settings.get<string | null>(SETTING_KEYS.brandingShortName),
-      settings.get<string | null>(SETTING_KEYS.brandingSignature),
-      settings.get<string | null>(SETTING_KEYS.brandingLogo),
-    ]);
-
-    return { title, shortName, signature, logoDataUrl };
-  };
-
   return {
     async status(): Promise<SetupStatusResponseDto> {
       const ping = await db.ping({ timeoutMs: 2000 });
@@ -67,7 +56,9 @@ export function createSetupService(dependencies: SetupServiceDependencies): Setu
       return {
         initialized: await settings.isInitialized(),
         checks: { database, migrations },
-        branding: await readBranding(),
+        // Брендинг читает сервис настроек: тот же источник, что и у правки
+        // после мастера (PATCH не нужен — экран входа перечитывает состояние).
+        branding: await settings.readBranding(),
       };
     },
 

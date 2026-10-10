@@ -38,6 +38,11 @@ export interface RolesRepository {
   ): Promise<void>;
   listPermissions(): Promise<Array<{ code: string; title: string }>>;
   upsertPermission(definition: { code: string; title: string }, executor?: Executor): Promise<void>;
+  /** Выдаёт право роли, если его ещё нет (синхронизация каталога). */
+  upsertPermissionGrant(
+    grant: { roleId: string; permission: string; scope: string },
+    executor?: Executor,
+  ): Promise<void>;
   permissionsForUser(userId: string): Promise<PermissionGrantRow[]>;
 }
 
@@ -159,6 +164,20 @@ export function createRolesRepository(db: Database): RolesRepository {
         .onConflictDoUpdate({
           target: permission.code,
           set: { title: definition.title },
+        });
+    },
+
+    async upsertPermissionGrant(grant, executor: Executor = db.orm): Promise<void> {
+      await executor
+        .insert(rolePermission)
+        .values({
+          roleId: grant.roleId,
+          permissionCode: grant.permission,
+          scope: grant.scope,
+        })
+        .onConflictDoUpdate({
+          target: [rolePermission.roleId, rolePermission.permissionCode],
+          set: { scope: grant.scope },
         });
     },
 
