@@ -28,6 +28,7 @@
     "check:architecture": "node tools/quality/check-architecture.mjs",
     "check:bundle-domains": "node tools/quality/check-bundle-domains.mjs apps/web/dist",
     "check:secrets": "node tools/quality/scan-secrets.mjs",
+    "check:registry": "node tools/quality/check-registry-access.mjs",
     "check:startup-secrets": "node tools/quality/check-startup-secrets.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check ."

@@ -88,6 +88,12 @@ jobs:
       - name: Установка зависимостей
         run: npm ci --no-audit --no-fund
 
+      # Сервисный контейнер postgres скачивается из Docker Hub. Проверяем это до
+      # установки браузера и сборки: при исчерпанном лимите раннера падение с
+      # понятным сообщением случается за секунды, а не после долгой работы.
+      - name: Доступ к реестру образов
+        run: npm run check:registry
+
       - name: Браузер для Playwright
         run: npx playwright install --with-deps chromium
 
@@ -146,6 +152,11 @@ jobs:
         with:
           username: ${{ env.DOCKERHUB_USERNAME }}
           password: ${{ env.DOCKERHUB_TOKEN }}
+
+      # Проверка до того, как раннер потратит время на сборку образов: при
+      # исчерпанном лимите реестра причина видна сразу и с указанием лечения.
+      - name: Доступ к реестру образов
+        run: npm run check:registry
 
       - name: Подъём стека
         run: docker compose up -d --build
