@@ -1,20 +1,36 @@
 import {
+  academicYearSchema,
+  academicYearWithPeriodsSchema,
+  assignmentSchema,
+  brandingSchema,
   consentSchema,
+  enrollmentSchema,
+  enrollStudentResponseSchema,
+  gradeCategorySchema,
   healthResponseSchema,
   listAcademicYearsResponseSchema,
+  listAssignmentsResponseSchema,
   listAuditResponseSchema,
   listConsentsResponseSchema,
+  listEnrollmentsResponseSchema,
+  listGradeCategoriesResponseSchema,
+  listGroupsResponseSchema,
   listPermissionsResponseSchema,
   listRolesResponseSchema,
+  listRoomsResponseSchema,
   listSecurityEventsResponseSchema,
   listStudentsResponseSchema,
+  listSubjectsResponseSchema,
   listUsersResponseSchema,
   periodSchema,
   policyResponseSchema,
+  roomSchema,
   sessionResponseSchema,
   setupStatusResponseSchema,
   studentSummarySchema,
   studentsWithoutConsentResponseSchema,
+  studyGroupSchema,
+  subjectSchema,
   userSummarySchema,
   type SessionResponseDto,
   type SetupStatusResponseDto,
@@ -46,7 +62,16 @@ export const queryKeys = {
   missingConsents: ['consents', 'missing'] as const,
   students: (params: string) => ['students', params] as const,
   academicYears: ['academic-years'] as const,
-  periods: ['periods'] as const,
+  academicYear: (id: string) => ['academic-years', id] as const,
+  periods: (params: string) => ['periods', params] as const,
+  groups: (params: string) => ['groups', params] as const,
+  group: (id: string) => ['groups', id] as const,
+  enrollments: (groupId: string) => ['groups', groupId, 'enrollments'] as const,
+  subjects: ['subjects'] as const,
+  rooms: ['rooms'] as const,
+  gradeCategories: ['grade-categories'] as const,
+  assignments: (params: string) => ['assignments', params] as const,
+  branding: ['branding'] as const,
 };
 
 function toQueryString(params: Record<string, string | number | boolean | undefined>): string {
@@ -380,7 +405,277 @@ export function useAcademicYears() {
 
 export function usePeriods() {
   return useQuery({
-    queryKey: queryKeys.periods,
+    queryKey: queryKeys.periods(''),
     queryFn: () => apiRequest('/api/periods', z.object({ items: z.array(periodSchema) })),
+  });
+}
+
+// --- Этап 2: учебные годы, группы, справочники, назначения, брендинг ---
+
+/** Год вместе с его периодами: экран «Учебный год» открывается одним запросом. */
+export function useAcademicYear(id: string | null) {
+  return useQuery({
+    queryKey: queryKeys.academicYear(id ?? ''),
+    enabled: id !== null,
+    queryFn: () => apiRequest(`/api/academic-years/${id ?? ''}`, academicYearWithPeriodsSchema),
+  });
+}
+
+function invalidateAcademics(client: ReturnType<typeof useQueryClient>): void {
+  void client.invalidateQueries({ queryKey: ['academic-years'] });
+  void client.invalidateQueries({ queryKey: ['periods'] });
+  void client.invalidateQueries({ queryKey: ['groups'] });
+  void client.invalidateQueries({ queryKey: ['subjects'] });
+  void client.invalidateQueries({ queryKey: ['rooms'] });
+  void client.invalidateQueries({ queryKey: ['grade-categories'] });
+  void client.invalidateQueries({ queryKey: ['assignments'] });
+  void client.invalidateQueries({ queryKey: ['students'] });
+}
+
+export function useCreateAcademicYear() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { title: string; startsOn: string; endsOn: string; isActive?: boolean }) =>
+      apiRequest('/api/academic-years', academicYearSchema, { method: 'POST', body: input }),
+    onSuccess: () => invalidateAcademics(client),
+  });
+}
+
+export function useUpdateAcademicYear() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { id: string; title: string }) =>
+      apiRequest(`/api/academic-years/${input.id}`, academicYearSchema, {
+        method: 'PATCH',
+        body: { title: input.title },
+      }),
+    onSuccess: () => invalidateAcademics(client),
+  });
+}
+
+export function useActivateAcademicYear() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiRequest(`/api/academic-years/${id}/activate`, academicYearSchema, { method: 'POST' }),
+    onSuccess: () => invalidateAcademics(client),
+  });
+}
+
+export function useCreatePeriod() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      academicYearId: string;
+      title: string;
+      kind: 'term' | 'semester' | 'quarter';
+      startsOn: string;
+      endsOn: string;
+    }) => apiRequest('/api/periods', periodSchema, { method: 'POST', body: input }),
+    onSuccess: () => invalidateAcademics(client),
+  });
+}
+
+export function useGroups(params: { academicYearId?: string; search?: string } = {}) {
+  const query = toQueryString(params);
+
+  return useQuery({
+    queryKey: queryKeys.groups(query),
+    queryFn: () => apiRequest(`/api/groups${query}`, listGroupsResponseSchema),
+  });
+}
+
+export function useCreateGroup() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      academicYearId: string;
+      name: string;
+      course?: number | null;
+      specialty?: string | null;
+      curatorUserId?: string | null;
+      startsOn: string;
+      endsOn: string;
+    }) => apiRequest('/api/groups', studyGroupSchema, { method: 'POST', body: input }),
+    onSuccess: () => invalidateAcademics(client),
+  });
+}
+
+export function useGroupEnrollments(groupId: string | null) {
+  return useQuery({
+    queryKey: queryKeys.enrollments(groupId ?? ''),
+    enabled: groupId !== null,
+    queryFn: () =>
+      apiRequest(`/api/groups/${groupId ?? ''}/students`, listEnrollmentsResponseSchema),
+  });
+}
+
+export function useEnrollStudent() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { groupId: string; studentId: string; joinedOn: string }) =>
+      apiRequest(`/api/groups/${input.groupId}/enrollments`, enrollStudentResponseSchema, {
+        method: 'POST',
+        body: { studentId: input.studentId, joinedOn: input.joinedOn },
+      }),
+    onSuccess: () => invalidateAcademics(client),
+  });
+}
+
+export function useWithdrawStudent() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { enrollmentId: string; leftOn: string }) =>
+      apiRequest(`/api/enrollments/${input.enrollmentId}`, enrollmentSchema, {
+        method: 'PATCH',
+        body: { leftOn: input.leftOn },
+      }),
+    onSuccess: () => invalidateAcademics(client),
+  });
+}
+
+export function useTransferStudent() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { studentId: string; studyGroupId: string; transferOn: string }) =>
+      apiRequest(`/api/students/${input.studentId}/transfer`, enrollStudentResponseSchema, {
+        method: 'POST',
+        body: { studyGroupId: input.studyGroupId, transferOn: input.transferOn },
+      }),
+    onSuccess: () => invalidateAcademics(client),
+  });
+}
+
+export function useSubjects() {
+  return useQuery({
+    queryKey: queryKeys.subjects,
+    queryFn: () => apiRequest('/api/subjects', listSubjectsResponseSchema),
+  });
+}
+
+export function useCreateSubject() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      name: string;
+      shortName?: string | null;
+      kind: 'mandatory' | 'optional' | 'practice';
+      color?: string | null;
+    }) => apiRequest('/api/subjects', subjectSchema, { method: 'POST', body: input }),
+    onSuccess: () => invalidateAcademics(client),
+  });
+}
+
+export function useDeleteSubject() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiSend(`/api/subjects/${id}`, { method: 'DELETE' }).then(() => id),
+    onSuccess: () => invalidateAcademics(client),
+  });
+}
+
+export function useRooms() {
+  return useQuery({
+    queryKey: queryKeys.rooms,
+    queryFn: () => apiRequest('/api/rooms', listRoomsResponseSchema),
+  });
+}
+
+export function useCreateRoom() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { name: string; capacity?: number | null; note?: string | null }) =>
+      apiRequest('/api/rooms', roomSchema, { method: 'POST', body: input }),
+    onSuccess: () => invalidateAcademics(client),
+  });
+}
+
+export function useGradeCategories() {
+  return useQuery({
+    queryKey: queryKeys.gradeCategories,
+    queryFn: () => apiRequest('/api/grade-categories', listGradeCategoriesResponseSchema),
+  });
+}
+
+export function useCreateGradeCategory() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { code: string; title: string; weight: number; color?: string | null }) =>
+      apiRequest('/api/grade-categories', gradeCategorySchema, { method: 'POST', body: input }),
+    onSuccess: () => invalidateAcademics(client),
+  });
+}
+
+export function useAssignments(params: { teacherUserId?: string; studyGroupId?: string } = {}) {
+  const query = toQueryString(params);
+
+  return useQuery({
+    queryKey: queryKeys.assignments(query),
+    queryFn: () => apiRequest(`/api/assignments${query}`, listAssignmentsResponseSchema),
+  });
+}
+
+/**
+ * Преподаватели для назначений: список пользователей с ролью `teacher`.
+ *
+ * Роль приходит в каждой записи, поэтому фильтруем на клиенте — отдельного
+ * «списка преподавателей» API не заводит.
+ */
+export function useTeachers() {
+  const query = toQueryString({ limit: 200 });
+
+  return useQuery({
+    queryKey: queryKeys.users(query),
+    queryFn: () => apiRequest(`/api/users${query}`, listUsersResponseSchema),
+  });
+}
+
+export function useCreateAssignment() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      teacherUserId: string;
+      subjectId: string;
+      studyGroupId: string;
+      startsOn: string;
+      endsOn?: string | null;
+      hoursPlanned?: number | null;
+    }) => apiRequest('/api/assignments', assignmentSchema, { method: 'POST', body: input }),
+    onSuccess: () => invalidateAcademics(client),
+  });
+}
+
+export function useCloseAssignment() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { id: string; endsOn: string }) =>
+      apiRequest(`/api/assignments/${input.id}/close`, assignmentSchema, {
+        method: 'POST',
+        body: { endsOn: input.endsOn },
+      }),
+    onSuccess: () => invalidateAcademics(client),
+  });
+}
+
+export function useBranding() {
+  return useQuery({
+    queryKey: queryKeys.branding,
+    queryFn: () => apiRequest('/api/settings/branding', brandingSchema),
+  });
+}
+
+export function useUpdateBranding() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      title?: string | null;
+      shortName?: string | null;
+      signature?: string | null;
+      logoDataUrl?: string | null;
+    }) => apiRequest('/api/settings/branding', brandingSchema, { method: 'PUT', body: input }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ['branding'] });
+      void client.invalidateQueries({ queryKey: ['setup'] });
+    },
   });
 }

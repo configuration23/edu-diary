@@ -1,6 +1,7 @@
 import { isAccessScope } from '@edu-diary/domain';
 import type { AccessScope } from '@edu-diary/domain';
 
+import { SYSTEM_ACTOR } from '../../shared/actor';
 import type { Database } from '../../shared/db/client';
 import { withTransaction } from '../../shared/db/transaction';
 import { AppError } from '../../shared/errors';
@@ -30,6 +31,8 @@ export interface UpdateRoleInput {
 export interface CatalogSyncResult {
   permissions: number;
   rolesCreated: number;
+  /** Сколько прав выдано уже существующим ролям (новые права каталога). */
+  grantsAdded: number;
 }
 
 export interface RolesService {
@@ -172,29 +175,78 @@ export function createRolesService(dependencies: RolesServiceDependencies): Role
         }
 
         let rolesCreated = 0;
+        let grantsAdded = 0;
 
         for (const definition of SYSTEM_ROLES) {
           const existing = await roles.findIdsByCodes([definition.code]);
-          if (existing.length > 0) continue;
 
-          const created = await roles.insert(
-            { code: definition.code, title: definition.title, isSystem: true },
-            tx,
+          if (existing.length === 0) {
+            const created = await roles.insert(
+              { code: definition.code, title: definition.title, isSystem: true },
+              tx,
+            );
+
+            await roles.setPermissions(
+              created.id,
+              definition.permissions.map((grant) => ({
+                permission: grant.permission,
+                scope: grant.scope satisfies AccessScope,
+              })),
+              tx,
+            );
+
+            rolesCreated += 1;
+            continue;
+          }
+
+          // Роль уже есть: набор прав администратор мог изменить сам, поэтому
+          // выдаём только те права, которые явно помечены как «выдавать при
+          // синхронизации». Новое право каталога иначе осталось бы без роли —
+          // и новый раздел отвечал бы 403 на существующих установках.
+          const grants = definition.grantedOnSync ?? [];
+          if (grants.length === 0) continue;
+
+          const roleId = existing[0]?.id;
+          if (roleId === undefined) continue;
+
+          const current = await roles.list();
+          const present = new Set(
+            (current.find((role) => role.id === roleId)?.permissions ?? []).map(
+              (grant) => grant.permission,
+            ),
           );
 
-          await roles.setPermissions(
-            created.id,
-            definition.permissions.map((grant) => ({
-              permission: grant.permission,
-              scope: grant.scope satisfies AccessScope,
-            })),
-            tx,
-          );
+          const missing = grants.filter((grant) => !present.has(grant.permission));
+          if (missing.length === 0) continue;
 
-          rolesCreated += 1;
+          for (const grant of missing) {
+            await roles.upsertPermissionGrant(
+              {
+                roleId,
+                permission: grant.permission,
+                scope: grant.scope satisfies AccessScope,
+              },
+              tx,
+            );
+            grantsAdded += 1;
+          }
         }
 
-        return { permissions: PERMISSIONS.length, rolesCreated };
+        if (grantsAdded > 0) {
+          await audit.record(
+            {
+              action: 'update',
+              entityKind: 'role',
+              entityId: null,
+              after: { grantsAdded },
+              context: { catalogSync: true },
+            },
+            SYSTEM_ACTOR,
+            tx,
+          );
+        }
+
+        return { permissions: PERMISSIONS.length, rolesCreated, grantsAdded };
       });
     },
   };

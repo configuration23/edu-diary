@@ -3,14 +3,20 @@ import { RouterProvider, createRootRoute, createRoute, createRouter } from '@tan
 import type { ReactNode } from 'react';
 
 import { AppLayout } from './components/AppLayout';
+import { AcademicContextProvider } from './components/AcademicContext';
 import { Alert } from './components/ui';
 import { errorMessage } from './lib/api-client';
 import { useSession, useSetupStatus } from './lib/queries';
+import { AcademicsScreen } from './screens/AcademicsScreen';
+import { AssignmentsScreen } from './screens/AssignmentsScreen';
 import { AuditScreen } from './screens/AuditScreen';
+import { CatalogsScreen } from './screens/CatalogsScreen';
 import { DashboardScreen } from './screens/DashboardScreen';
+import { GroupsScreen } from './screens/GroupsScreen';
 import { LoginScreen } from './screens/LoginScreen';
 import { PrivacyScreen } from './screens/PrivacyScreen';
 import { SecurityScreen } from './screens/SecurityScreen';
+import { SettingsScreen } from './screens/SettingsScreen';
 import { SetupScreen } from './screens/SetupScreen';
 import { UsersScreen } from './screens/UsersScreen';
 import type { BrandingDto, SessionResponseDto } from '@edu-diary/contracts';
@@ -52,7 +58,13 @@ function RootComponent() {
 
   if (session.data == null || setup.data == null) return <Splash />;
 
-  return <AppLayout session={session.data} branding={setup.data.branding} />;
+  // Контекст учебного процесса нужен шапке (переключатель года и группы) и
+  // разделам: собирается один раз на всё приложение.
+  return (
+    <AcademicContextProvider session={session.data}>
+      <AppLayout session={session.data} branding={setup.data.branding} />
+    </AcademicContextProvider>
+  );
 }
 
 const rootRoute = createRootRoute({ component: RootComponent });
@@ -87,12 +99,47 @@ const securityRoute = createRoute({
   component: SecurityScreen,
 });
 
+const academicsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/academics',
+  component: AcademicsScreen,
+});
+
+const groupsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/groups',
+  component: GroupsScreen,
+});
+
+const catalogsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/catalogs',
+  component: CatalogsScreen,
+});
+
+const assignmentsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/assignments',
+  component: withSession((session) => <AssignmentsScreen session={session} />),
+});
+
+const settingsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/settings',
+  component: SettingsScreen,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
+  academicsRoute,
+  groupsRoute,
+  catalogsRoute,
+  assignmentsRoute,
   usersRoute,
   privacyRoute,
   auditRoute,
   securityRoute,
+  settingsRoute,
 ]);
 
 const router = createRouter({ routeTree, defaultPreload: false });

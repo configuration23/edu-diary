@@ -2,6 +2,7 @@ import type { SessionResponseDto } from '@edu-diary/contracts';
 import { Link, Outlet } from '@tanstack/react-router';
 
 import { Badge, Button } from './ui';
+import { GroupSwitcher } from './AcademicContext';
 import { useLogout } from '../lib/queries';
 import type { BrandingDto } from '@edu-diary/contracts';
 
@@ -14,26 +15,56 @@ interface NavigationItem {
 const NAVIGATION: NavigationItem[] = [
   { to: '/', label: 'Обзор', visible: () => true },
   {
+    to: '/academics',
+    label: 'Учебный год',
+    visible: (session) => has(session, 'academics:read'),
+  },
+  {
+    to: '/groups',
+    label: 'Группы и ученики',
+    visible: (session) => has(session, 'academics:read'),
+  },
+  {
+    to: '/catalogs',
+    label: 'Справочники',
+    visible: (session) => has(session, 'academics:read'),
+  },
+  {
+    to: '/assignments',
+    label: 'Назначения',
+    visible: (session) => has(session, 'assignments:read'),
+  },
+  {
     to: '/users',
     label: 'Пользователи и роли',
-    visible: (session) => session.permissions.some((grant) => grant.permission === 'users:read'),
+    visible: (session) => has(session, 'users:read'),
   },
   {
     to: '/privacy',
     label: 'Согласия и политика',
-    visible: (session) => session.permissions.some((grant) => grant.permission === 'consents:read'),
+    visible: (session) => has(session, 'consents:read'),
   },
   {
     to: '/audit',
     label: 'Аудит',
-    visible: (session) => session.permissions.some((grant) => grant.permission === 'audit:read'),
+    visible: (session) => has(session, 'audit:read'),
   },
   {
     to: '/security',
     label: 'Безопасность',
-    visible: (session) => session.permissions.some((grant) => grant.permission === 'security:read'),
+    visible: (session) => has(session, 'security:read'),
+  },
+  {
+    to: '/settings',
+    label: 'Настройки',
+    visible: (session) => has(session, 'settings:write'),
   },
 ];
+
+/** Раздел виден, если право выдано с любой областью действия. */
+function has(session: SessionResponseDto, permission: string): boolean {
+  return session.permissions.some((grant) => grant.permission === permission);
+}
 
 export function AppLayout({
   session,
@@ -58,6 +89,7 @@ export function AppLayout({
           </div>
 
           <div className="flex items-center gap-3 text-sm">
+            <GroupSwitcher />
             <span className="text-slate-600">{session.user.fullName}</span>
             {session.user.roles.map((role) => (
               <Badge key={role.code}>{role.title}</Badge>

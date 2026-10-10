@@ -69,7 +69,23 @@ export const PERMISSIONS: readonly PermissionDefinition[] = [
 export interface SystemRoleDefinition {
   code: string;
   title: string;
+  /** Набор прав при создании роли на чистой установке. */
   permissions: readonly { permission: string; scope: AccessScope }[];
+  /**
+   * Права, которые выдаются уже существующей роли при синхронизации каталога.
+   *
+   * Каталог прав и системные роли обновляются при старте, но набор прав роли
+   * администратор может менять сам. Поэтому «выдать новое право» — отдельное
+   * решение: если права нет в этом списке, роль на уже настроенной установке его
+   * не получит, и новый раздел будет отвечать `403`, пока право не выдадут
+   * вручную.
+   *
+   * Администратору новые права выдаём всегда: он по определению управляет
+   * системой, иначе обновление ломало бы новые разделы на существующих
+   * установках (проверено на этой машине: без выдачи `assignments:*` админ
+   * получал `403` на назначениях после обновления).
+   */
+  grantedOnSync?: readonly { permission: string; scope: AccessScope }[];
 }
 
 export const SYSTEM_ROLES: readonly SystemRoleDefinition[] = [
@@ -77,6 +93,11 @@ export const SYSTEM_ROLES: readonly SystemRoleDefinition[] = [
     code: 'admin',
     title: 'Администратор',
     permissions: PERMISSIONS.map((permission) => ({
+      permission: permission.code,
+      scope: 'all' as AccessScope,
+    })),
+    // Все права каталога: новое право появляется у администратора сразу.
+    grantedOnSync: PERMISSIONS.map((permission) => ({
       permission: permission.code,
       scope: 'all' as AccessScope,
     })),
@@ -100,6 +121,10 @@ export const SYSTEM_ROLES: readonly SystemRoleDefinition[] = [
       { permission: 'analytics:read', scope: 'assigned' },
       { permission: 'analytics:export', scope: 'assigned' },
     ],
+    // Преподаватель без этого права не увидит свои назначения после обновления
+    // уже настроенной установки. Право только на чтение: менять назначения
+    // по-прежнему может лишь администратор.
+    grantedOnSync: [{ permission: 'assignments:read', scope: 'assigned' }],
   },
   {
     code: 'student',
