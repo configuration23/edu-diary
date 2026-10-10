@@ -34,6 +34,16 @@ export const PERMISSIONS: readonly PermissionDefinition[] = [
     title: 'Изменение учебных годов, периодов и справочников',
     scopeHint: 'all',
   },
+  {
+    code: 'assignments:read',
+    title: 'Просмотр назначений «преподаватель ↔ предмет ↔ группа»',
+    scopeHint: 'assigned',
+  },
+  {
+    code: 'assignments:write',
+    title: 'Назначения преподавателей на предметы и группы',
+    scopeHint: 'all',
+  },
   { code: 'audit:read', title: 'Просмотр журнала изменений и доступа', scopeHint: 'all' },
   { code: 'security:read', title: 'Просмотр событий безопасности', scopeHint: 'all' },
   { code: 'security:write', title: 'Разбор событий безопасности', scopeHint: 'all' },
@@ -77,6 +87,9 @@ export const SYSTEM_ROLES: readonly SystemRoleDefinition[] = [
     permissions: [
       { permission: 'students:read', scope: 'assigned' },
       { permission: 'academics:read', scope: 'all' },
+      // Право выдано ровно на область `assigned`: преподаватель видит только
+      // свои назначения, а «вижу всё» в модуле назначений требует `all`.
+      { permission: 'assignments:read', scope: 'assigned' },
       { permission: 'grades:read', scope: 'assigned' },
       { permission: 'grades:write', scope: 'assigned' },
       { permission: 'attendance:read', scope: 'assigned' },

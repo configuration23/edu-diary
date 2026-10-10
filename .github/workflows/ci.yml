@@ -88,6 +88,12 @@ jobs:
       - name: Установка зависимостей
         run: npm ci --no-audit --no-fund
 
+      # Сервисный контейнер postgres скачивается из Docker Hub. Проверяем это до
+      # установки браузера и сборки: при исчерпанном лимите раннера падение с
+      # понятным сообщением случается за секунды, а не после долгой работы.
+      - name: Доступ к реестру образов
+        run: npm run check:registry
+
       - name: Браузер для Playwright
         run: npx playwright install --with-deps chromium
 
@@ -114,6 +120,10 @@ jobs:
   docker:
     name: Стек docker compose
     runs-on: ubuntu-latest
+    env:
+      # Пусто, если секреты не заданы: шаг входа в реестр тогда пропускается.
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -130,6 +140,23 @@ jobs:
 
       - name: Проверка конфигурации compose
         run: docker compose config --quiet
+
+      # Анонимные скачивания из Docker Hub ограничены по IP раннера, а IP у
+      # GitHub-hosted раннеров общий: без входа в реестр сборка падает с
+      # `toomanyrequests` / `429 Too Many Requests` (наблюдалось в этом
+      # репозитории). Если секреты DOCKERHUB_* заданы, лимит становится
+      # персональным; без секретов шаг пропускается и сборка работает как раньше.
+      - name: Вход в Docker Hub (если заданы секреты)
+        if: ${{ env.DOCKERHUB_USERNAME != '' }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ env.DOCKERHUB_TOKEN }}
+
+      # Проверка до того, как раннер потратит время на сборку образов: при
+      # исчерпанном лимите реестра причина видна сразу и с указанием лечения.
+      - name: Доступ к реестру образов
+        run: npm run check:registry
 
       - name: Подъём стека
         run: docker compose up -d --build
