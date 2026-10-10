@@ -18,6 +18,17 @@ function createFakeSettings(values: Map<string, unknown>): {
     async isInitialized(): Promise<boolean> {
       return values.get('system.initialized') === true;
     },
+    // Брендинг в этом тесте не участвует: состояние настройки от него не зависит.
+    async readBranding() {
+      return { title: null, shortName: null, signature: null, logoDataUrl: null };
+    },
+    async updateBranding() {
+      return {
+        branding: { title: null, shortName: null, signature: null, logoDataUrl: null },
+        before: { title: null, shortName: null, signature: null, logoDataUrl: null },
+        changed: {},
+      };
+    },
   };
 
   return { settings, reads: () => reads };

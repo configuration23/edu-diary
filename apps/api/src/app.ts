@@ -14,7 +14,11 @@ import { createGuardiansRepository } from './modules/iam/iam.guardians.repositor
 import { createUsersRepository } from './modules/iam/iam.users.repository';
 import { buildPrivacyService, createPrivacyModule } from './modules/privacy';
 import { buildSecurityService, createSecurityModule } from './modules/security';
-import { createSettingsRepository, createSettingsService } from './modules/settings';
+import {
+  createSettingsModule,
+  createSettingsRepository,
+  createSettingsService,
+} from './modules/settings';
 import {
   buildStaffingService,
   createStaffingModule,
@@ -193,6 +197,7 @@ export async function buildApp({
   await app.register(createAuditModule({ audit }), { prefix: '/api' });
   await app.register(createSecurityModule({ security, audit }), { prefix: '/api' });
   await app.register(createPrivacyModule({ privacy }), { prefix: '/api' });
+  await app.register(createSettingsModule({ db, settings, audit }), { prefix: '/api' });
 
   return app;
 }
