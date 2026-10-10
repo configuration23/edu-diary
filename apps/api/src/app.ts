@@ -1,7 +1,11 @@
 import cookie from '@fastify/cookie';
 import Fastify, { type FastifyInstance } from 'fastify';
 
-import { buildAcademicsService, createAcademicsModule } from './modules/academics';
+import {
+  buildAcademicsService,
+  createAcademicsModule,
+  createAcademicsRepository,
+} from './modules/academics';
 import { buildAuditService, createAuditModule } from './modules/audit';
 import { buildAuthService, createAuthModule, SESSION_COOKIE_NAME } from './modules/auth';
 import { createHealthModule } from './modules/health';
@@ -11,7 +15,11 @@ import { createUsersRepository } from './modules/iam/iam.users.repository';
 import { buildPrivacyService, createPrivacyModule } from './modules/privacy';
 import { buildSecurityService, createSecurityModule } from './modules/security';
 import { createSettingsRepository, createSettingsService } from './modules/settings';
-import { createAssignmentUsagePort, createStaffingModule } from './modules/staffing';
+import {
+  buildStaffingService,
+  createStaffingModule,
+  createStaffingRepository,
+} from './modules/staffing';
 import {
   buildSetupService,
   createSetupModule,
@@ -70,14 +78,27 @@ export async function buildApp({
   // сборка зависимостей замкнулась бы в кольцо.
   const guardiansRepository = createGuardiansRepository(db);
   // Порт «справочник используется в назначениях»: отвечает модуль staffing.
-  const assignmentUsage = createAssignmentUsagePort(db);
-  // Порт проверки пользователя (куратор группы): читает репозиторий iam.
+  const staffingRepository = createStaffingRepository(db);
+  // Порт проверки пользователя (куратор группы, преподаватель): репозиторий iam.
   const usersRepository = createUsersRepository(db);
   const userLookup = {
     async findActiveUser(userId: string) {
       const user = await usersRepository.findById(userId);
       return user === null || !user.isActive ? null : { id: user.id, fullName: user.fullName };
     },
+    async findActiveTeacher(userId: string) {
+      const user = await usersRepository.findById(userId);
+      if (user === null || !user.isActive) return null;
+
+      const isTeacher = user.roles.some((role) => role.code === 'teacher');
+      return isTeacher ? { id: user.id, fullName: user.fullName } : null;
+    },
+  };
+  // Порт справочников для назначений: читает репозиторий academics.
+  const academicsRepository = createAcademicsRepository(db);
+  const catalogLookup = {
+    findGroup: (id: string) => academicsRepository.findGroup(id),
+    findSubject: (id: string) => academicsRepository.findSubject(id),
   };
 
   const academics = buildAcademicsService({
@@ -85,8 +106,15 @@ export async function buildApp({
     audit,
     security,
     guardians: guardiansRepository,
-    assignments: assignmentUsage,
+    assignments: staffingRepository,
     users: userLookup,
+  });
+
+  const staffing = buildStaffingService({
+    db,
+    audit,
+    teachers: userLookup,
+    catalog: catalogLookup,
   });
 
   let authService: SessionRevokerPort | null = null;
@@ -161,7 +189,7 @@ export async function buildApp({
   await app.register(createAuthModule({ auth }), { prefix: '/api' });
   await app.register(createIamModule({ services: iam }), { prefix: '/api' });
   await app.register(createAcademicsModule({ academics }), { prefix: '/api' });
-  await app.register(createStaffingModule(), { prefix: '/api' });
+  await app.register(createStaffingModule({ staffing }), { prefix: '/api' });
   await app.register(createAuditModule({ audit }), { prefix: '/api' });
   await app.register(createSecurityModule({ security, audit }), { prefix: '/api' });
   await app.register(createPrivacyModule({ privacy }), { prefix: '/api' });

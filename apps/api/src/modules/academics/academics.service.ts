@@ -56,7 +56,9 @@ export interface GuardianLookupPort {
  * Порт использования назначений: реализует модуль `staffing`.
  *
  * Нужен, чтобы не удалить предмет или группу, на которые ссылаются назначения:
- * сам `academics` о таблице назначений ничего не знает.
+ * сам `academics` о таблице назначений ничего не знает. Тип объявлен здесь, а не
+ * взят из `staffing`: `staffing` уже зависит от `academics` (читает группы и
+ * предметы), и обратная ссылка замкнула бы модули в кольцо.
  */
 export interface AssignmentUsagePort {
   countUsages(filter: { subjectId?: string; studyGroupId?: string }): Promise<number>;

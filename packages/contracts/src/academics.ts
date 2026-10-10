@@ -304,6 +304,10 @@ export const teachingAssignmentSchema = z.object({
 });
 export type TeachingAssignmentDto = z.infer<typeof teachingAssignmentSchema>;
 
+/** Короткое имя: в маршрутах назначений DTO называется `assignmentSchema`. */
+export const assignmentSchema = teachingAssignmentSchema;
+export type AssignmentDto = TeachingAssignmentDto;
+
 export const listAssignmentsQuerySchema = paginationQuerySchema.extend({
   teacherUserId: uuidSchema.optional(),
   studyGroupId: uuidSchema.optional(),
@@ -344,6 +348,15 @@ export const closeAssignmentRequestSchema = z.object({
   endsOn: isoDateSchema,
 });
 export type CloseAssignmentRequestDto = z.infer<typeof closeAssignmentRequestSchema>;
+
+/** Массовое закрытие: преподаватель уходит — закрываем все его назначения датой. */
+export const closeAssignmentsForTeacherRequestSchema = z.object({
+  teacherUserId: uuidSchema,
+  endsOn: isoDateSchema,
+});
+export type CloseAssignmentsForTeacherRequestDto = z.infer<
+  typeof closeAssignmentsForTeacherRequestSchema
+>;
 
 // --- Брендинг: правится в интерфейсе после мастера (Этап 2) ---
 
