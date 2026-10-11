@@ -65,6 +65,25 @@ describeWithDatabase('ученик и его учётная запись', () =>
     expect(items[0]?.username).toBeNull();
   });
 
+  it('пустые поля формы не ломают создание ученика', async () => {
+    // Регрессия: форма отправляла пустые значения как `null`, и создание
+    // ученика без даты рождения или примечания падало с 400.
+    const withNulls = await createStudent({
+      fullName: 'Пустой Поленович',
+      birthDate: null,
+      note: null,
+    });
+
+    expect(withNulls.statusCode).toBe(201);
+    const student = withNulls.json() as Json;
+    expect(student.birthDate).toBeNull();
+    expect(student.note).toBeNull();
+
+    // И тот же случай, когда поля не переданы вовсе.
+    const withoutFields = await createStudent({ fullName: 'Безполый Безполович' });
+    expect(withoutFields.statusCode).toBe(201);
+  });
+
   it('ученик создаётся сразу с учётной записью', async () => {
     const created = await createStudent({
       fullName: 'Петров Пётр Петрович',

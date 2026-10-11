@@ -108,6 +108,8 @@ export async function buildApp({
         password: string;
         fullName: string;
         roles: readonly string[];
+        email?: string;
+        phone?: string;
       },
       executor?: Executor,
     ) {
@@ -121,6 +123,8 @@ export async function buildApp({
           password: input.password,
           fullName: input.fullName,
           roles: [...input.roles],
+          ...(input.email === undefined ? {} : { email: input.email }),
+          ...(input.phone === undefined ? {} : { phone: input.phone }),
         },
         { actor: SYSTEM_ACTOR, executor },
       );

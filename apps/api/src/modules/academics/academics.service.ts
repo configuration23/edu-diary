@@ -85,6 +85,8 @@ export interface UserLookupPort {
       password: string;
       fullName: string;
       roles: readonly string[];
+      email?: string;
+      phone?: string;
     },
     executor?: Executor,
   ): Promise<{ id: string }>;
@@ -92,12 +94,13 @@ export interface UserLookupPort {
 
 export interface CreateStudentInput {
   fullName: string;
-  shortName?: string | undefined;
+  shortName?: string | null | undefined;
   birthDate?: string | null | undefined;
-  note?: string | undefined;
+  /** `null` приходит из формы, когда поле оставили пустым. */
+  note?: string | null | undefined;
   userId?: string | null | undefined;
   /** Новая учётная запись ученика: необязательна (создаётся по необходимости). */
-  account?: { username: string; password: string } | undefined;
+  account?: { username: string; password: string; email?: string; phone?: string } | undefined;
 }
 
 export interface UpdateStudentInput {
@@ -550,6 +553,8 @@ export function createAcademicsService(
                   password: account.password,
                   fullName: input.fullName,
                   roles: ['student'],
+                  ...(account.email === undefined ? {} : { email: account.email }),
+                  ...(account.phone === undefined ? {} : { phone: account.phone }),
                 },
                 tx,
               ),

@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 import type { SessionResponseDto, UserSummaryDto } from '@edu-diary/contracts';
 import { GuardianLinksCard, LinkGuardianForm } from './StudentsCard';
+import { NewGuardianCard } from './NewGuardianCard';
 import { errorMessage } from '../lib/api-client';
 import {
   useCreateUser,
@@ -12,7 +13,6 @@ import {
   useResetPassword,
   useRoles,
   useSetUserRoles,
-  useSuggestUsername,
   useUsers,
 } from '../lib/queries';
 import {
@@ -71,11 +71,6 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
   const [passwordFor, setPasswordFor] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
-  /** Подсказка по логину — рядом с полем, а не в общей плашке страницы. */
-  const [loginHint, setLoginHint] = useState<{
-    tone: 'success' | 'warning' | 'error';
-    text: string;
-  } | null>(null);
 
   const users = useUsers({ search });
   const roles = useRoles();
@@ -83,12 +78,17 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
   const setUserRoles = useSetUserRoles();
   const deactivate = useDeactivateUser();
   const resetPassword = useResetPassword();
-  const suggest = useSuggestUsername();
 
   const form = useForm<CreateUserForm>({
     resolver: zodResolver(createUserFormSchema),
     defaultValues: { username: '', fullName: '', password: '', email: '', roles: ['teacher'] },
   });
+
+  // В общей форме — только роли сотрудников: ученик заводится в разделе групп,
+  // представитель — отдельным блоком, где учётная запись связана с учеником.
+  const staffRoles = (roles.data?.items ?? []).filter(
+    (role) => role.code !== 'student' && role.code !== 'parent',
+  );
 
   // Сколько ролей отмечено сейчас: две и больше — повод для предупреждения.
   const selectedCount = form.watch('roles').length;
@@ -127,66 +127,11 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
               </Field>
               <Field
                 label="Логин"
-                hint="Предлагается по ФИО — можно поправить"
+                hint="Строчные латинские буквы, цифры, точка, дефис"
                 error={form.formState.errors.username?.message}
               >
-                <div className="flex gap-2">
-                  <TextInput autoComplete="off" {...form.register('username')} />
-                  <Button
-                    tone="secondary"
-                    disabled={suggest.isPending}
-                    onClick={async () => {
-                      // Результат показываем здесь же, у поля: общая плашка
-                      // наверху страницы не видна при прокрученной форме.
-                      setLoginHint(null);
-                      const fullName = form.getValues('fullName').trim();
-                      if (fullName === '') {
-                        setLoginHint({
-                          tone: 'warning',
-                          text: 'Сначала заполните ФИО — логин строится из него.',
-                        });
-                        return;
-                      }
-
-                      try {
-                        const result = await suggest.mutateAsync(fullName);
-                        if (result.username === null) {
-                          setLoginHint({
-                            tone: 'error',
-                            text: 'Не удалось построить логин из ФИО — введите его вручную.',
-                          });
-                          return;
-                        }
-
-                        form.setValue('username', result.username, { shouldValidate: true });
-                        setLoginHint({
-                          tone: 'success',
-                          text:
-                            result.taken.length === 0
-                              ? `Логин свободен: ${result.username}`
-                              : `Базовый логин занят, предложен ${result.username}`,
-                        });
-                      } catch (error) {
-                        setLoginHint({ tone: 'error', text: errorMessage(error) });
-                      }
-                    }}
-                  >
-                    По ФИО
-                  </Button>
-                </div>
-                {loginHint !== null && (
-                  <p
-                    className={
-                      loginHint.tone === 'error'
-                        ? 'mt-1 text-xs text-red-700'
-                        : loginHint.tone === 'warning'
-                          ? 'mt-1 text-xs text-amber-700'
-                          : 'mt-1 text-xs text-emerald-700'
-                    }
-                  >
-                    {loginHint.text}
-                  </p>
-                )}
+                {/* Автоподстановка логина по ФИО отложена: поле заполняется вручную. */}
+                <TextInput autoComplete="off" {...form.register('username')} />
               </Field>
               <Field
                 label="Временный пароль"
@@ -209,17 +154,17 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
             </div>
 
             <fieldset>
-              <legend className="mb-2 text-sm font-medium text-slate-700">Роли</legend>
+              <legend className="mb-2 text-sm font-medium text-slate-700">Роли сотрудника</legend>
               <div className="flex flex-wrap gap-3">
-                {(roles.data?.items ?? []).map((role) => (
+                {staffRoles.map((role) => (
                   <label key={role.code} className="flex items-center gap-2 text-sm">
                     <input
                       type="checkbox"
                       value={role.code}
                       {...form.register('roles')}
                       onChange={(event) => {
-                        // Роли дают права всем вместе: показываем явное
-                        // предупреждение, чтобы не выдать ученику права админа.
+                        // Роли дают права все вместе: показываем предупреждение,
+                        // чтобы случайно не выдать лишнее.
                         void form.register('roles').onChange(event);
                         setNotice(null);
                       }}
@@ -233,6 +178,10 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
                   {form.formState.errors.roles.message}
                 </span>
               )}
+              <p className="mt-2 text-xs text-slate-500">
+                Учеников заводят в разделе «Группы и ученики» (блок «Новый ученик»), законных
+                представителей — блоком ниже: у них учётная запись всегда связана с человеком.
+              </p>
             </fieldset>
 
             {selectedCount > 1 && (
@@ -405,9 +354,10 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
       </Card>
 
       {/* Учеников ведут в «Группах и учениках»: там список людей и группы,
-          которые из них собираются. Здесь остаётся связка с представителем. */}
+          которые из них собираются. Здесь — учётные записи представителей. */}
       {canManage && (
         <>
+          <NewGuardianCard onCreated={setNotice} />
           <LinkGuardianForm onLinked={setNotice} />
           <GuardianLinksCard onNotice={setNotice} />
         </>

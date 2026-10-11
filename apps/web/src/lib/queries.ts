@@ -201,8 +201,14 @@ function invalidateUsers(client: ReturnType<typeof useQueryClient>): void {
 export function useCreateUser() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (input: unknown) =>
-      apiRequest('/api/users', userSummarySchema, { method: 'POST', body: input }),
+    mutationFn: (input: {
+      username: string;
+      fullName: string;
+      password: string;
+      roles: string[];
+      email?: string;
+      phone?: string;
+    }) => apiRequest('/api/users', userSummarySchema, { method: 'POST', body: input }),
     onSuccess: () => invalidateUsers(client),
   });
 }
@@ -357,10 +363,10 @@ export function useCreateStudent() {
   return useMutation({
     mutationFn: (input: {
       fullName: string;
-      birthDate?: string | null;
-      note?: string | null;
+      birthDate?: string;
+      note?: string;
       /** Учётная запись создаётся по необходимости, вместе с карточкой ученика. */
-      account?: { username: string; password: string } | undefined;
+      account?: { username: string; password: string; email?: string; phone?: string } | undefined;
     }) => apiRequest('/api/students', studentSummarySchema, { method: 'POST', body: input }),
     onSuccess: () => invalidateStudents(client),
   });
@@ -370,10 +376,21 @@ export function useCreateStudent() {
 export function useCreateStudentAccount() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (input: { studentId: string; username: string; password: string }) =>
+    mutationFn: (input: {
+      studentId: string;
+      username: string;
+      password: string;
+      email?: string;
+      phone?: string;
+    }) =>
       apiRequest(`/api/students/${input.studentId}/account`, studentSummarySchema, {
         method: 'POST',
-        body: { username: input.username, password: input.password },
+        body: {
+          username: input.username,
+          password: input.password,
+          ...(input.email === undefined ? {} : { email: input.email }),
+          ...(input.phone === undefined ? {} : { phone: input.phone }),
+        },
       }),
     onSuccess: () => invalidateStudents(client),
   });

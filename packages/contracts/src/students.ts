@@ -64,14 +64,18 @@ export const studentAccountRequestSchema = z.object({
     }),
   /** Временный пароль: при первом входе его нужно сменить. */
   password: z.string().min(1).max(200),
+  email: z.email().max(200).optional(),
+  phone: z.string().max(40).optional(),
 });
 export type StudentAccountRequestDto = z.infer<typeof studentAccountRequestSchema>;
 
 export const createStudentRequestSchema = z.object({
   fullName: z.string().min(1).max(200),
   shortName: z.string().max(60).optional(),
+  // Пустое значение формы приходит как `null`: раньше такие поля принимались
+  // только строкой, и создание ученика без даты или примечания падало с 400.
   birthDate: isoDateSchema.nullable().optional(),
-  note: z.string().max(500).optional(),
+  note: z.string().max(500).nullable().optional(),
   /** Привязка уже существующей учётной записи (например, созданной заранее). */
   userId: uuidSchema.nullable().optional(),
   /** Новая учётная запись ученика: необязательна. */

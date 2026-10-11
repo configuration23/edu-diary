@@ -8,7 +8,6 @@ import {
   useGuardianLinks,
   useLinkGuardian,
   useStudents,
-  useSuggestUsername,
   useUnlinkGuardian,
   useUsers,
 } from '../lib/queries';
@@ -52,7 +51,6 @@ function relationLabel(value: string | null): string {
 
 function CreateStudentForm({ onCreated }: { onCreated: (message: string) => void }) {
   const createStudent = useCreateStudent();
-  const suggest = useSuggestUsername();
 
   const [fullName, setFullName] = useState('');
   const [birthDate, setBirthDate] = useState('');
@@ -60,29 +58,8 @@ function CreateStudentForm({ onCreated }: { onCreated: (message: string) => void
   const [withAccount, setWithAccount] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [hint, setHint] = useState<string | null>(null);
-
-  /** Подсказка логина по ФИО: занятость проверяет сервер. */
-  const suggestLogin = async (): Promise<void> => {
-    setHint(null);
-    if (fullName.trim() === '') {
-      setHint('Сначала заполните ФИО.');
-      return;
-    }
-
-    const result = await suggest.mutateAsync(fullName.trim());
-    if (result.username === null) {
-      setHint('Не удалось построить логин из ФИО — введите его вручную.');
-      return;
-    }
-
-    setUsername(result.username);
-    setHint(
-      result.taken.length === 0
-        ? `Логин свободен: ${result.username}`
-        : `Базовый логин занят, предложен ${result.username}`,
-    );
-  };
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
 
   return (
     <Card
@@ -93,15 +70,28 @@ function CreateStudentForm({ onCreated }: { onCreated: (message: string) => void
         className="flex flex-col gap-4"
         onSubmit={async (event) => {
           event.preventDefault();
-          setHint(null);
 
           try {
+            const trimmedNote = note.trim();
+            const trimmedUsername = username.trim().toLowerCase();
+            const trimmedEmail = email.trim();
+            const trimmedPhone = phone.trim();
+
             await createStudent.mutateAsync({
               fullName: fullName.trim(),
-              birthDate: birthDate === '' ? null : birthDate,
-              note: note === '' ? null : note,
+              // Пустые поля не отправляем совсем: раньше они уходили как `null`,
+              // и сервер отвечал 400 на создание ученика без даты или примечания.
+              ...(birthDate === '' ? {} : { birthDate }),
+              ...(trimmedNote === '' ? {} : { note: trimmedNote }),
               ...(withAccount
-                ? { account: { username: username.trim().toLowerCase(), password } }
+                ? {
+                    account: {
+                      username: trimmedUsername,
+                      password,
+                      ...(trimmedEmail === '' ? {} : { email: trimmedEmail }),
+                      ...(trimmedPhone === '' ? {} : { phone: trimmedPhone }),
+                    },
+                  }
                 : {}),
             });
 
@@ -111,6 +101,8 @@ function CreateStudentForm({ onCreated }: { onCreated: (message: string) => void
             setNote('');
             setUsername('');
             setPassword('');
+            setEmail('');
+            setPhone('');
             setWithAccount(false);
             onCreated(
               withAccount
@@ -137,7 +129,7 @@ function CreateStudentForm({ onCreated }: { onCreated: (message: string) => void
               onChange={(event) => setBirthDate(event.target.value)}
             />
           </Field>
-          <Field label="Примечание" hint="Только факты по учёбе">
+          <Field label="Примечание" hint="Необязательно: только факты по учёбе">
             <TextInput value={note} onChange={(event) => setNote(event.target.value)} />
           </Field>
         </div>
@@ -152,10 +144,11 @@ function CreateStudentForm({ onCreated }: { onCreated: (message: string) => void
         </label>
 
         {withAccount && (
-          <div className="grid gap-4 rounded-md border border-slate-200 p-4 sm:grid-cols-3">
+          <div className="grid gap-4 rounded-md border border-slate-200 p-4 sm:grid-cols-2">
             <Field label="Логин" hint="Строчные латинские буквы и цифры">
               <TextInput
                 required={withAccount}
+                autoComplete="off"
                 value={username}
                 onChange={(event) => setUsername(event.target.value)}
               />
@@ -169,20 +162,19 @@ function CreateStudentForm({ onCreated }: { onCreated: (message: string) => void
                 onChange={(event) => setPassword(event.target.value)}
               />
             </Field>
-            <div className="flex items-end pb-2">
-              <Button
-                tone="secondary"
-                onClick={() => void suggestLogin()}
-                disabled={suggest.isPending}
-              >
-                Предложить логин по ФИО
-              </Button>
-            </div>
+            <Field label="Почта" hint="Необязательно">
+              <TextInput
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+              />
+            </Field>
+            <Field label="Телефон" hint="Необязательно">
+              <TextInput value={phone} onChange={(event) => setPhone(event.target.value)} />
+            </Field>
           </div>
         )}
 
-        {hint !== null && <Alert tone="info">{hint}</Alert>}
-        {suggest.isError && <Alert tone="error">{errorMessage(suggest.error)}</Alert>}
         {createStudent.isError && <Alert tone="error">{errorMessage(createStudent.error)}</Alert>}
 
         <div>
@@ -303,18 +295,23 @@ function AccountForm({
   onDone: (message: string) => void;
 }) {
   const createAccount = useCreateStudentAccount();
-  const suggest = useSuggestUsername();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
 
   return (
     <div className="mt-3 rounded-md border border-slate-200 p-4">
       <p className="mb-3 text-sm text-slate-700">
         Учётная запись для «{studentName}»: роль «Ученик» подставляется автоматически.
       </p>
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Field label="Логин">
-          <TextInput value={username} onChange={(event) => setUsername(event.target.value)} />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Логин" hint="Строчные латинские буквы и цифры">
+          <TextInput
+            autoComplete="off"
+            value={username}
+            onChange={(event) => setUsername(event.target.value)}
+          />
         </Field>
         <Field label="Временный пароль" hint="Минимум 10 символов">
           <TextInput
@@ -324,30 +321,35 @@ function AccountForm({
             onChange={(event) => setPassword(event.target.value)}
           />
         </Field>
-        <div className="flex items-end gap-2 pb-2">
-          <Button
-            tone="secondary"
-            disabled={suggest.isPending}
-            onClick={async () => {
-              const result = await suggest.mutateAsync(studentName);
-              if (result.username !== null) setUsername(result.username);
-            }}
-          >
-            Предложить логин
-          </Button>
-          <Button
-            disabled={createAccount.isPending || username === '' || password.length < 10}
-            onClick={async () => {
-              await createAccount.mutateAsync({ studentId, username, password });
-              onDone(`Учётная запись «${username}» создана.`);
-            }}
-          >
-            Создать
-          </Button>
-        </div>
+        <Field label="Почта" hint="Необязательно">
+          <TextInput
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+          />
+        </Field>
+        <Field label="Телефон" hint="Необязательно">
+          <TextInput value={phone} onChange={(event) => setPhone(event.target.value)} />
+        </Field>
+      </div>
+      <div className="mt-3">
+        <Button
+          disabled={createAccount.isPending || username === '' || password.length < 10}
+          onClick={async () => {
+            await createAccount.mutateAsync({
+              studentId,
+              username,
+              password,
+              ...(email.trim() === '' ? {} : { email: email.trim() }),
+              ...(phone.trim() === '' ? {} : { phone: phone.trim() }),
+            });
+            onDone(`Учётная запись «${username}» создана.`);
+          }}
+        >
+          Создать
+        </Button>
       </div>
       {createAccount.isError && <Alert tone="error">{errorMessage(createAccount.error)}</Alert>}
-      {suggest.isError && <Alert tone="error">{errorMessage(suggest.error)}</Alert>}
     </div>
   );
 }

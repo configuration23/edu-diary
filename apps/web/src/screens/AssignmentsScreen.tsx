@@ -37,6 +37,9 @@ function CreateAssignmentCard() {
   const subjects = useSubjects();
   const groups = useGroups();
   const create = useCreateAssignment();
+  // Уже существующие назначения: по ним показываем мягкое предупреждение о
+  // возможном наложении — сервер такое больше не запрещает.
+  const existing = useAssignments();
 
   const [teacherUserId, setTeacherUserId] = useState('');
   const [subjectId, setSubjectId] = useState('');
@@ -50,10 +53,24 @@ function CreateAssignmentCard() {
     user.roles.some((role) => role.code === 'teacher'),
   );
 
+  /**
+   * Назначения выбранного преподавателя, которые пересекаются с вводимым
+   * периодом. Не запрет: вести два предмета параллельно можно, но стоит
+   * проверить, не окажутся ли пары в одно время (это ловит расписание).
+   */
+  const overlapping = (existing.data?.items ?? []).filter(
+    (item) =>
+      teacherUserId !== '' &&
+      item.teacherUserId === teacherUserId &&
+      item.endsOn !== null &&
+      (endsOn === '' || item.startsOn <= endsOn) &&
+      (startsOn === '' || item.endsOn >= startsOn),
+  );
+
   return (
     <Card
       title="Новое назначение"
-      description="У преподавателя не бывает двух назначений в один период; предмет в группе ведёт один преподаватель."
+      description="Преподаватель может вести предмет в нескольких группах и несколько предметов в группе; ограничение одно — предмет в группе ведёт один преподаватель."
     >
       <form
         className="flex flex-col gap-4"
@@ -176,6 +193,14 @@ function CreateAssignmentCard() {
         </div>
 
         {dateError !== null && <Alert tone="error">{dateError}</Alert>}
+
+        {overlapping.length > 0 && (
+          <Alert tone="warning">
+            У этого преподавателя уже есть назначения в этот период:{' '}
+            {overlapping.map((item) => `${item.subjectName} — ${item.groupName}`).join('; ')}. Это
+            допустимо, но проверьте, что пары не окажутся в одно время.
+          </Alert>
+        )}
 
         {create.isError && <Alert tone="error">{errorMessage(create.error)}</Alert>}
 
