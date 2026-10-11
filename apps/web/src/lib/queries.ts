@@ -1,5 +1,6 @@
-﻿import {
+import {
   academicYearSchema,
+  bellScheduleSchema,
   academicYearWithPeriodsSchema,
   assignmentSchema,
   brandingSchema,
@@ -15,6 +16,7 @@
   listEnrollmentsResponseSchema,
   listGradeCategoriesResponseSchema,
   listGuardianLinksResponseSchema,
+  listBellsResponseSchema,
   listGroupsResponseSchema,
   listPermissionsResponseSchema,
   listRolesResponseSchema,
@@ -719,6 +721,41 @@ export function useCreateGradeCategory() {
     mutationFn: (input: { code: string; title: string; weight: number; color?: string | null }) =>
       apiRequest('/api/grade-categories', gradeCategorySchema, { method: 'POST', body: input }),
     onSuccess: () => invalidateAcademics(client),
+  });
+}
+
+/** Звонки: сетка времени по номеру пары (справочник заведения). */
+export function useBells() {
+  return useQuery({
+    queryKey: ['bells'],
+    queryFn: () => apiRequest('/api/bells', listBellsResponseSchema),
+  });
+}
+
+/** Сохранение звонка: пара уникальна, поэтому одна операция и для создания, и для правки. */
+export function useSaveBell() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      pairNumber: number;
+      timeStart: string;
+      timeEnd: string;
+      breakMinutes?: number | null;
+    }) => apiRequest('/api/bells', bellScheduleSchema, { method: 'PUT', body: input }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ['bells'] });
+    },
+  });
+}
+
+export function useDeleteBell() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (pairNumber: number) =>
+      apiSend(`/api/bells/${pairNumber}`, { method: 'DELETE' }).then(() => pairNumber),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ['bells'] });
+    },
   });
 }
 

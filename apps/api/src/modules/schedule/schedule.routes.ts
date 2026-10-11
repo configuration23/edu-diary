@@ -1,10 +1,12 @@
 import {
+  bellScheduleSchema,
   createScheduleEntryRequestSchema,
   createScheduleExceptionRequestSchema,
   createSubstitutionRequestSchema,
   generateLessonsRequestSchema,
   lessonSchema,
   listLessonsQuerySchema,
+  listBellsResponseSchema,
   listLessonsResponseSchema,
   listSubstitutionsQuerySchema,
   listScheduleExceptionsResponseSchema,
@@ -16,6 +18,7 @@ import {
   substitutionSchema,
   updateLessonRequestSchema,
   updateScheduleEntryRequestSchema,
+  upsertBellRequestSchema,
   type LessonDto,
   type ScheduleEntryDto,
   type ScheduleExceptionDto,
@@ -156,6 +159,31 @@ export function registerScheduleRoutes(
     // привязки уже учтены в `groupIdsOfStudent` (ADR-005).
     return catalog.groupIdsOfStudent(auth.userId);
   };
+
+  // --- Звонки: сетка времени по номеру пары ---
+
+  app.get('/bells', { preHandler: requirePermission('schedule:read', 'own') }, async () =>
+    listBellsResponseSchema.parse({ items: await schedule.listBells() }),
+  );
+
+  app.put('/bells', { preHandler: requirePermission('schedule:write', 'all') }, async (request) => {
+    const body = upsertBellRequestSchema.parse(request.body);
+    const saved = await schedule.saveBell(body, { actor: actorFromRequest(request) });
+
+    return bellScheduleSchema.parse(saved);
+  });
+
+  app.delete(
+    '/bells/:pairNumber',
+    { preHandler: requirePermission('schedule:write', 'all') },
+    async (request, reply) => {
+      const { pairNumber } = request.params as { pairNumber: string };
+      await schedule.deleteBell(Number(pairNumber), { actor: actorFromRequest(request) });
+
+      reply.status(204);
+      return null;
+    },
+  );
 
   app.get(
     '/schedule',

@@ -3,13 +3,27 @@ import { and, asc, eq, gte, inArray, lte, ne, sql } from 'drizzle-orm';
 import type { Database, Executor } from '../../shared/db/client';
 import { room, studyGroup, subject } from '../academics';
 import { teachingAssignment } from '../staffing';
-import { lesson, scheduleEntry, scheduleException, substitution } from './schedule.schema';
+import {
+  bellSchedule,
+  lesson,
+  scheduleEntry,
+  scheduleException,
+  substitution,
+} from './schedule.schema';
 
-/** SQL только здесь: расписание, исключения, уроки и замены. */
+/** SQL только здесь: звонки, расписание, исключения, уроки и замены. */
 
 /** Время из базы приходит как `HH:MM:SS`: в DTO нужно `HH:MM`. */
 function toTime(value: string): string {
   return value.slice(0, 5);
+}
+
+export interface BellScheduleRecord {
+  id: string;
+  pairNumber: number;
+  timeStart: string;
+  timeEnd: string;
+  breakMinutes: number | null;
 }
 
 export interface ScheduleEntryRecord {
@@ -181,6 +195,14 @@ function toExceptionRecord(
 }
 
 export interface ScheduleRepository {
+  /** Звонки: сетка времени по номеру пары. */
+  listBells(): Promise<BellScheduleRecord[]>;
+  upsertBell(
+    input: { pairNumber: number; timeStart: string; timeEnd: string; breakMinutes: number | null },
+    executor?: Executor,
+  ): Promise<BellScheduleRecord>;
+  deleteBell(pairNumber: number, executor?: Executor): Promise<boolean>;
+
   listEntries(filter: {
     studyGroupId?: string | undefined;
     teacherUserId?: string | undefined;
@@ -326,6 +348,55 @@ export function createScheduleRepository(db: Database): ScheduleRepository {
       .innerJoin(studyGroup, eq(studyGroup.id, scheduleException.studyGroupId));
 
   return {
+    async listBells() {
+      const rows = await db.orm.select().from(bellSchedule).orderBy(asc(bellSchedule.pairNumber));
+
+      return rows.map((row) => ({
+        id: row.id,
+        pairNumber: row.pairNumber,
+        timeStart: toTime(row.timeStart),
+        timeEnd: toTime(row.timeEnd),
+        breakMinutes: row.breakMinutes,
+      }));
+    },
+
+    async upsertBell(input, executor: Executor = db.orm) {
+      // Пара уникальна: повторная запись — это правка сетки, а не вторая строка.
+      const rows = await executor
+        .insert(bellSchedule)
+        .values(input)
+        .onConflictDoUpdate({
+          target: bellSchedule.pairNumber,
+          set: {
+            timeStart: input.timeStart,
+            timeEnd: input.timeEnd,
+            breakMinutes: input.breakMinutes,
+            updatedAt: new Date(),
+          },
+        })
+        .returning();
+
+      const saved = rows[0];
+      if (saved === undefined) throw new Error('Не удалось сохранить звонок');
+
+      return {
+        id: saved.id,
+        pairNumber: saved.pairNumber,
+        timeStart: toTime(saved.timeStart),
+        timeEnd: toTime(saved.timeEnd),
+        breakMinutes: saved.breakMinutes,
+      };
+    },
+
+    async deleteBell(pairNumber, executor: Executor = db.orm) {
+      const rows = await executor
+        .delete(bellSchedule)
+        .where(eq(bellSchedule.pairNumber, pairNumber))
+        .returning({ id: bellSchedule.id });
+
+      return rows.length > 0;
+    },
+
     async listEntries(filter) {
       const conditions = [
         filter.studyGroupId === undefined

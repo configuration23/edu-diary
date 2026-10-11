@@ -65,6 +65,28 @@ export interface CatalogLookupPort {
 }
 
 export interface ScheduleService {
+  /** Звонки: сетка времени по номеру пары (справочник заведения). */
+  listBells(): Promise<
+    {
+      id: string;
+      pairNumber: number;
+      timeStart: string;
+      timeEnd: string;
+      breakMinutes: number | null;
+    }[]
+  >;
+  saveBell(
+    input: { pairNumber: number; timeStart: string; timeEnd: string; breakMinutes?: number | null },
+    options: MutationOptions,
+  ): Promise<{
+    id: string;
+    pairNumber: number;
+    timeStart: string;
+    timeEnd: string;
+    breakMinutes: number | null;
+  }>;
+  deleteBell(pairNumber: number, options: MutationOptions): Promise<void>;
+
   listEntries(filter: {
     studyGroupId?: string | undefined;
     teacherUserId?: string | undefined;
@@ -77,8 +99,9 @@ export interface ScheduleService {
       roomId?: string | null | undefined;
       dayOfWeek: number;
       pairNumber: number;
-      timeStart: string;
-      timeEnd: string;
+      /** Если не указано — берётся из звонков по номеру пары. */
+      timeStart?: string | undefined;
+      timeEnd?: string | undefined;
       validFrom: string;
       validTo?: string | null | undefined;
     },
@@ -300,6 +323,64 @@ export function createScheduleService(dependencies: ScheduleServiceDependencies)
   };
 
   return {
+    listBells() {
+      return schedule.listBells();
+    },
+
+    async saveBell(input, options) {
+      assertTimesValid(input.timeStart, input.timeEnd);
+
+      return withTransaction(db, options.executor, async (tx) => {
+        const saved = await schedule.upsertBell(
+          {
+            pairNumber: input.pairNumber,
+            timeStart: input.timeStart,
+            timeEnd: input.timeEnd,
+            breakMinutes: input.breakMinutes ?? null,
+          },
+          tx,
+        );
+
+        await audit.record(
+          {
+            action: 'update',
+            entityKind: 'bell_schedule',
+            entityId: saved.id,
+            after: {
+              pairNumber: saved.pairNumber,
+              timeStart: saved.timeStart,
+              timeEnd: saved.timeEnd,
+              breakMinutes: saved.breakMinutes,
+            },
+          },
+          options.actor,
+          tx,
+        );
+
+        return saved;
+      });
+    },
+
+    async deleteBell(pairNumber, options) {
+      return withTransaction(db, options.executor, async (tx) => {
+        const removed = await schedule.deleteBell(pairNumber, tx);
+        if (!removed) {
+          throw new AppError('NOT_FOUND', `Звонок для ${pairNumber}-й пары не найден`);
+        }
+
+        await audit.record(
+          {
+            action: 'delete',
+            entityKind: 'bell_schedule',
+            entityId: null,
+            before: { pairNumber },
+          },
+          options.actor,
+          tx,
+        );
+      });
+    },
+
     listEntries(filter) {
       return schedule.listEntries(filter);
     },
@@ -310,7 +391,27 @@ export function createScheduleService(dependencies: ScheduleServiceDependencies)
 
     async createEntry(input, options) {
       const assignment = await requireAssignment(input.assignmentId);
-      assertTimesValid(input.timeStart, input.timeEnd);
+
+      // Время берётся из звонков, если в форме его не задали: сетка заведения —
+      // источник истины для «который час идёт пара».
+      let { timeStart, timeEnd } = input;
+      if (timeStart === undefined || timeEnd === undefined) {
+        const bells = await schedule.listBells();
+        const bell = bells.find((item) => item.pairNumber === input.pairNumber);
+
+        if (bell === undefined) {
+          throw new AppError(
+            'VALIDATION_FAILED',
+            `Для ${input.pairNumber}-й пары не заданы звонки — укажите время вручную или заполните справочник «Звонки»`,
+            { details: { pairNumber: input.pairNumber } },
+          );
+        }
+
+        timeStart = bell.timeStart;
+        timeEnd = bell.timeEnd;
+      }
+
+      assertTimesValid(timeStart, timeEnd);
 
       if (input.validFrom < assignment.startsOn) {
         throw new AppError(
@@ -351,8 +452,9 @@ export function createScheduleService(dependencies: ScheduleServiceDependencies)
         roomId: input.roomId ?? null,
         dayOfWeek: input.dayOfWeek,
         pairNumber: input.pairNumber,
-        timeStart: input.timeStart,
-        timeEnd: input.timeEnd,
+        // Время уже развёрнуто выше: либо из формы, либо из звонков.
+        timeStart,
+        timeEnd,
         validFrom: input.validFrom,
         validTo: input.validTo ?? null,
       };

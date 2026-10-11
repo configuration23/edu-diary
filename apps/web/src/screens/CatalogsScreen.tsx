@@ -4,14 +4,17 @@ import type { GradeCategoryDto, RoomDto, SubjectDto } from '@edu-diary/contracts
 import { Alert, Badge, Button, Card, EmptyState, Field, Table, TextInput } from '../components/ui';
 import { errorMessage } from '../lib/api-client';
 import {
+  useBells,
   useCreateGradeCategory,
   useCreateRoom,
   useCreateSubject,
+  useDeleteBell,
   useDeleteGradeCategory,
   useDeleteRoom,
   useDeleteSubject,
   useGradeCategories,
   useRooms,
+  useSaveBell,
   useSubjects,
   useUpdateGradeCategory,
   useUpdateRoom,
@@ -506,12 +509,154 @@ function CategoriesCard() {
   );
 }
 
+/**
+ * Звонки: сетка времени по номеру пары.
+ *
+ * Сетка различается между заведениями, поэтому живёт в справочнике, а не в коде.
+ * При составлении расписания время подставляется по номеру пары, но остаётся
+ * правимым — в отдельных случаях пара идёт в другое время.
+ */
+function BellsCard() {
+  const bells = useBells();
+  const save = useSaveBell();
+  const remove = useDeleteBell();
+
+  const [pairNumber, setPairNumber] = useState('1');
+  const [timeStart, setTimeStart] = useState('');
+  const [timeEnd, setTimeEnd] = useState('');
+  const [breakMinutes, setBreakMinutes] = useState('');
+
+  return (
+    <Card
+      title="Звонки"
+      description="Время пары подставляется в расписание по номеру пары и остаётся правимым."
+    >
+      <form
+        className="flex flex-col gap-3"
+        onSubmit={async (event) => {
+          event.preventDefault();
+          try {
+            await save.mutateAsync({
+              pairNumber: Number(pairNumber),
+              timeStart,
+              timeEnd,
+              breakMinutes: breakMinutes === '' ? null : Number(breakMinutes),
+            });
+            setTimeStart('');
+            setTimeEnd('');
+            setBreakMinutes('');
+          } catch {
+            // Ошибка показывается ниже.
+          }
+        }}
+      >
+        <div className="grid gap-3 sm:grid-cols-4">
+          <Field label="Пара">
+            <select
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+              value={pairNumber}
+              onChange={(event) => setPairNumber(event.target.value)}
+            >
+              {[1, 2, 3, 4, 5, 6, 7, 8].map((number) => (
+                <option key={number} value={String(number)}>
+                  {number}-я пара
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Начало">
+            <TextInput
+              required
+              type="time"
+              value={timeStart}
+              onChange={(event) => setTimeStart(event.target.value)}
+            />
+          </Field>
+          <Field label="Окончание">
+            <TextInput
+              required
+              type="time"
+              value={timeEnd}
+              onChange={(event) => setTimeEnd(event.target.value)}
+            />
+          </Field>
+          <Field label="Перемена, мин" hint="Необязательно">
+            <TextInput
+              inputMode="numeric"
+              value={breakMinutes}
+              onChange={(event) => setBreakMinutes(event.target.value)}
+            />
+          </Field>
+        </div>
+
+        <div>
+          <Button type="submit" disabled={save.isPending}>
+            Сохранить звонок
+          </Button>
+        </div>
+
+        {save.isError && <Alert tone="error">{errorMessage(save.error)}</Alert>}
+      </form>
+
+      <div className="mt-4">
+        {bells.data !== undefined && bells.data.items.length === 0 && (
+          <EmptyState>
+            Звонки не заполнены: при составлении расписания время придётся указывать вручную.
+          </EmptyState>
+        )}
+
+        {bells.data !== undefined && bells.data.items.length > 0 && (
+          <Table head={['Пара', 'Начало', 'Окончание', 'Перемена', '']}>
+            {bells.data.items.map((bell) => (
+              <tr key={bell.id} className="border-b border-slate-100">
+                <td className="px-3 py-2 font-medium">{bell.pairNumber}-я</td>
+                <td className="px-3 py-2">{bell.timeStart}</td>
+                <td className="px-3 py-2">{bell.timeEnd}</td>
+                <td className="px-3 py-2 text-slate-500">{bell.breakMinutes ?? '—'}</td>
+                <td className="px-3 py-2">
+                  <span className="flex flex-wrap gap-2">
+                    <Button
+                      tone="ghost"
+                      onClick={() => {
+                        setPairNumber(String(bell.pairNumber));
+                        setTimeStart(bell.timeStart);
+                        setTimeEnd(bell.timeEnd);
+                        setBreakMinutes(
+                          bell.breakMinutes === null ? '' : String(bell.breakMinutes),
+                        );
+                      }}
+                    >
+                      Править
+                    </Button>
+                    <Button
+                      tone="ghost"
+                      disabled={remove.isPending}
+                      onClick={() =>
+                        void remove.mutateAsync(bell.pairNumber).catch(() => undefined)
+                      }
+                    >
+                      Удалить
+                    </Button>
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </Table>
+        )}
+
+        {remove.isError && <Alert tone="error">{errorMessage(remove.error)}</Alert>}
+      </div>
+    </Card>
+  );
+}
+
 export function CatalogsScreen() {
   return (
     <div className="flex flex-col gap-6">
       <SubjectsCard />
       <RoomsCard />
       <CategoriesCard />
+      <BellsCard />
     </div>
   );
 }

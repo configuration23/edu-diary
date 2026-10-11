@@ -34,6 +34,38 @@ const timeOfDaySchema = z
 export const pairNumberSchema = z.number().int().min(MIN_PAIR_NUMBER).max(MAX_PAIR_NUMBER);
 export const dayOfWeekSchema = z.number().int().min(MIN_DAY_OF_WEEK).max(MAX_DAY_OF_WEEK);
 
+/**
+ * Звонки: сетка времени по номеру пары.
+ *
+ * Хранится в базе, потому что сетка различается между заведениями: в форме
+ * расписания время подставляется по номеру пары, но остаётся правимым.
+ */
+export const bellScheduleSchema = z.object({
+  id: uuidSchema,
+  pairNumber: pairNumberSchema,
+  timeStart: timeOfDaySchema,
+  timeEnd: timeOfDaySchema,
+  /** Перемена после пары, минут: подсказка для интерфейса. */
+  breakMinutes: z.number().int().min(0).max(120).nullable(),
+});
+export type BellScheduleDto = z.infer<typeof bellScheduleSchema>;
+
+export const listBellsResponseSchema = z.object({ items: z.array(bellScheduleSchema) });
+export type ListBellsResponseDto = z.infer<typeof listBellsResponseSchema>;
+
+export const upsertBellRequestSchema = z
+  .object({
+    pairNumber: pairNumberSchema,
+    timeStart: timeOfDaySchema,
+    timeEnd: timeOfDaySchema,
+    breakMinutes: z.number().int().min(0).max(120).nullable().optional(),
+  })
+  .refine((value) => value.timeStart < value.timeEnd, {
+    message: 'Время начала позже времени окончания',
+    path: ['timeEnd'],
+  });
+export type UpsertBellRequestDto = z.infer<typeof upsertBellRequestSchema>;
+
 /** Шаблон расписания: занятие, повторяющееся каждую неделю. */
 export const scheduleEntrySchema = z.object({
   id: uuidSchema,
@@ -74,15 +106,26 @@ export const createScheduleEntryRequestSchema = z
     roomId: uuidSchema.nullable().optional(),
     dayOfWeek: dayOfWeekSchema,
     pairNumber: pairNumberSchema,
-    timeStart: timeOfDaySchema,
-    timeEnd: timeOfDaySchema,
+    /**
+     * Время можно не указывать: тогда оно берётся из звонков по номеру пары.
+     * Если сетка звонков не заполнена — сервер попросит указать время явно.
+     */
+    timeStart: timeOfDaySchema.optional(),
+    timeEnd: timeOfDaySchema.optional(),
     validFrom: isoDateSchema,
     validTo: isoDateSchema.nullable().optional(),
   })
-  .refine((value) => value.timeStart < value.timeEnd, {
-    message: 'Время начала позже времени окончания',
+  .refine((value) => (value.timeStart === undefined) === (value.timeEnd === undefined), {
+    message: 'Укажите и начало, и окончание пары',
     path: ['timeEnd'],
   })
+  .refine(
+    (value) =>
+      value.timeStart === undefined ||
+      value.timeEnd === undefined ||
+      value.timeStart < value.timeEnd,
+    { message: 'Время начала позже времени окончания', path: ['timeEnd'] },
+  )
   .refine(
     (value) =>
       value.validTo === null || value.validTo === undefined || value.validFrom <= value.validTo,

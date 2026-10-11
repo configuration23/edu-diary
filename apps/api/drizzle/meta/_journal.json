@@ -43,6 +43,13 @@
       "when": 1791730878108,
       "tag": "0005_schedule",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791733002367,
+      "tag": "0006_bell_schedule",
+      "breakpoints": true
     }
   ]
 }

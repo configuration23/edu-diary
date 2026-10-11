@@ -41,7 +41,13 @@ export {
   type ScheduleServiceDependencies,
   type UserLookupPort,
 } from './schedule.service';
-export { lesson, scheduleEntry, scheduleException, substitution } from './schedule.schema';
+export {
+  bellSchedule,
+  lesson,
+  scheduleEntry,
+  scheduleException,
+  substitution,
+} from './schedule.schema';
 
 export function buildScheduleService(dependencies: {
   db: Database;

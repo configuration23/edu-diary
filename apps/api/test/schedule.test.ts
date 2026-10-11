@@ -145,6 +145,94 @@ describeWithDatabase('расписание и уроки', () => {
   const createEntry = (payload: Json) =>
     testApp.app.inject({ method: 'POST', url: '/api/schedule', headers: auth(), payload });
 
+  it('звонки: справочник заполняется, правится и время подставляется в занятие', async () => {
+    const empty = await testApp.app.inject({
+      method: 'GET',
+      url: '/api/bells',
+      headers: auth(),
+    });
+    expect(empty.statusCode).toBe(200);
+    expect((empty.json() as { items: Json[] }).items).toHaveLength(0);
+
+    // Пока звонков нет, занятие без времени не создаётся: сервер объясняет, что делать.
+    const withoutBells = await createEntry({
+      assignmentId,
+      dayOfWeek: 4,
+      pairNumber: 3,
+      validFrom: shiftDays(-100),
+    });
+    expect(withoutBells.statusCode).toBe(400);
+    expect((withoutBells.json() as { error: { message: string } }).error.message).toContain(
+      'звонки',
+    );
+
+    const saved = await testApp.app.inject({
+      method: 'PUT',
+      url: '/api/bells',
+      headers: auth(),
+      payload: { pairNumber: 3, timeStart: '11:30', timeEnd: '13:00', breakMinutes: 10 },
+    });
+    expect(saved.statusCode).toBe(200);
+    expect((saved.json() as Json).timeStart).toBe('11:30');
+
+    // Повторная запись той же пары — правка, а не вторая строка.
+    const updated = await testApp.app.inject({
+      method: 'PUT',
+      url: '/api/bells',
+      headers: auth(),
+      payload: { pairNumber: 3, timeStart: '11:40', timeEnd: '13:10' },
+    });
+    expect(updated.statusCode).toBe(200);
+
+    const bells = await testApp.app.inject({ method: 'GET', url: '/api/bells', headers: auth() });
+    const items = (bells.json() as { items: Json[] }).items;
+    expect(items).toHaveLength(1);
+    expect(items[0]?.timeStart).toBe('11:40');
+
+    // Теперь занятие создаётся без указания времени: оно берётся из звонков.
+    const entry = await createEntry({
+      assignmentId,
+      dayOfWeek: 4,
+      pairNumber: 3,
+      validFrom: shiftDays(-100),
+    });
+    expect(entry.statusCode).toBe(201);
+    expect((entry.json() as Json).timeStart).toBe('11:40');
+    expect((entry.json() as Json).timeEnd).toBe('13:10');
+
+    // Преподаватель звонки менять не может, но видеть — да.
+    const forbidden = await testApp.app.inject({
+      method: 'PUT',
+      url: '/api/bells',
+      headers: teacherAuth(),
+      payload: { pairNumber: 4, timeStart: '14:00', timeEnd: '15:30' },
+    });
+    expect(forbidden.statusCode).toBe(403);
+
+    const visible = await testApp.app.inject({
+      method: 'GET',
+      url: '/api/bells',
+      headers: teacherAuth(),
+    });
+    expect(visible.statusCode).toBe(200);
+
+    const removed = await testApp.app.inject({
+      method: 'DELETE',
+      url: '/api/bells/3',
+      headers: auth(),
+    });
+    expect(removed.statusCode).toBe(204);
+
+    // Убираем занятие, созданное проверкой: дальше тесты считают сетку с нуля.
+    const created = entry.json() as Json;
+    const cleaned = await testApp.app.inject({
+      method: 'DELETE',
+      url: `/api/schedule/${created.id as string}`,
+      headers: auth(),
+    });
+    expect(cleaned.statusCode).toBe(204);
+  });
+
   it('занятие ставится в сетку группы', async () => {
     const created = await createEntry({
       assignmentId,
