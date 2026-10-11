@@ -332,6 +332,46 @@ export function createScheduleService(dependencies: ScheduleServiceDependencies)
     }
   };
 
+  /**
+   * Проверка, что заменяющий свободен на этом слоте.
+   *
+   * Проверяются реальные уроки: занятие заменяющего может быть в другой группе,
+   * поэтому слот сверяется со всеми парами, которые он ведёт в этот день.
+   * Отменённые уроки не в счёт — пара освобождена (тот же смысл, что у
+   * частичного индекса `lesson_group_slot_key`).
+   */
+  const assertSubstituteFree = async (
+    substituteUserId: string,
+    scheduleEntryId: string | null,
+    date: string,
+    pairNumber: number,
+  ): Promise<void> => {
+    if (scheduleEntryId === null) return;
+
+    // Ищем занятие заменяющего по всем группам сразу: он может вести пару в
+    // любой из них, а не только в той, куда его ставят заменой.
+    const lessons = await schedule.listLessonsForTeacherOnDate(substituteUserId, date);
+    const conflict = lessons.find(
+      (item) => item.pairNumber === pairNumber && item.status !== 'cancelled',
+    );
+
+    if (conflict !== undefined) {
+      throw new AppError(
+        'CONFLICT',
+        `Заменяющий уже ведёт занятие в это время: «${conflict.groupName}», ${conflict.subjectName} (${date}, ${pairNumber}-я пара)`,
+        {
+          details: {
+            reason: 'substitute_overlap',
+            conflictId: conflict.id,
+            studyGroupId: conflict.studyGroupId,
+            lessonDate: date,
+            pairNumber,
+          },
+        },
+      );
+    }
+  };
+
   const assertTimesValid = (timeStart: string, timeEnd: string): void => {
     if (!isValidPairTime(timeStart, timeEnd)) {
       throw new AppError(
@@ -1011,6 +1051,15 @@ export function createScheduleService(dependencies: ScheduleServiceDependencies)
           );
         }
 
+        // Заменяющий не может оказаться в двух местах в одно время: до этого
+        // проверки не было, и одного человека можно было поставить на две пары.
+        await assertSubstituteFree(
+          substitute.id,
+          target.scheduleEntryId,
+          target.lessonDate,
+          target.pairNumber,
+        );
+
         return withTransaction(db, options.executor, async (tx) => {
           const created = await schedule.insertSubstitution(
             {
@@ -1072,6 +1121,21 @@ export function createScheduleService(dependencies: ScheduleServiceDependencies)
       }
       if (substitute.id === assignment.teacherUserId) {
         throw new AppError('VALIDATION_FAILED', 'Заменяющий совпадает с преподавателем назначения');
+      }
+
+      /**
+       * Диапазон замены: проверяем каждую дату, когда по шаблону назначения
+       * занятие действительно проходит. Пары вне периода действия шаблона и не
+       * в свой день недели замены не касаются.
+       */
+      const entries = await schedule.listEntries({ studyGroupId: assignment.studyGroupId });
+      const affected = entries.filter((entry) => entry.assignmentId === assignment.id);
+
+      for (const entry of affected) {
+        const dates = datesForEntry(entry, startsOn, endsOn ?? startsOn);
+        for (const date of dates) {
+          await assertSubstituteFree(substitute.id, entry.id, date, entry.pairNumber);
+        }
       }
 
       return withTransaction(db, options.executor, async (tx) => {

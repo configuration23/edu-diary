@@ -246,6 +246,12 @@ export interface ScheduleRepository {
 
   listLessons(filters: LessonListFilters): Promise<{ items: LessonRecord[]; total: number }>;
   findLesson(id: string, executor?: Executor): Promise<LessonRecord | null>;
+  /** Уроки преподавателя на дату: проверка занятости заменяющего. */
+  listLessonsForTeacherOnDate(
+    teacherUserId: string,
+    lessonDate: string,
+    executor?: Executor,
+  ): Promise<LessonRecord[]>;
   listLessonsForGroup(
     studyGroupId: string,
     from: string,
@@ -596,6 +602,28 @@ export function createScheduleRepository(db: Database): ScheduleRepository {
 
       const found = rows[0];
       return found === undefined ? null : toLessonRecord(found);
+    },
+
+    /**
+     * Уроки конкретного преподавателя на дату.
+     *
+     * Нужны проверке занятости заменяющего: его занятие может быть в любой группе,
+     * поэтому поиск идёт по преподавателю, а не по группе.
+     */
+    async listLessonsForTeacherOnDate(
+      teacherUserId: string,
+      lessonDate: string,
+      executor: Executor = db.orm,
+    ) {
+      const rows = await executor
+        .select(LESSON_SELECTION)
+        .from(lesson)
+        .innerJoin(studyGroup, eq(studyGroup.id, lesson.studyGroupId))
+        .innerJoin(subject, eq(subject.id, lesson.subjectId))
+        .leftJoin(room, eq(room.id, lesson.roomId))
+        .where(and(eq(lesson.teacherUserId, teacherUserId), eq(lesson.lessonDate, lessonDate)));
+
+      return rows.map(toLessonRecord);
     },
 
     async listLessonsForGroup(studyGroupId, from, to, executor: Executor = db.orm) {

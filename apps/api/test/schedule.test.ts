@@ -861,4 +861,128 @@ describeWithDatabase('расписание и уроки', () => {
     });
     expect(forbidden.statusCode).toBe(403);
   });
+
+  it('занятый заменяющий на этот слот не назначается', async () => {
+    // Заменяющий не может оказаться в двух местах: до этой проверки его можно
+    // было поставить на две пары в одно время. Слот берём свободный в первой
+    // группе — суббота, 8-я пара.
+    const substitute = await createUserAndLogin(testApp.app, adminCookie, {
+      username: 'prepod-zanyat',
+      fullName: 'Преподаватель Занятый',
+      password: 'kolledzh-zanyat-2025',
+      roles: ['teacher'],
+    });
+
+    // Своя группа и своё занятие заменяющего на этом слоте.
+    const ownGroup = await testApp.app.inject({
+      method: 'POST',
+      url: '/api/groups',
+      headers: auth(),
+      payload: {
+        academicYearId: yearId,
+        name: 'РПС-23',
+        startsOn: shiftDays(-200),
+        endsOn: shiftDays(200),
+      },
+    });
+    expect(ownGroup.statusCode).toBe(201);
+    const ownGroupId = (ownGroup.json() as Json).id as string;
+
+    const ownAssignment = await testApp.app.inject({
+      method: 'POST',
+      url: '/api/assignments',
+      headers: auth(),
+      payload: {
+        teacherUserId: substitute.id,
+        subjectId: secondSubjectId,
+        studyGroupId: ownGroupId,
+        startsOn: shiftDays(-120),
+      },
+    });
+    expect(ownAssignment.statusCode).toBe(201);
+
+    const ownEntry = await createEntry({
+      assignmentId: (ownAssignment.json() as Json).id as string,
+      dayOfWeek: 6,
+      pairNumber: 8,
+      timeStart: '18:10',
+      timeEnd: '19:40',
+      validFrom: shiftDays(-100),
+    });
+    expect(ownEntry.statusCode).toBe(201);
+
+    const ownLessons = await testApp.app.inject({
+      method: 'POST',
+      url: '/api/lessons/generate',
+      headers: auth(),
+      payload: { studyGroupId: ownGroupId, from: shiftDays(-100), to: shiftDays(60) },
+    });
+    expect(ownLessons.statusCode).toBe(200);
+
+    const busyLessons = await testApp.app.inject({
+      method: 'GET',
+      url: `/api/lessons?teacherUserId=${substitute.id}&from=${shiftDays(-100)}&to=${shiftDays(60)}`,
+      headers: auth(),
+    });
+    const busyLesson = (busyLessons.json() as { items: Json[] }).items[0];
+    expect(busyLesson).toBeDefined();
+
+    // Урок в первой группе на ту же дату и пару: его и пробуем заменить занятым.
+    const freeAssignment = await testApp.app.inject({
+      method: 'POST',
+      url: '/api/assignments',
+      headers: auth(),
+      payload: {
+        teacherUserId,
+        subjectId: secondSubjectId,
+        studyGroupId: groupId,
+        startsOn: shiftDays(-120),
+      },
+    });
+    expect(freeAssignment.statusCode).toBe(201);
+
+    const freeEntry = await createEntry({
+      assignmentId: (freeAssignment.json() as Json).id as string,
+      dayOfWeek: 6,
+      pairNumber: 8,
+      timeStart: '18:10',
+      timeEnd: '19:40',
+      validFrom: shiftDays(-100),
+    });
+    expect(freeEntry.statusCode).toBe(201);
+
+    const generated = await testApp.app.inject({
+      method: 'POST',
+      url: '/api/lessons/generate',
+      headers: auth(),
+      payload: { studyGroupId: groupId, from: shiftDays(-100), to: shiftDays(60) },
+    });
+    expect(generated.statusCode).toBe(200);
+
+    const targetLessons = await testApp.app.inject({
+      method: 'GET',
+      url: `/api/lessons?studyGroupId=${groupId}&from=${String(busyLesson?.lessonDate)}&to=${String(busyLesson?.lessonDate)}&status=planned`,
+      headers: auth(),
+    });
+    const target = (targetLessons.json() as { items: Json[] }).items.find(
+      (item) => item.pairNumber === 8,
+    );
+    expect(target).toBeDefined();
+
+    const conflict = await testApp.app.inject({
+      method: 'POST',
+      url: '/api/substitutions',
+      headers: auth(),
+      payload: {
+        lessonId: target?.id as string,
+        substituteUserId: substitute.id,
+        reason: 'Проверка занятости',
+      },
+    });
+
+    expect(conflict.statusCode).toBe(409);
+    expect(
+      (conflict.json() as { error: { details?: { reason?: string } } }).error.details?.reason,
+    ).toBe('substitute_overlap');
+  });
 });
