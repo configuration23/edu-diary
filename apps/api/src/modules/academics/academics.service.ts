@@ -238,6 +238,7 @@ export interface AcademicsService {
     input: UpdatePeriodInput,
     options: MutationOptions,
   ): Promise<PeriodRecord>;
+  deletePeriod(id: string, options: MutationOptions): Promise<void>;
 
   listGroups(filters: {
     academicYearId?: string | undefined;
@@ -931,6 +932,41 @@ export function createAcademicsService(
         );
 
         return updated;
+      });
+    },
+
+    async deletePeriod(id, options): Promise<void> {
+      const current = await academics.findPeriod(id);
+      if (current === null) {
+        throw new AppError('NOT_FOUND', 'Период не найден');
+      }
+
+      // Период внутри года свободен: на него пока ничего не ссылается. Когда
+      // появятся правила оценок и оценки (Этап 4), проверка занятости встанет
+      // здесь же, как у справочников, а внешний ключ с `on delete restrict`
+      // подстрахует на уровне базы.
+      return withTransaction(db, options.executor, async (tx) => {
+        const removed = await academics.deletePeriod(id, tx);
+        if (!removed) {
+          throw new AppError('NOT_FOUND', 'Период не найден');
+        }
+
+        await audit.record(
+          {
+            action: 'delete',
+            entityKind: 'period',
+            entityId: id,
+            before: {
+              academicYearId: current.academicYearId,
+              title: current.title,
+              kind: current.kind,
+              startsOn: current.startsOn,
+              endsOn: current.endsOn,
+            },
+          },
+          options.actor,
+          tx,
+        );
       });
     },
 

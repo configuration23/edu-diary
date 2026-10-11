@@ -1,4 +1,4 @@
-﻿import { describe, expect, it, afterAll, beforeAll } from 'vitest';
+import { describe, expect, it, afterAll, beforeAll } from 'vitest';
 
 import {
   completeSetup,
@@ -459,6 +459,57 @@ describeWithDatabase('группы, зачисления и справочник
       (removedOccupied.json() as { error: { details?: { usedBy?: string[] } } }).error.details
         ?.usedBy,
     ).toContain('enrollments');
+  });
+
+  it('период правится и удаляется, а повторное удаление даёт 404', async () => {
+    // Период обязан помещаться в год: сначала расширяем границы года, иначе
+    // любой новый период пересечётся с уже существующим или выйдет за границы.
+    const extended = await testApp.app.inject({
+      method: 'PATCH',
+      url: `/api/academic-years/${yearId}`,
+      headers: auth(),
+      payload: { endsOn: '2027-12-31' },
+    });
+    expect(extended.statusCode).toBe(200);
+
+    const created = await testApp.app.inject({
+      method: 'POST',
+      url: '/api/periods',
+      headers: auth(),
+      payload: {
+        academicYearId: yearId,
+        title: 'Летняя практика',
+        kind: 'term',
+        startsOn: '2027-06-01',
+        endsOn: '2027-06-30',
+      },
+    });
+    expect(created.statusCode).toBe(201);
+    const periodId = (created.json() as Json).id as string;
+
+    const updated = await testApp.app.inject({
+      method: 'PATCH',
+      url: `/api/periods/${periodId}`,
+      headers: auth(),
+      payload: { title: 'Летняя практика (правка)' },
+    });
+    expect(updated.statusCode).toBe(200);
+    expect((updated.json() as Json).title).toBe('Летняя практика (правка)');
+
+    const removed = await testApp.app.inject({
+      method: 'DELETE',
+      url: `/api/periods/${periodId}`,
+      headers: auth(),
+    });
+    expect(removed.statusCode).toBe(204);
+
+    // Периода больше нет: повторное удаление — «не найдено».
+    const again = await testApp.app.inject({
+      method: 'DELETE',
+      url: `/api/periods/${periodId}`,
+      headers: auth(),
+    });
+    expect(again.statusCode).toBe(404);
   });
 
   it('изменения справочников видны в журнале аудита', async () => {

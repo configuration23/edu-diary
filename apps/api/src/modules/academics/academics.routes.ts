@@ -401,6 +401,18 @@ export function registerAcademicsRoutes(
     },
   );
 
+  app.delete(
+    '/periods/:id',
+    { preHandler: requirePermission('academics:write', 'all') },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      await academics.deletePeriod(id, mutation(request));
+
+      reply.status(204);
+      return null;
+    },
+  );
+
   // --- Группы и зачисления ---
 
   app.get(

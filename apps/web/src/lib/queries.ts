@@ -663,6 +663,95 @@ export function useCreateGradeCategory() {
   });
 }
 
+export function useUpdateGradeCategory() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { id: string; title?: string; weight?: number; color?: string | null }) => {
+      const { id, ...body } = input;
+      return apiRequest(`/api/grade-categories/${id}`, gradeCategorySchema, {
+        method: 'PATCH',
+        body,
+      });
+    },
+    onSuccess: () => invalidateAcademics(client),
+  });
+}
+
+export function useDeleteGradeCategory() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiSend(`/api/grade-categories/${id}`, { method: 'DELETE' }).then(() => id),
+    onSuccess: () => invalidateAcademics(client),
+  });
+}
+
+export function useUpdateRoom() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      id: string;
+      name?: string;
+      capacity?: number | null;
+      note?: string | null;
+    }) => {
+      const { id, ...body } = input;
+      return apiRequest(`/api/rooms/${id}`, roomSchema, { method: 'PATCH', body });
+    },
+    onSuccess: () => invalidateAcademics(client),
+  });
+}
+
+export function useDeleteRoom() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiSend(`/api/rooms/${id}`, { method: 'DELETE' }).then(() => id),
+    onSuccess: () => invalidateAcademics(client),
+  });
+}
+
+export function useUpdateSubject() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      id: string;
+      name?: string;
+      shortName?: string | null;
+      kind?: 'mandatory' | 'optional' | 'practice';
+      color?: string | null;
+    }) => {
+      const { id, ...body } = input;
+      return apiRequest(`/api/subjects/${id}`, subjectSchema, { method: 'PATCH', body });
+    },
+    onSuccess: () => invalidateAcademics(client),
+  });
+}
+
+export function useUpdatePeriod() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      id: string;
+      title?: string;
+      kind?: 'term' | 'semester' | 'quarter';
+      startsOn?: string;
+      endsOn?: string;
+    }) => {
+      const { id, ...body } = input;
+      return apiRequest(`/api/periods/${id}`, periodSchema, { method: 'PATCH', body });
+    },
+    onSuccess: () => invalidateAcademics(client),
+  });
+}
+
+export function useDeletePeriod() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiSend(`/api/periods/${id}`, { method: 'DELETE' }).then(() => id),
+    onSuccess: () => invalidateAcademics(client),
+  });
+}
+
 export function useAssignments(params: { teacherUserId?: string; studyGroupId?: string } = {}) {
   const query = toQueryString(params);
 

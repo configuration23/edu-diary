@@ -168,6 +168,7 @@ export interface AcademicsRepository {
     executor?: Executor,
   ): Promise<PeriodRecord | null>;
   countPeriods(academicYearId: string, executor?: Executor): Promise<number>;
+  deletePeriod(id: string, executor?: Executor): Promise<boolean>;
 
   listGroups(filters: {
     academicYearId?: string | undefined;
@@ -412,6 +413,12 @@ export function createAcademicsRepository(db: Database): AcademicsRepository {
       const rows = await executor.update(period).set(input).where(eq(period.id, id)).returning();
 
       return rows[0] ?? null;
+    },
+
+    async deletePeriod(id: string, executor: Executor = db.orm): Promise<boolean> {
+      const rows = await executor.delete(period).where(eq(period.id, id)).returning();
+
+      return rows.length > 0;
     },
 
     async countPeriods(academicYearId: string, executor: Executor = db.orm): Promise<number> {
