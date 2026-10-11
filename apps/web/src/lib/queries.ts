@@ -14,6 +14,7 @@ import {
   listConsentsResponseSchema,
   listEnrollmentsResponseSchema,
   listGradeCategoriesResponseSchema,
+  listGuardianLinksResponseSchema,
   listGroupsResponseSchema,
   listPermissionsResponseSchema,
   listRolesResponseSchema,
@@ -400,7 +401,33 @@ export function useLinkGuardian() {
           ...(input.relation === undefined ? {} : { relation: input.relation }),
         },
       }),
-    onSuccess: () => invalidateStudents(client),
+    onSuccess: () => {
+      invalidateStudents(client);
+      void client.invalidateQueries({ queryKey: ['guardian-links'] });
+    },
+  });
+}
+
+/** Все связи «ученик ↔ представитель»: список в разделе «Пользователи и роли». */
+export function useGuardianLinks() {
+  return useQuery({
+    queryKey: ['guardian-links'],
+    queryFn: () => apiRequest('/api/guardian-links?limit=200', listGuardianLinksResponseSchema),
+  });
+}
+
+/** Отвязка представителя: ученик и представитель перестают быть связаны. */
+export function useUnlinkGuardian() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { studentId: string; linkId: string }) =>
+      apiSend(`/api/students/${input.studentId}/guardians/${input.linkId}`, {
+        method: 'DELETE',
+      }).then(() => input.linkId),
+    onSuccess: () => {
+      invalidateStudents(client);
+      void client.invalidateQueries({ queryKey: ['guardian-links'] });
+    },
   });
 }
 

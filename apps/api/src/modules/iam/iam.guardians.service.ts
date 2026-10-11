@@ -3,7 +3,11 @@ import { withTransaction } from '../../shared/db/transaction';
 import { AppError } from '../../shared/errors';
 import type { AuditService } from '../audit';
 import type { AcademicsService } from '../academics';
-import type { GuardiansRepository, GuardianLinkRow } from './iam.guardians.repository';
+import type {
+  GuardiansRepository,
+  GuardianLinkRow,
+  GuardianLinkWithStudentRow,
+} from './iam.guardians.repository';
 import type { MutationOptions } from './iam.users.service';
 
 /**
@@ -21,6 +25,8 @@ export interface LinkGuardianInput {
 
 export interface GuardiansService {
   listByStudent(studentId: string): Promise<GuardianLinkRow[]>;
+  /** Все связи с именами учеников: список показывается в разделе «Пользователи». */
+  listAll(limit: number): Promise<GuardianLinkWithStudentRow[]>;
   link(input: LinkGuardianInput, options: MutationOptions): Promise<GuardianLinkRow>;
   unlink(linkId: string, options: MutationOptions): Promise<void>;
   /** Ученики, привязанные к родителю: основа приватности (ADR-005). */
@@ -42,6 +48,15 @@ export function createGuardiansService(
   return {
     listByStudent(studentId) {
       return guardians.listByStudent(studentId);
+    },
+
+    listAll(limit) {
+      // Имя ученика берём у владельца таблицы: модули не читают таблицы друг
+      // друга, поэтому резолвер идёт через сервис `academics`.
+      return guardians.listAll(limit, async (studentId) => {
+        const student = await academics.findStudentForLookup(studentId);
+        return student?.fullName ?? null;
+      });
     },
 
     async link(input, options): Promise<GuardianLinkRow> {

@@ -2,10 +2,12 @@ import {
   createRoleRequestSchema,
   createUserRequestSchema,
   linkGuardianRequestSchema,
+  listGuardianLinksResponseSchema,
   listPermissionsResponseSchema,
   listRolesResponseSchema,
   listUsersQuerySchema,
   listUsersResponseSchema,
+  paginationQuerySchema,
   resetPasswordRequestSchema,
   setUserRolesRequestSchema,
   suggestUsernameQuerySchema,
@@ -215,6 +217,25 @@ export function registerIamRoutes(
     },
   );
 
+  /** Все связи: в разделе «Пользователи и роли» видно, кто к кому привязан. */
+  app.get(
+    '/guardian-links',
+    { preHandler: requirePermission('students:read', 'assigned') },
+    async (request) => {
+      const query = paginationQuerySchema.parse(request.query);
+      const links = await guardians.listAll(query.limit);
+
+      return listGuardianLinksResponseSchema.parse({
+        items: links.map((link) => ({
+          ...link,
+          // Дата из базы — объект Date; в контракте строка ISO (ADR-016).
+          createdAt: link.createdAt.toISOString(),
+        })),
+        total: links.length,
+      });
+    },
+  );
+
   app.get(
     '/students/:id/guardians',
     { preHandler: requirePermission('students:read', 'assigned') },
@@ -245,10 +266,13 @@ export function registerIamRoutes(
   app.delete(
     '/students/:id/guardians/:linkId',
     { preHandler: requirePermission('students:write', 'all') },
-    async (request) => {
+    async (request, reply) => {
       const { linkId } = request.params as { id: string; linkId: string };
       await guardians.unlink(linkId, { actor: actorFromRequest(request) });
-      return { ok: true };
+
+      // Как у остальных удалений: 204 и пустое тело.
+      reply.status(204);
+      return null;
     },
   );
 }

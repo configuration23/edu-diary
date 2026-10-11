@@ -201,6 +201,8 @@ export interface AcademicsService {
   /** Карточка ученика с проверкой области действия и записью аудита доступа. */
   getStudentForViewer(studentId: string, viewer: StudentViewer): Promise<StudentRecord>;
   studentExists(id: string): Promise<boolean>;
+  /** Ученик по идентификатору для служебных связок (имя, проверка существования). */
+  findStudentForLookup(id: string): Promise<StudentRecord | null>;
   createStudent(input: CreateStudentInput, options: MutationOptions): Promise<StudentRecord>;
   /** Учётная запись ученику, созданному ранее (учётка — по необходимости). */
   createStudentAccount(
@@ -508,6 +510,10 @@ export function createAcademicsService(
 
     async studentExists(id): Promise<boolean> {
       return (await academics.findStudent(id)) !== null;
+    },
+
+    findStudentForLookup(id) {
+      return academics.findStudent(id);
     },
 
     async createStudent(input, options): Promise<StudentRecord> {

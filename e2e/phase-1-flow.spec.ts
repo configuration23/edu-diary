@@ -85,14 +85,14 @@ test.describe.serial('Этап 1: настройка, вход, права', () 
     await ensureSession(page, ADMIN.username, ADMIN.password);
     await page.getByRole('link', { name: 'Пользователи и роли' }).click();
 
-    // Поля ищем внутри карточки «Новый пользователь»: на странице есть и блок
-    // «Новый ученик» — у него свои поля с похожими названиями.
+    // Поля ищем внутри карточки «Новый пользователь»: ниже на странице есть
+    // блок «Новый ученик» со своими полями, в том числе «ФИО».
     const userForm = page
       .locator('section')
       .filter({ has: page.getByRole('heading', { name: 'Новый пользователь' }) });
 
     await userForm.getByLabel('Логин').fill(TEACHER.username);
-    await userForm.getByLabel('ФИО').fill(TEACHER.fullName);
+    await userForm.locator('input[name="fullName"]').fill(TEACHER.fullName);
     await userForm.getByLabel('Временный пароль').fill(TEACHER.password);
 
     // Роли по умолчанию отмечен преподаватель — проверяем и оставляем.

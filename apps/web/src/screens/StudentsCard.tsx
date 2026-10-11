@@ -5,9 +5,11 @@ import { errorMessage } from '../lib/api-client';
 import {
   useCreateStudent,
   useCreateStudentAccount,
+  useGuardianLinks,
   useLinkGuardian,
   useStudents,
   useSuggestUsername,
+  useUnlinkGuardian,
   useUsers,
 } from '../lib/queries';
 import {
@@ -42,6 +44,11 @@ const RELATIONS = [
   { value: 'custodian', label: 'Опекун' },
   { value: 'other', label: 'Другое' },
 ] as const;
+
+/** Подпись отношения: в базе хранится код, человеку показываем слово. */
+function relationLabel(value: string | null): string {
+  return RELATIONS.find((item) => item.value === value)?.label ?? 'Не указано';
+}
 
 function CreateStudentForm({ onCreated }: { onCreated: (message: string) => void }) {
   const createStudent = useCreateStudent();
@@ -403,6 +410,66 @@ export function StudentsCard({ onNotice }: { onNotice: (message: string) => void
       </Card>
 
       <LinkGuardianForm onLinked={onNotice} />
+
+      <GuardianLinksCard onNotice={onNotice} />
     </div>
+  );
+}
+
+/**
+ * Кто к кому привязан.
+ *
+ * Без этого списка привязка выглядела как «нажал и ничего не произошло»: запись
+ * в базе появлялась, но её нигде не было видно.
+ */
+function GuardianLinksCard({ onNotice }: { onNotice: (message: string) => void }) {
+  const links = useGuardianLinks();
+  const unlink = useUnlinkGuardian();
+
+  return (
+    <Card
+      title="Связи учеников и представителей"
+      description="Отвязка убирает доступ представителя к данным ученика."
+    >
+      {links.isLoading && <p className="text-sm text-slate-500">Загружаем…</p>}
+      {links.isError && <Alert tone="error">{errorMessage(links.error)}</Alert>}
+
+      {links.data !== undefined && links.data.items.length === 0 && (
+        <EmptyState>Связей пока нет — привяжите представителя блоком выше.</EmptyState>
+      )}
+
+      {links.data !== undefined && links.data.items.length > 0 && (
+        <Table head={['Ученик', 'Представитель', 'Логин', 'Кем является', '']}>
+          {links.data.items.map((link) => (
+            <tr key={link.id} className="border-b border-slate-100">
+              <td className="px-3 py-2 font-medium">{link.studentName}</td>
+              <td className="px-3 py-2">{link.guardianName}</td>
+              <td className="px-3 py-2 font-mono text-xs text-slate-600">
+                {link.guardianUsername}
+              </td>
+              <td className="px-3 py-2 text-slate-600">{relationLabel(link.relation)}</td>
+              <td className="px-3 py-2">
+                <Button
+                  tone="ghost"
+                  disabled={unlink.isPending}
+                  onClick={() =>
+                    void unlink
+                      .mutateAsync({ studentId: link.studentId, linkId: link.id })
+                      .then(() =>
+                        onNotice(`Представитель «${link.guardianName}» отвязан от ученика.`),
+                      )
+                      .catch(() => undefined)
+                  }
+                >
+                  Отвязать
+                </Button>
+              </td>
+            </tr>
+          ))}
+        </Table>
+      )}
+
+      {unlink.isError && <Alert tone="error">{errorMessage(unlink.error)}</Alert>}
+    </Card>
   );
 }

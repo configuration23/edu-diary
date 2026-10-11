@@ -104,6 +104,27 @@ export const exportInfoSchema = z.object({
 export type ExportInfoDto = z.infer<typeof exportInfoSchema>;
 
 /**
+ * Связь «ученик ↔ законный представитель» для списка: кто к кому привязан.
+ *
+ * Имя ученика добавлено к записи привязки: без него администратор не видит,
+ * что привязка вообще есть (раньше была только форма).
+ */
+export const guardianLinkDetailSchema = z.object({
+  id: uuidSchema,
+  studentId: uuidSchema,
+  studentName: z.string(),
+  guardianUserId: uuidSchema,
+  guardianName: z.string(),
+  guardianUsername: z.string(),
+  relation: z.string().nullable(),
+  createdAt: isoDateTimeSchema,
+});
+export type GuardianLinkDetailDto = z.infer<typeof guardianLinkDetailSchema>;
+
+export const listGuardianLinksResponseSchema = pageSchema(guardianLinkDetailSchema);
+export type ListGuardianLinksResponseDto = z.infer<typeof listGuardianLinksResponseSchema>;
+
+/**
  * Подсказка логина по ФИО: транслитерация «Чумаков Сергей Петрович» → `chumakovsp`
  * с проверкой занятости (при совпадении добавляется цифра).
  */

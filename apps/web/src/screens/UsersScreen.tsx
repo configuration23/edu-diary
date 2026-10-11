@@ -12,6 +12,7 @@ import {
   useResetPassword,
   useRoles,
   useSetUserRoles,
+  useSuggestUsername,
   useUsers,
 } from '../lib/queries';
 import {
@@ -40,13 +41,24 @@ const createUserFormSchema = z.object({
 
 type CreateUserForm = z.infer<typeof createUserFormSchema>;
 
+/**
+ * Подпись роли для человека.
+ *
+ * Код и заголовок роли приходят из каталога, но «parent» в интерфейсе точнее
+ * называть законным представителем: юридически это одно и то же, а в документах
+ * и в жизни используется второе. Схему и API не меняем — правим только показ.
+ */
+function roleTitle(code: string, fallback: string): string {
+  return code === 'parent' ? 'Законный представитель' : fallback;
+}
+
 function RolesCell({ user }: { user: UserSummaryDto }) {
   return (
     <span className="flex flex-wrap gap-1">
       {user.roles.length === 0 ? (
         <Badge tone="warning">нет ролей</Badge>
       ) : (
-        user.roles.map((role) => <Badge key={role.code}>{role.title}</Badge>)
+        user.roles.map((role) => <Badge key={role.code}>{roleTitle(role.code, role.title)}</Badge>)
       )}
     </span>
   );
@@ -66,11 +78,15 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
   const setUserRoles = useSetUserRoles();
   const deactivate = useDeactivateUser();
   const resetPassword = useResetPassword();
+  const suggest = useSuggestUsername();
 
   const form = useForm<CreateUserForm>({
     resolver: zodResolver(createUserFormSchema),
     defaultValues: { username: '', fullName: '', password: '', email: '', roles: ['teacher'] },
   });
+
+  // Сколько ролей отмечено сейчас: две и больше — повод для предупреждения.
+  const selectedCount = form.watch('roles').length;
 
   const onCreate = form.handleSubmit(async (values) => {
     setNotice(null);
@@ -101,11 +117,43 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
         >
           <form className="flex flex-col gap-4" onSubmit={onCreate} noValidate>
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Логин" error={form.formState.errors.username?.message}>
-                <TextInput autoComplete="off" {...form.register('username')} />
-              </Field>
               <Field label="ФИО" error={form.formState.errors.fullName?.message}>
                 <TextInput {...form.register('fullName')} />
+              </Field>
+              <Field
+                label="Логин"
+                hint="Предлагается по ФИО — можно поправить"
+                error={form.formState.errors.username?.message}
+              >
+                <div className="flex gap-2">
+                  <TextInput autoComplete="off" {...form.register('username')} />
+                  <Button
+                    tone="secondary"
+                    disabled={suggest.isPending}
+                    onClick={async () => {
+                      const fullName = form.getValues('fullName').trim();
+                      if (fullName === '') {
+                        setNotice('Сначала заполните ФИО — логин строится из него.');
+                        return;
+                      }
+
+                      const result = await suggest.mutateAsync(fullName);
+                      if (result.username === null) {
+                        setNotice('Не удалось построить логин из ФИО — введите его вручную.');
+                        return;
+                      }
+
+                      form.setValue('username', result.username, { shouldValidate: true });
+                      setNotice(
+                        result.taken.length === 0
+                          ? `Логин свободен: ${result.username}`
+                          : `Базовый логин занят, предложен ${result.username}`,
+                      );
+                    }}
+                  >
+                    По ФИО
+                  </Button>
+                </div>
               </Field>
               <Field
                 label="Временный пароль"
@@ -132,8 +180,18 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
               <div className="flex flex-wrap gap-3">
                 {(roles.data?.items ?? []).map((role) => (
                   <label key={role.code} className="flex items-center gap-2 text-sm">
-                    <input type="checkbox" value={role.code} {...form.register('roles')} />
-                    {role.title}
+                    <input
+                      type="checkbox"
+                      value={role.code}
+                      {...form.register('roles')}
+                      onChange={(event) => {
+                        // Роли дают права всем вместе: показываем явное
+                        // предупреждение, чтобы не выдать ученику права админа.
+                        void form.register('roles').onChange(event);
+                        setNotice(null);
+                      }}
+                    />
+                    {roleTitle(role.code, role.title)}
                   </label>
                 ))}
               </div>
@@ -143,6 +201,12 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
                 </span>
               )}
             </fieldset>
+
+            {selectedCount > 1 && (
+              <Alert tone="warning">
+                Внимание! Вы выбрали больше одной роли! Пользователь получит расширенные права!
+              </Alert>
+            )}
 
             {createUser.isError && <Alert tone="error">{errorMessage(createUser.error)}</Alert>}
 

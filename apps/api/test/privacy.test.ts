@@ -51,7 +51,6 @@ describeWithDatabase('политика и согласия', () => {
     await testApp.close();
     await database.dispose();
   });
-
   it('требует опубликованную политику до регистрации согласия', async () => {
     const response = await testApp.app.inject({
       method: 'POST',
@@ -225,5 +224,38 @@ describeWithDatabase('политика и согласия', () => {
       payload: { studentId, guardianUserId, grantedVia: 'electronic' },
     });
     expect(create.statusCode).toBe(403);
+  });
+
+  it('список связей показывает, кто к кому привязан, и умеет отвязывать', async () => {
+    const links = await testApp.app.inject({
+      method: 'GET',
+      url: '/api/guardian-links?limit=50',
+      headers: { cookie: adminCookie },
+    });
+
+    expect(links.statusCode).toBe(200);
+    const items = (links.json() as { items: Array<Record<string, unknown>> }).items;
+    expect(items).toHaveLength(1);
+
+    const link = items[0] ?? {};
+    // Имя ученика приходит вместе со связью: иначе связку не видно в интерфейсе.
+    expect(link.studentName).toBe('Ученик Согласие');
+    expect(link.guardianName).toBe('Родитель Согласие');
+    expect(link.guardianUsername).toBe('roditel-soglasie');
+    expect(link.relation).toBe('father');
+
+    const unlinked = await testApp.app.inject({
+      method: 'DELETE',
+      url: `/api/students/${studentId}/guardians/${String(link.id)}`,
+      headers: { cookie: adminCookie },
+    });
+    expect(unlinked.statusCode).toBe(204);
+
+    const after = await testApp.app.inject({
+      method: 'GET',
+      url: '/api/guardian-links?limit=50',
+      headers: { cookie: adminCookie },
+    });
+    expect((after.json() as { items: unknown[] }).items).toHaveLength(0);
   });
 });
