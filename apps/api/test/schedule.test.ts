@@ -481,6 +481,68 @@ describeWithDatabase('расписание и уроки', () => {
     expect((late.json() as { error: { code: string } }).error.code).toBe('VALIDATION_FAILED');
   });
 
+  it('у двух групп расписания независимы', async () => {
+    // Критерий приёмки этапа: сетка одной группы не влияет на другую, а одинаковая
+    // пара в разных группах — это норма, а не конфликт.
+    //
+    // Назначение для второй группы уже создано проверками наложений: повторно его
+    // заводить нельзя (один преподаватель — один предмет в группе), поэтому берём
+    // существующее.
+    const assignments = await testApp.app.inject({
+      method: 'GET',
+      url: `/api/assignments?studyGroupId=${secondGroupId}`,
+      headers: auth(),
+    });
+    const secondAssignment = (assignments.json() as { items: Json[] }).items[0];
+    expect(secondAssignment).toBeDefined();
+
+    const created = await createEntry({
+      assignmentId: secondAssignment?.id as string,
+      dayOfWeek: 6,
+      pairNumber: 3,
+      timeStart: '11:30',
+      timeEnd: '13:00',
+      validFrom: shiftDays(-100),
+    });
+    expect(created.statusCode).toBe(201);
+
+    const first = await testApp.app.inject({
+      method: 'GET',
+      url: `/api/schedule?studyGroupId=${groupId}`,
+      headers: auth(),
+    });
+    const second = await testApp.app.inject({
+      method: 'GET',
+      url: `/api/schedule?studyGroupId=${secondGroupId}`,
+      headers: auth(),
+    });
+
+    const firstItems = (first.json() as { items: Json[] }).items;
+    const secondItems = (second.json() as { items: Json[] }).items;
+
+    // Сетки не пересекаются: у каждой группы — только свои занятия.
+    expect(firstItems.every((item) => item.studyGroupId === groupId)).toBe(true);
+    expect(secondItems.every((item) => item.studyGroupId === secondGroupId)).toBe(true);
+
+    // Наше занятие попало в сетку второй группы и не появилось в первой.
+    const ours = secondItems.find((item) => item.id === (created.json() as Json).id);
+    expect(ours?.dayOfWeek).toBe(6);
+    expect(ours?.pairNumber).toBe(3);
+    expect(firstItems.some((item) => item.id === (created.json() as Json).id)).toBe(false);
+
+    // Одинаковая пара в разных группах — не конфликт: своё занятие в первой
+    // группе на 3-ю пару субботы тоже ставится.
+    const sameSlotOtherGroup = await createEntry({
+      assignmentId: assignmentId,
+      dayOfWeek: 6,
+      pairNumber: 3,
+      timeStart: '11:30',
+      timeEnd: '13:00',
+      validFrom: shiftDays(-100),
+    });
+    expect(sameSlotOtherGroup.statusCode).toBe(201);
+  });
+
   it('генерация уроков из шаблона идемпотентна', async () => {
     const from = nextWeekday(2);
     const to = shiftDays(28);
