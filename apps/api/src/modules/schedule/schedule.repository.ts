@@ -246,6 +246,16 @@ export interface ScheduleRepository {
 
   listLessons(filters: LessonListFilters): Promise<{ items: LessonRecord[]; total: number }>;
   findLesson(id: string, executor?: Executor): Promise<LessonRecord | null>;
+  /**
+   * Уроки назначения в периоде: нужны снятию замены на диапазон дат, чтобы
+   * вернуть исходного преподавателя всем затронутым занятиям.
+   */
+  listLessonsForAssignment(
+    assignmentId: string,
+    from: string,
+    to: string,
+    executor?: Executor,
+  ): Promise<LessonRecord[]>;
   /** Уроки преподавателя на дату: проверка занятости заменяющего. */
   listLessonsForTeacherOnDate(
     teacherUserId: string,
@@ -602,6 +612,25 @@ export function createScheduleRepository(db: Database): ScheduleRepository {
 
       const found = rows[0];
       return found === undefined ? null : toLessonRecord(found);
+    },
+
+    async listLessonsForAssignment(assignmentId, from, to, executor: Executor = db.orm) {
+      const rows = await executor
+        .select(LESSON_SELECTION)
+        .from(lesson)
+        .innerJoin(studyGroup, eq(studyGroup.id, lesson.studyGroupId))
+        .innerJoin(subject, eq(subject.id, lesson.subjectId))
+        .leftJoin(room, eq(room.id, lesson.roomId))
+        .where(
+          and(
+            eq(lesson.assignmentId, assignmentId),
+            gte(lesson.lessonDate, from),
+            lte(lesson.lessonDate, to),
+          ),
+        )
+        .orderBy(asc(lesson.lessonDate), asc(lesson.pairNumber));
+
+      return rows.map(toLessonRecord);
     },
 
     /**

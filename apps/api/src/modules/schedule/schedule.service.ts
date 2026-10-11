@@ -1284,6 +1284,40 @@ export function createScheduleService(dependencies: ScheduleServiceDependencies)
       return withTransaction(db, options.executor, async (tx) => {
         await schedule.deleteSubstitution(id, tx);
 
+        /**
+         * Снятая замена возвращает уроки исходному преподавателю: иначе в уроках
+         * и расписании оставался бы заменяющий, а замены уже нет.
+         *
+         * Замена на урок — один урок; замена на диапазон — все уроки этого
+         * назначения в периоде, где стоит заменяющий.
+         */
+        const affected =
+          current.lessonId === null
+            ? await schedule.listLessonsForAssignment(
+                current.assignmentId,
+                current.startsOn,
+                current.endsOn ?? '9999-12-31',
+                tx,
+              )
+            : [await schedule.findLesson(current.lessonId, tx)].filter(
+                (lesson): lesson is LessonRecord => lesson !== null,
+              );
+
+        for (const lesson of affected) {
+          if (lesson.teacherUserId !== current.substituteUserId) continue;
+
+          await schedule.updateLesson(
+            lesson.id,
+            {
+              teacherUserId: lesson.plannedTeacherUserId ?? current.replacedUserId,
+              plannedTeacherUserId: null,
+              status: 'planned',
+              isManual: true,
+            },
+            tx,
+          );
+        }
+
         await audit.record(
           {
             action: 'delete',
@@ -1297,6 +1331,7 @@ export function createScheduleService(dependencies: ScheduleServiceDependencies)
               startsOn: current.startsOn,
               endsOn: current.endsOn,
               reason: current.reason,
+              lessonsRestored: affected.length,
             },
           },
           options.actor,

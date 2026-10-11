@@ -47,12 +47,15 @@ const NAVIGATION: NavigationItem[] = [
   {
     to: '/lessons',
     label: 'Уроки',
-    visible: (session) => has(session, 'lessons:read'),
+    // Раздел рабочий: сетка периода, правка и замены. Ученику и родителю он не
+    // нужен — у них есть «Расписание», поэтому оставляем его тем, кто ведёт
+    // занятия (администратор и преподаватель).
+    visible: (session) => hasScope(session, 'lessons:read', ['all', 'assigned']),
   },
   {
     to: '/substitutions',
     label: 'Замены',
-    visible: (session) => has(session, 'lessons:read'),
+    visible: (session) => hasScope(session, 'lessons:read', ['all', 'assigned']),
   },
   {
     to: '/users',
@@ -84,6 +87,18 @@ const NAVIGATION: NavigationItem[] = [
 /** Раздел виден, если право выдано с любой областью действия. */
 function has(session: SessionResponseDto, permission: string): boolean {
   return session.permissions.some((grant) => grant.permission === permission);
+}
+
+/**
+ * Раздел виден, только если право выдано с одной из перечисленных областей.
+ *
+ * Нужно, чтобы отличать роли: у преподавателя и администратора `lessons:read`
+ * приходит с областью `assigned`, а у ученика и родителя — с `own`.
+ */
+function hasScope(session: SessionResponseDto, permission: string, scopes: string[]): boolean {
+  return session.permissions.some(
+    (grant) => grant.permission === permission && scopes.includes(grant.scope),
+  );
 }
 
 export function AppLayout({
@@ -134,6 +149,9 @@ export function AppLayout({
                   activeProps={{
                     className: 'inline-block rounded-md px-3 py-1.5 bg-slate-900 text-white',
                   }}
+                  // Точное совпадение пути: иначе «Расписание» подсвечивалось бы и
+                  // на «Сетке (шаблон)» — она вложена в тот же путь.
+                  activeOptions={{ exact: true }}
                 >
                   {item.label}
                 </Link>

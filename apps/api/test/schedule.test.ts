@@ -1052,4 +1052,50 @@ describeWithDatabase('расписание и уроки', () => {
     // Карточка урока ссылается на запись замены: по ней видно причину.
     expect(replaced?.substitutionId).not.toBeNull();
   });
+
+  it('снятие замены возвращает урок исходному преподавателю', async () => {
+    // Замена меняет преподавателя в уроке, поэтому её снятие обязано вернуть
+    // исходного: иначе в уроках и расписании остаётся заменяющий без замены.
+    const lessons = await testApp.app.inject({
+      method: 'GET',
+      url: `/api/lessons?studyGroupId=${groupId}&from=${nextWeekday(2)}&to=${shiftDays(28)}&status=replaced`,
+      headers: auth(),
+    });
+    const target = (lessons.json() as { items: Json[] }).items[0];
+    expect(target).toBeDefined();
+    expect(target?.substitutionId).not.toBeNull();
+
+    const substituteUserId = target?.teacherUserId as string;
+    const originalUserId = target?.plannedTeacherUserId as string;
+    expect(substituteUserId).not.toBe(originalUserId);
+
+    const removed = await testApp.app.inject({
+      method: 'DELETE',
+      url: `/api/substitutions/${target?.substitutionId as string}`,
+      headers: auth(),
+    });
+    expect(removed.statusCode).toBe(204);
+
+    const after = await testApp.app.inject({
+      method: 'GET',
+      url: `/api/lessons/${target?.id as string}`,
+      headers: auth(),
+    });
+    const restored = after.json() as Json;
+    expect(restored.status).toBe('planned');
+    expect(restored.teacherUserId).toBe(originalUserId);
+    expect(restored.plannedTeacherUserId).toBeNull();
+    expect(restored.substitutionId).toBeNull();
+
+    // В расписании дня тоже без замены: это то, что видит ученик.
+    const day = await testApp.app.inject({
+      method: 'GET',
+      url: `/api/lessons?studyGroupId=${groupId}&from=${String(target?.lessonDate)}&to=${String(target?.lessonDate)}`,
+      headers: { cookie: studentCookie },
+    });
+    const dayLesson = (day.json() as { items: Json[] }).items.find(
+      (item) => item.id === target?.id,
+    );
+    expect(dayLesson?.teacherUserId).toBe(originalUserId);
+  });
 });
