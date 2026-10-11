@@ -5,6 +5,7 @@ export * from './common';
 export * from './error';
 export * from './health';
 export * from './privacy';
+export * from './schedule';
 export * from './security';
 export * from './setup';
 export * from './students';
