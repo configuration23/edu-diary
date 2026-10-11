@@ -316,13 +316,22 @@ interface StorageAdapter {
 | POST | `/api/auth/change-password` | смена своего пароля |
 | GET | `/api/users` | список пользователей (право `users:read`) |
 | POST | `/api/users` | создать пользователя |
+| GET | `/api/users/suggest-username?fullName=` | логин по ФИО с проверкой занятости |
 | PATCH | `/api/users/:id` | изменить, деактивировать |
 | POST | `/api/users/:id/roles` | назначить роли |
 | GET/POST | `/api/roles`, `/api/roles/:id/permissions` | роли и их права |
-| GET/POST | `/api/students`, `/api/students/:id` | ученики |
-| POST | `/api/students/:id/guardians` | привязать родителя |
+| GET/POST | `/api/students`, `/api/students/:id` | ученики (карточка; учётная запись — по необходимости) |
+| POST | `/api/students/:id/account` | создать ученику учётную запись |
+| GET/POST | `/api/students/:id/guardians` | привязать законного представителя |
+| DELETE | `/api/students/:id/guardians/:linkId` | отвязать представителя |
+| GET | `/api/guardian-links` | все связи «ученик ↔ представитель» |
+| GET | `/api/academic-years`, `/api/academic-years/:id` | годы и их периоды |
+| POST | `/api/academic-years/:id/activate` | сделать год активным (активный всегда один) |
+| GET/POST/PATCH/DELETE | `/api/periods`, `/api/periods/:id` | периоды внутри года |
 | GET/POST | `/api/groups`, `/api/groups/:id/enrollments` | группы и зачисления |
-| GET/POST | `/api/subjects`, `/api/rooms`, `/api/periods` | справочники |
+| GET | `/api/groups/:id/students` | состав группы |
+| POST | `/api/students/:id/transfer` | перевод в другую группу |
+| GET/POST | `/api/subjects`, `/api/rooms`, `/api/grade-categories` | справочники |
 | GET/POST | `/api/assignments` | назначения «учитель–предмет–группа» |
 | POST | `/api/assignments/:id/substitutions` | замена преподавателя |
 | GET | `/api/schedule?groupId=&from=&to=` | расписание с учётом исключений |
