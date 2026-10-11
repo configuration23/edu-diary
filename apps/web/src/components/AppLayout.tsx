@@ -46,7 +46,7 @@ const NAVIGATION: NavigationItem[] = [
   },
   {
     to: '/users',
-    label: 'Пользователи и роли',
+    label: 'Учётные записи и роли',
     visible: (session) => has(session, 'users:read'),
   },
   {

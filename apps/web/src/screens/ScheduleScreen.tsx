@@ -1,5 +1,5 @@
-import type { SessionResponseDto } from '@edu-diary/contracts';
-import { useState } from 'react';
+import type { ScheduleEntryDto, SessionResponseDto } from '@edu-diary/contracts';
+import { useEffect, useRef, useState } from 'react';
 
 import { useAcademicContext } from '../components/AcademicContext';
 import { Alert, Button, Card, EmptyState, Field, Table, TextInput } from '../components/ui';
@@ -53,9 +53,59 @@ function dayLabel(dayOfWeek: number): string {
 
 const selectClass = 'w-full rounded-md border border-slate-300 px-3 py-2 text-sm';
 
+/**
+ * Выбор группы для расписания.
+ *
+ * Группа выбирается в блоке добавления занятия, а список ниже подгружается по ней.
+ * Отдельного селекта в шапке на этом экране нет: два разных «Группа» на одной
+ * странице путают (в шапке — контекст всего приложения).
+ */
+function GroupField({
+  groups,
+  selectedGroupId,
+  selectGroup,
+  disabled = false,
+}: {
+  groups: Array<{ id: string; name: string }>;
+  selectedGroupId: string | null;
+  selectGroup: (id: string | null) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <Field label="Группа" hint="«Все доступные» — занятия по всем группам">
+      <select
+        name="studyGroupId"
+        required={disabled}
+        className={`${selectClass} max-w-sm`}
+        value={selectedGroupId ?? ''}
+        onChange={(event) => selectGroup(event.target.value === '' ? null : event.target.value)}
+      >
+        <option value="">Все доступные группы</option>
+        {groups.map((group) => (
+          <option key={group.id} value={group.id}>
+            {group.name}
+          </option>
+        ))}
+      </select>
+    </Field>
+  );
+}
+
 /** Форма постановки занятия в сетку. */
-function EntryForm({ groupId, yearStart }: { groupId: string; yearStart: string }) {
-  const assignments = useAssignments({ studyGroupId: groupId });
+function EntryForm({
+  groupId,
+  groups,
+  selectedGroupId,
+  selectGroup,
+  yearStart,
+}: {
+  groupId: string | null;
+  groups: Array<{ id: string; name: string }>;
+  selectedGroupId: string | null;
+  selectGroup: (id: string | null) => void;
+  yearStart: string;
+}) {
+  const assignments = useAssignments(groupId === null ? {} : { studyGroupId: groupId });
   const rooms = useRooms();
   const bells = useBells();
   const create = useCreateScheduleEntry();
@@ -69,6 +119,41 @@ function EntryForm({ groupId, yearStart }: { groupId: string; yearStart: string 
   const [timeEnd, setTimeEnd] = useState('');
   const [validFrom, setValidFrom] = useState(yearStart);
   const [validTo, setValidTo] = useState('');
+
+  /**
+   * Начало действия по умолчанию — начало активного учебного года. Пока
+   * пользователь не трогал поле, оно следует за годом: контекст подгружается
+   * после первого рендера.
+   */
+  const validFromTouched = useRef(false);
+  useEffect(() => {
+    if (validFromTouched.current || yearStart === '') return;
+    setValidFrom(yearStart);
+  }, [yearStart]);
+
+  const assignmentOptions = assignments.data?.items ?? [];
+  const selectedAssignment = assignmentOptions.find((item) => item.id === assignmentId);
+
+  /**
+   * Занятие не может начинаться раньше назначения. Если выбранное назначение
+   * стартует позже подставленной даты, подтягиваем её — но только пока
+   * пользователь не правил поле сам: иначе форма упиралась бы в отказ сервера.
+   */
+  useEffect(() => {
+    if (validFromTouched.current || selectedAssignment === undefined) return;
+    setValidFrom((current) =>
+      current === '' || current < selectedAssignment.startsOn
+        ? selectedAssignment.startsOn
+        : current,
+    );
+  }, [selectedAssignment]);
+
+  /**
+   * Список аудиторий: название и примечание отдельными частями, чтобы номер
+   * аудитории не путался (названия вида «301» без пояснения бесполезны).
+   */
+  const roomOptions = rooms.data?.items ?? [];
+  const selectedRoom = roomOptions.find((room) => room.id === roomId);
 
   const bell = bells.data?.items.find((item) => item.pairNumber === Number(pairNumber));
   const needsManualTime = manualTime || bells.data === undefined || bell === undefined;
@@ -96,6 +181,8 @@ function EntryForm({ groupId, yearStart }: { groupId: string; yearStart: string 
       }}
     >
       <div className="grid gap-3 sm:grid-cols-3">
+        <GroupField groups={groups} selectedGroupId={selectedGroupId} selectGroup={selectGroup} />
+
         <Field label="Назначение" hint="Предмет и преподаватель из назначений группы">
           <select
             required
@@ -103,9 +190,12 @@ function EntryForm({ groupId, yearStart }: { groupId: string; yearStart: string 
             className={selectClass}
             value={assignmentId}
             onChange={(event) => setAssignmentId(event.target.value)}
+            disabled={groupId === null}
           >
-            <option value="">Выберите назначение</option>
-            {(assignments.data?.items ?? []).map((item) => (
+            <option value="">
+              {groupId === null ? 'Сначала выберите группу' : 'Выберите назначение'}
+            </option>
+            {assignmentOptions.map((item) => (
               <option key={item.id} value={item.id}>
                 {item.subjectName} — {item.teacherName}
               </option>
@@ -151,21 +241,28 @@ function EntryForm({ groupId, yearStart }: { groupId: string; yearStart: string 
             onChange={(event) => setRoomId(event.target.value)}
           >
             <option value="">Без аудитории</option>
-            {(rooms.data?.items ?? []).map((room) => (
+            {roomOptions.map((room) => (
               <option key={room.id} value={room.id}>
                 {room.name}
               </option>
             ))}
           </select>
+          {/* Название серым под селектом: в списке из одних номеров легко запутаться. */}
+          {selectedRoom !== undefined && selectedRoom.note !== null && (
+            <span className="mt-1 block text-xs text-slate-500">{selectedRoom.note}</span>
+          )}
         </Field>
 
-        <Field label="Действует с">
+        <Field label="Действует с" hint="По умолчанию — начало учебного года">
           <TextInput
             required
             name="validFrom"
             type="date"
             value={validFrom}
-            onChange={(event) => setValidFrom(event.target.value)}
+            onChange={(event) => {
+              validFromTouched.current = true;
+              setValidFrom(event.target.value);
+            }}
           />
         </Field>
 
@@ -232,16 +329,22 @@ function EntryForm({ groupId, yearStart }: { groupId: string; yearStart: string 
   );
 }
 
-/** Правка занятия: перенос на другую пару, смена аудитории и дат действия. */
-function EntryEditor({ id, onDone }: { id: string; onDone: () => void }) {
-  const entries = useScheduleEntries();
-  const entry = entries.data?.items.find((item) => item.id === id);
+/**
+ * Правка занятия: перенос на другую пару, смена аудитории и дат действия.
+ *
+ * Занятие приходит строкой из списка, а не берётся повторным запросом: строка в
+ * списке уже отфильтрована (группа), и редактор закрывается кнопкой, а не «сам»
+ * после сохранения.
+ */
+function EntryEditor({ entry, onDone }: { entry: ScheduleEntryDto; onDone: () => void }) {
   const rooms = useRooms();
   const update = useUpdateScheduleEntry();
+  const [pairNumber, setPairNumber] = useState(String(entry.pairNumber));
+  const [roomId, setRoomId] = useState(entry.roomId ?? '');
+  const [validTo, setValidTo] = useState(entry.validTo ?? '');
 
-  const [pairNumber, setPairNumber] = useState(String(entry?.pairNumber ?? 1));
-  const [roomId, setRoomId] = useState(entry?.roomId ?? '');
-  const [validTo, setValidTo] = useState('');
+  const roomOptions = rooms.data?.items ?? [];
+  const selectedRoom = roomOptions.find((room) => room.id === roomId);
 
   return (
     <form
@@ -250,7 +353,7 @@ function EntryEditor({ id, onDone }: { id: string; onDone: () => void }) {
         event.preventDefault();
         try {
           await update.mutateAsync({
-            id,
+            id: entry.id,
             pairNumber: Number(pairNumber),
             roomId: roomId === '' ? null : roomId,
             ...(validTo === '' ? {} : { validTo }),
@@ -282,14 +385,16 @@ function EntryEditor({ id, onDone }: { id: string; onDone: () => void }) {
           onChange={(event) => setRoomId(event.target.value)}
         >
           <option value="">Без аудитории</option>
-          {(rooms.data?.items ?? []).map((room) => (
+          {roomOptions.map((room) => (
             <option key={room.id} value={room.id}>
               {room.name}
             </option>
           ))}
         </select>
+        {selectedRoom !== undefined && selectedRoom.note !== null && (
+          <span className="mt-1 block text-xs text-slate-500">{selectedRoom.note}</span>
+        )}
       </Field>
-
       <Field label="Действует по" hint="Пусто — не менять">
         <TextInput
           type="date"
@@ -303,7 +408,7 @@ function EntryEditor({ id, onDone }: { id: string; onDone: () => void }) {
           Сохранить
         </Button>
         <Button tone="ghost" type="button" onClick={onDone}>
-          Отмена
+          Закрыть
         </Button>
       </span>
 
@@ -318,6 +423,7 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
     selectedGroupId,
     selectGroup,
     activeYearTitle,
+    activeYearStartsOn,
   } = useAcademicContext();
   const ownGroups = useScheduleGroups();
 
@@ -350,25 +456,28 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
 
   return (
     <div className="flex flex-col gap-6">
+      {editable && (
+        <Card
+          title="Добавить занятие"
+          description="Занятие повторяется каждую неделю в указанных датах действия. Группа выбирается здесь — список ниже показывает её занятия."
+        >
+          <EntryForm
+            groupId={selectedGroupId}
+            groups={groups}
+            selectedGroupId={selectedGroupId}
+            selectGroup={selectGroup}
+            yearStart={activeYearStartsOn ?? ''}
+          />
+        </Card>
+      )}
+
       <Card
-        title="Расписание"
+        title="Занятия в сетке"
         description={`Шаблон занятий на неделю${activeYearTitle === null ? '' : ` · ${activeYearTitle}`}. Уроки по датам появляются на экране «Уроки».`}
       >
-        <Field label="Группа">
-          <select
-            name="studyGroupId"
-            className={`${selectClass} max-w-sm`}
-            value={selectedGroupId ?? ''}
-            onChange={(event) => selectGroup(event.target.value === '' ? null : event.target.value)}
-          >
-            <option value="">Все доступные группы</option>
-            {groups.map((group) => (
-              <option key={group.id} value={group.id}>
-                {group.name}
-              </option>
-            ))}
-          </select>
-        </Field>
+        {!editable && (
+          <GroupField groups={groups} selectedGroupId={selectedGroupId} selectGroup={selectGroup} />
+        )}
 
         {entries.isError && <Alert tone="error">{errorMessage(entries.error)}</Alert>}
 
@@ -376,7 +485,7 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
           <div className="mt-4">
             <EmptyState>
               {selectedGroupId === null
-                ? 'Выберите группу, чтобы увидеть её расписание.'
+                ? 'Выберите группу, чтобы увидеть её расписание, или заполните расписание для всех групп.'
                 : 'В расписании этой группы пока нет занятий.'}
             </EmptyState>
           </div>
@@ -395,11 +504,11 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
                   <td className="px-3 py-2">
                     {entry.subjectName}
                     <div className="text-xs text-slate-500">
-                      с {entry.validFrom}
+                      {entry.groupName} · с {entry.validFrom}
                       {entry.validTo === null ? '' : ` по ${entry.validTo}`}
                     </div>
                     {editingId === entry.id && (
-                      <EntryEditor id={entry.id} onDone={() => setEditingId(null)} />
+                      <EntryEditor entry={entry} onDone={() => setEditingId(null)} />
                     )}
                   </td>
                   <td className="px-3 py-2">{teacherName(entry.teacherUserId)}</td>
@@ -428,15 +537,6 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
 
         {remove.isError && <Alert tone="error">{errorMessage(remove.error)}</Alert>}
       </Card>
-
-      {editable && selectedGroupId !== null && (
-        <Card
-          title="Добавить занятие"
-          description="Занятие повторяется каждую неделю в указанных датах действия."
-        >
-          <EntryForm groupId={selectedGroupId} yearStart={new Date().toISOString().slice(0, 10)} />
-        </Card>
-      )}
     </div>
   );
 }

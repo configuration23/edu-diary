@@ -106,7 +106,7 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
     });
 
     form.reset({ username: '', fullName: '', password: '', email: '', roles: ['teacher'] });
-    setNotice('Пользователь создан. Пароль временный: при первом входе его нужно сменить.');
+    setNotice('Учётная запись создана. Пароль временный: при первом входе его нужно сменить.');
   });
 
   const canManage = session.permissions.some(
@@ -117,7 +117,7 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
     <div className="flex flex-col gap-6">
       {canManage && (
         <Card
-          title="Новый пользователь"
+          title="Новая учётная запись"
           description="Учётная запись создаётся с временным паролем."
         >
           <form className="flex flex-col gap-4" onSubmit={onCreate} noValidate>
@@ -186,7 +186,7 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
 
             {selectedCount > 1 && (
               <Alert tone="warning">
-                Внимание! Вы выбрали больше одной роли! Пользователь получит расширенные права!
+                Внимание! Вы выбрали больше одной роли! Учётная запись получит расширенные права!
               </Alert>
             )}
 
@@ -194,7 +194,7 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
 
             <div>
               <Button type="submit" disabled={createUser.isPending}>
-                {createUser.isPending ? 'Создаём…' : 'Создать пользователя'}
+                {createUser.isPending ? 'Создаём…' : 'Создать учётную запись'}
               </Button>
             </div>
           </form>
@@ -204,7 +204,7 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
       {notice !== null && <Alert tone="success">{notice}</Alert>}
 
       <Card
-        title="Пользователи"
+        title="Учётные записи"
         description={`Всего: ${users.data?.total ?? 0}`}
         actions={
           <TextInput
@@ -219,7 +219,7 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
         {users.isError && <Alert tone="error">{errorMessage(users.error)}</Alert>}
 
         {users.data !== undefined && users.data.items.length === 0 && (
-          <EmptyState>Пользователей нет</EmptyState>
+          <EmptyState>Учётных записей нет</EmptyState>
         )}
 
         {users.data !== undefined && users.data.items.length > 0 && (
@@ -284,7 +284,7 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
 
         {editing !== null && (
           <div className="mt-4 rounded-md border border-slate-200 p-4">
-            <p className="mb-2 text-sm font-medium">Роли пользователя</p>
+            <p className="mb-2 text-sm font-medium">Роли учётной записи</p>
             <div className="flex flex-wrap gap-3">
               {(roles.data?.items ?? []).map((role) => (
                 <label key={role.code} className="flex items-center gap-2 text-sm">
@@ -323,7 +323,7 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
 
         {passwordFor !== null && (
           <div className="mt-4 rounded-md border border-slate-200 p-4">
-            <Field label="Новый временный пароль" hint="Все сессии пользователя будут отозваны">
+            <Field label="Новый временный пароль" hint="Все сессии учётной записи будут отозваны">
               <TextInput
                 type="password"
                 value={newPassword}
@@ -336,7 +336,7 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
                   await resetPassword.mutateAsync({ userId: passwordFor, password: newPassword });
                   setPasswordFor(null);
                   setNewPassword('');
-                  setNotice('Пароль сброшен, сессии пользователя отозваны.');
+                  setNotice('Пароль сброшен, сессии учётной записи отозваны.');
                 }}
                 disabled={resetPassword.isPending || newPassword.length < 10}
               >

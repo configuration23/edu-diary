@@ -9,6 +9,7 @@ import {
   useDeleteLesson,
   useGenerateLessons,
   useLessons,
+  useRestoreLesson,
   useScheduleGroups,
   useTeachers,
   useUpdateLesson,
@@ -155,8 +156,52 @@ function LessonEditor({ lesson, canReplace }: { lesson: LessonDto; canReplace: b
   );
 }
 
+/**
+ * Выбор группы для уроков.
+ *
+ * Группа выбирается в блоке «Создать уроки» (или в списке, если генерации нет по
+ * правам): два разных «Группа» на одной странице путают.
+ */
+function GroupField({
+  groups,
+  selectedGroupId,
+  selectGroup,
+}: {
+  groups: Array<{ id: string; name: string }>;
+  selectedGroupId: string | null;
+  selectGroup: (id: string | null) => void;
+}) {
+  return (
+    <Field label="Группа" hint="«Все доступные» — уроки по всем группам">
+      <select
+        name="studyGroupId"
+        className={`${selectClass} max-w-sm`}
+        value={selectedGroupId ?? ''}
+        onChange={(event) => selectGroup(event.target.value === '' ? null : event.target.value)}
+      >
+        <option value="">Все доступные группы</option>
+        {groups.map((group) => (
+          <option key={group.id} value={group.id}>
+            {group.name}
+          </option>
+        ))}
+      </select>
+    </Field>
+  );
+}
+
 /** Генерация уроков за период: только администратор. */
-function GenerateForm({ groupId }: { groupId: string }) {
+function GenerateForm({
+  groupId,
+  groups,
+  selectedGroupId,
+  selectGroup,
+}: {
+  groupId: string | null;
+  groups: Array<{ id: string; name: string }>;
+  selectedGroupId: string | null;
+  selectGroup: (id: string | null) => void;
+}) {
   const generate = useGenerateLessons();
   const [from, setFrom] = useState(shiftDays(1));
   const [to, setTo] = useState(shiftDays(28));
@@ -167,6 +212,7 @@ function GenerateForm({ groupId }: { groupId: string }) {
       className="flex flex-col gap-3"
       onSubmit={async (event) => {
         event.preventDefault();
+        if (groupId === null) return;
         setResult(null);
         try {
           const response = await generate.mutateAsync({ studyGroupId: groupId, from, to });
@@ -179,6 +225,8 @@ function GenerateForm({ groupId }: { groupId: string }) {
         }
       }}
     >
+      <GroupField groups={groups} selectedGroupId={selectedGroupId} selectGroup={selectGroup} />
+
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="С даты">
           <TextInput
@@ -199,7 +247,7 @@ function GenerateForm({ groupId }: { groupId: string }) {
       </div>
 
       <div>
-        <Button type="submit" disabled={generate.isPending}>
+        <Button type="submit" disabled={generate.isPending || groupId === null}>
           Создать уроки за период
         </Button>
       </div>
@@ -234,37 +282,61 @@ export function LessonsScreen({ session }: { session: SessionResponseDto }) {
     to: shiftDays(28),
   });
   const remove = useDeleteLesson();
+  const restore = useRestoreLesson();
 
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [showCancelled, setShowCancelled] = useState(false);
 
   const canReplace = canManageAll(session, 'substitutions:write');
   const canEditTopic = session.permissions.some((grant) => grant.permission === 'lessons:write');
   const canRemove = canManageAll(session, 'lessons:write');
   const canGenerate = canManageAll(session, 'schedule:write');
 
-  const items = lessons.data?.items ?? [];
+  const allItems = lessons.data?.items ?? [];
+  /**
+   * Отменённые уроки по умолчанию скрыты: их накапливается много, и они мешают
+   * читать расписание. Переключатель возвращает их в список — вместе с кнопкой
+   * восстановления, потому что отмена не должна быть дорогой в одну сторону.
+   */
+  const items = showCancelled
+    ? allItems
+    : allItems.filter((lesson) => lesson.status !== 'cancelled');
+  const cancelledCount = allItems.filter((lesson) => lesson.status === 'cancelled').length;
 
   return (
     <div className="flex flex-col gap-6">
+      {canGenerate && (
+        <Card
+          title="Создать уроки"
+          description="Повторный запуск за тот же период ничего не дублирует и не перезаписывает правки. Группа выбирается здесь — список ниже показывает её уроки."
+        >
+          <GenerateForm
+            groupId={selectedGroupId}
+            groups={groups}
+            selectedGroupId={selectedGroupId}
+            selectGroup={selectGroup}
+          />
+        </Card>
+      )}
+
       <Card
         title="Уроки"
         description={`Занятия по датам${activeYearTitle === null ? '' : ` · ${activeYearTitle}`}. Показаны две недели назад и четыре вперёд.`}
       >
-        <Field label="Группа">
-          <select
-            name="studyGroupId"
-            className={`${selectClass} max-w-sm`}
-            value={selectedGroupId ?? ''}
-            onChange={(event) => selectGroup(event.target.value === '' ? null : event.target.value)}
-          >
-            <option value="">Все доступные группы</option>
-            {groups.map((group) => (
-              <option key={group.id} value={group.id}>
-                {group.name}
-              </option>
-            ))}
-          </select>
-        </Field>
+        {!canGenerate && (
+          <GroupField groups={groups} selectedGroupId={selectedGroupId} selectGroup={selectGroup} />
+        )}
+
+        <div className="mt-3 text-sm text-slate-600">
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={showCancelled}
+              onChange={(event) => setShowCancelled(event.target.checked)}
+            />
+            Показать отменённые ({cancelledCount})
+          </label>
+        </div>
 
         {lessons.isError && <Alert tone="error">{errorMessage(lessons.error)}</Alert>}
 
@@ -272,8 +344,10 @@ export function LessonsScreen({ session }: { session: SessionResponseDto }) {
           <div className="mt-4">
             <EmptyState>
               {selectedGroupId === null
-                ? 'Выберите группу, чтобы увидеть её уроки.'
-                : 'Уроков за этот период нет. Их можно создать из расписания группы.'}
+                ? 'Выберите группу, чтобы увидеть её уроки, или создайте уроки для всех групп.'
+                : cancelledCount > 0 && !showCancelled
+                  ? 'За этот период есть только отменённые занятия — включите их показ выше.'
+                  : 'Уроков за этот период нет. Их можно создать из расписания группы.'}
             </EmptyState>
           </div>
         )}
@@ -337,6 +411,17 @@ export function LessonsScreen({ session }: { session: SessionResponseDto }) {
                               Отменить занятие
                             </Button>
                           )}
+                          {canRemove && lesson.status === 'cancelled' && (
+                            <Button
+                              tone="ghost"
+                              disabled={restore.isPending}
+                              onClick={() =>
+                                void restore.mutateAsync(lesson).catch(() => undefined)
+                              }
+                            >
+                              Восстановить
+                            </Button>
+                          )}
                         </span>
                       )}
                     </td>
@@ -348,16 +433,8 @@ export function LessonsScreen({ session }: { session: SessionResponseDto }) {
         )}
 
         {remove.isError && <Alert tone="error">{errorMessage(remove.error)}</Alert>}
+        {restore.isError && <Alert tone="error">{errorMessage(restore.error)}</Alert>}
       </Card>
-
-      {canGenerate && selectedGroupId !== null && (
-        <Card
-          title="Создать уроки"
-          description="Повторный запуск за тот же период ничего не дублирует и не перезаписывает правки."
-        >
-          <GenerateForm groupId={selectedGroupId} />
-        </Card>
-      )}
     </div>
   );
 }

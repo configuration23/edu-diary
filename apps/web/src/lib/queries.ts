@@ -4,6 +4,7 @@ import {
   generateLessonsResponseSchema,
   lessonSchema,
   listLessonsResponseSchema,
+  listScheduleExceptionsResponseSchema,
   listScheduleResponseSchema,
   scheduleEntrySchema,
   substitutionSchema,
@@ -43,6 +44,7 @@ import {
   subjectSchema,
   suggestUsernameResponseSchema,
   userSummarySchema,
+  type LessonDto,
   type SessionResponseDto,
   type SetupStatusResponseDto,
 } from '@edu-diary/contracts';
@@ -436,7 +438,7 @@ export function useLinkGuardian() {
   });
 }
 
-/** Все связи «ученик ↔ представитель»: список в разделе «Пользователи и роли». */
+/** Все связи «ученик ↔ представитель»: список в разделе «Учётные записи и роли». */
 export function useGuardianLinks(studentId?: string) {
   const query = toQueryString({ limit: 200, ...(studentId === undefined ? {} : { studentId }) });
 
@@ -1058,6 +1060,49 @@ export function useDeleteSubstitution() {
   return useMutation({
     mutationFn: (id: string) =>
       apiSend(`/api/substitutions/${id}`, { method: 'DELETE' }).then(() => id),
+    onSuccess: () => invalidateSchedule(client),
+  });
+}
+
+/**
+ * Восстановление отменённого урока.
+ *
+ * Отмена — это исключение на дату, а не удаление строки, поэтому возврат состоит
+ * из двух шагов: снять исключение и попросить генерацию вернуть урок в план по
+ * этой же дате. Широкий период не берём: генерация по одному дню ничего лишнего
+ * не пересчитывает.
+ */
+export function useRestoreLesson() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async (lesson: LessonDto) => {
+      const exceptions = await apiRequest(
+        '/api/schedule/exceptions',
+        listScheduleExceptionsResponseSchema,
+      );
+
+      const cancellation = exceptions.items.find(
+        (item) =>
+          item.exceptionDate === lesson.lessonDate &&
+          item.action === 'cancel' &&
+          item.scheduleEntryId === lesson.scheduleEntryId,
+      );
+
+      if (cancellation !== undefined) {
+        await apiSend(`/api/schedule/exceptions/${cancellation.id}`, { method: 'DELETE' });
+      }
+
+      await apiRequest('/api/lessons/generate', generateLessonsResponseSchema, {
+        method: 'POST',
+        body: {
+          studyGroupId: lesson.studyGroupId,
+          from: lesson.lessonDate,
+          to: lesson.lessonDate,
+        },
+      });
+
+      return lesson.id;
+    },
     onSuccess: () => invalidateSchedule(client),
   });
 }

@@ -172,18 +172,20 @@ test.describe('Этап 3: звонки, расписание, уроки', () =
 
     // --- Расписание: занятие в сетке группы ---
     await page.getByRole('link', { name: 'Расписание' }).click();
+    // Экран открывается блоком добавления занятия: группа выбирается в нём,
+    // список занятий идёт ниже и подгружается по выбранной группе.
     await expect(
-      page.getByRole('heading', { level: 2, name: 'Расписание', exact: true }),
+      page.getByRole('heading', { level: 2, name: 'Добавить занятие', exact: true }),
     ).toBeVisible();
 
-    // Группа выбирается в шапке: там же переключатель контекста, что и в других
-    // разделах, поэтому отдельного списка групп у расписания нет.
-    await page.locator('header select').selectOption({ label: GROUP });
-    await expect(page.getByText('В расписании этой группы пока нет занятий')).toBeVisible();
-
+    // Группа выбирается в блоке добавления занятия: список ниже подгружается по
+    // выбранной группе, а отдельного селекта в шапке на этом экране нет.
     const entryForm = page
       .locator('section')
       .filter({ has: page.getByRole('heading', { name: 'Добавить занятие' }) });
+
+    await entryForm.getByLabel('Группа').selectOption({ label: GROUP });
+    await expect(page.getByText('В расписании этой группы пока нет занятий')).toBeVisible();
 
     await entryForm
       .getByLabel('Назначение')
@@ -261,15 +263,16 @@ test.describe('Этап 3: звонки, расписание, уроки', () =
     await page.getByRole('button', { name: 'Выйти' }).click();
     await login(page, STUDENT.username, STUDENT.password);
 
-    // Свою группу ученик выбирает в шапке: справочник групп ему недоступен,
-    // поэтому список строит само расписание (маршрут «мои группы»).
+    // Свою группу ученик выбирает в самом расписании: справочник групп ему
+    // недоступен, поэтому список строит маршрут «мои группы», а шапка остаётся
+    // только контекстом приложения.
     //
     // Раздел открываем адресом: группа должна попасть в первый же запрос
     // расписания. Если сначала открыть раздел, а затем перезагрузить страницу,
     // исходный запрос отменяется, и таблица остаётся пустой.
     await page.goto('/schedule');
 
-    const studentGroupSelect = page.locator('header select');
+    const studentGroupSelect = page.locator('select[name="studyGroupId"]');
     await expect(studentGroupSelect.locator('option', { hasText: GROUP })).toHaveCount(1);
     await studentGroupSelect.selectOption({ label: GROUP });
 
