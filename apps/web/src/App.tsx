@@ -3,7 +3,7 @@ import { RouterProvider, createRootRoute, createRoute, createRouter } from '@tan
 import type { ReactNode } from 'react';
 
 import { AppLayout } from './components/AppLayout';
-import { AcademicContextProvider } from './components/AcademicContext';
+import { AcademicContextProvider, useAcademicContext } from './components/AcademicContext';
 import { Alert } from './components/ui';
 import { errorMessage } from './lib/api-client';
 import { useSession, useSetupStatus } from './lib/queries';
@@ -17,6 +17,7 @@ import { LoginScreen } from './screens/LoginScreen';
 import { LessonsScreen } from './screens/LessonsScreen';
 import { PrivacyScreen } from './screens/PrivacyScreen';
 import { ScheduleScreen } from './screens/ScheduleScreen';
+import { SubstitutionsScreen } from './screens/SubstitutionsScreen';
 import { ScheduleTemplateScreen } from './screens/ScheduleTemplateScreen';
 import { SecurityScreen } from './screens/SecurityScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
@@ -146,6 +147,12 @@ const scheduleTemplateRoute = createRoute({
   component: withSession((session) => <ScheduleTemplateScreen session={session} />),
 });
 
+const substitutionsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/substitutions',
+  component: () => <SubstitutionsRoute />,
+});
+
 const lessonsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/lessons',
@@ -158,6 +165,20 @@ const settingsRoute = createRoute({
   component: SettingsScreen,
 });
 
+/** Замены: группа берётся из контекста, право — из сессии. */
+function SubstitutionsRoute() {
+  const { selectedGroupId } = useAcademicContext();
+  const session = useSession();
+
+  if (session.data == null) return <Splash />;
+
+  const canManage = session.data.permissions.some(
+    (grant) => grant.permission === 'substitutions:write' && grant.scope === 'all',
+  );
+
+  return <SubstitutionsScreen groupId={selectedGroupId} canManage={canManage} />;
+}
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   academicsRoute,
@@ -166,6 +187,7 @@ const routeTree = rootRoute.addChildren([
   assignmentsRoute,
   scheduleRoute,
   scheduleTemplateRoute,
+  substitutionsRoute,
   lessonsRoute,
   usersRoute,
   privacyRoute,

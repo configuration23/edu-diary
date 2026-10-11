@@ -32,6 +32,8 @@ import {
   listSecurityEventsResponseSchema,
   listStudentsResponseSchema,
   listSubjectsResponseSchema,
+  listSubstituteCandidatesResponseSchema,
+  listSubstitutionsResponseSchema,
   listUsersResponseSchema,
   periodSchema,
   policyResponseSchema,
@@ -1044,10 +1046,11 @@ export function useCreateSubstitution() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (input: {
+      /** На один урок: даты берутся из урока, начало указывать не нужно. */
       lessonId?: string | null;
       assignmentId?: string | null;
       substituteUserId: string;
-      startsOn: string;
+      startsOn?: string;
       endsOn?: string | null;
       reason: string;
     }) => apiRequest('/api/substitutions', substitutionSchema, { method: 'POST', body: input }),
@@ -1061,6 +1064,34 @@ export function useDeleteSubstitution() {
     mutationFn: (id: string) =>
       apiSend(`/api/substitutions/${id}`, { method: 'DELETE' }).then(() => id),
     onSuccess: () => invalidateSchedule(client),
+  });
+}
+
+/**
+ * Кандидаты на замену: активные преподаватели со статусом занятости на слот урока.
+ * Свободные приходят первыми — администратор выбирает заменяющего за пару секунд.
+ */
+export function useSubstituteCandidates(lessonId: string | null) {
+  return useQuery({
+    queryKey: ['substitute-candidates', lessonId],
+    enabled: lessonId !== null,
+    queryFn: () =>
+      apiRequest(
+        `/api/lessons/${String(lessonId)}/substitute-candidates`,
+        listSubstituteCandidatesResponseSchema,
+      ),
+  });
+}
+
+/** Журнал замен: список активных замен за период. */
+export function useSubstitutions(
+  params: { assignmentId?: string; substituteUserId?: string } = {},
+) {
+  const query = toQueryString(params);
+
+  return useQuery({
+    queryKey: ['substitutions', 'journal', query],
+    queryFn: () => apiRequest(`/api/substitutions${query}`, listSubstitutionsResponseSchema),
   });
 }
 

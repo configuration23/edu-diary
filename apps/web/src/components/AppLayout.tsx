@@ -50,6 +50,11 @@ const NAVIGATION: NavigationItem[] = [
     visible: (session) => has(session, 'lessons:read'),
   },
   {
+    to: '/substitutions',
+    label: 'Замены',
+    visible: (session) => has(session, 'lessons:read'),
+  },
+  {
     to: '/users',
     label: 'Учётные записи и роли',
     visible: (session) => has(session, 'users:read'),
