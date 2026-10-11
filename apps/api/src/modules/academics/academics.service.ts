@@ -264,6 +264,7 @@ export interface AcademicsService {
   withdrawStudent(
     enrollmentId: string,
     leftOn: string,
+    note: string | undefined,
     options: MutationOptions,
   ): Promise<EnrollmentRecord>;
   /** Перевод: закрыть текущее зачисление и открыть новое одной транзакцией. */
@@ -1194,7 +1195,7 @@ export function createAcademicsService(
       });
     },
 
-    async withdrawStudent(enrollmentId, leftOn, options): Promise<EnrollmentRecord> {
+    async withdrawStudent(enrollmentId, leftOn, note, options): Promise<EnrollmentRecord> {
       const current = await academics.findEnrollment(enrollmentId);
       if (current === null) {
         throw new AppError('NOT_FOUND', 'Зачисление не найдено');
@@ -1211,7 +1212,7 @@ export function createAcademicsService(
       }
 
       return withTransaction(db, options.executor, async (tx) => {
-        const updated = await academics.closeEnrollment(enrollmentId, leftOn, tx);
+        const updated = await academics.closeEnrollment(enrollmentId, leftOn, note, tx);
         if (updated === null) {
           throw new AppError('NOT_FOUND', 'Зачисление не найдено');
         }
@@ -1221,8 +1222,8 @@ export function createAcademicsService(
             action: 'update',
             entityKind: 'student_enrollment',
             entityId: enrollmentId,
-            before: { leftOn: current.leftOn },
-            after: { leftOn },
+            before: { leftOn: current.leftOn, note: current.note },
+            after: note === undefined ? { leftOn } : { leftOn, note },
           },
           options.actor,
           tx,
@@ -1273,7 +1274,8 @@ export function createAcademicsService(
         // Перевод — одна транзакция: закрытие прежнего зачисления и открытие
         // нового не могут разойтись (иначе ученик «потеряется» или удвоится).
         if (current !== undefined) {
-          await academics.closeEnrollment(current.id, input.transferOn, tx);
+          // Примечание не трогаем: причина зачисления относится к записи.
+          await academics.closeEnrollment(current.id, input.transferOn, undefined, tx);
         }
 
         const created = await academics.insertEnrollment(

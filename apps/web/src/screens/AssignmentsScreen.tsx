@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router';
 import { useState } from 'react';
 
 import { requiredISODateSchema } from '@edu-diary/contracts';
@@ -94,6 +95,16 @@ function CreateAssignmentCard() {
           }
         }}
       >
+        {teachers.data !== undefined && teacherOptions.length === 0 && (
+          <Alert tone="warning">
+            Преподавателей ещё нет — создайте пользователя с ролью «Преподаватель» в разделе{' '}
+            <Link to="/users" className="underline">
+              Пользователи и роли
+            </Link>
+            .
+          </Alert>
+        )}
+
         <div className="grid gap-4 sm:grid-cols-3">
           <Field label="Преподаватель">
             <select

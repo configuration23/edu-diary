@@ -501,11 +501,10 @@ export function useCreateAcademicYear() {
 export function useUpdateAcademicYear() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (input: { id: string; title: string }) =>
-      apiRequest(`/api/academic-years/${input.id}`, academicYearSchema, {
-        method: 'PATCH',
-        body: { title: input.title },
-      }),
+    mutationFn: (input: { id: string; title?: string; startsOn?: string; endsOn?: string }) => {
+      const { id, ...body } = input;
+      return apiRequest(`/api/academic-years/${id}`, academicYearSchema, { method: 'PATCH', body });
+    },
     onSuccess: () => invalidateAcademics(client),
   });
 }
@@ -597,10 +596,19 @@ export function useGroupEnrollments(groupId: string | null) {
 export function useEnrollStudent() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (input: { groupId: string; studentId: string; joinedOn: string }) =>
+    mutationFn: (input: {
+      groupId: string;
+      studentId: string;
+      joinedOn: string;
+      note?: string | null;
+    }) =>
       apiRequest(`/api/groups/${input.groupId}/enrollments`, enrollStudentResponseSchema, {
         method: 'POST',
-        body: { studentId: input.studentId, joinedOn: input.joinedOn },
+        body: {
+          studentId: input.studentId,
+          joinedOn: input.joinedOn,
+          ...(input.note === undefined || input.note === null ? {} : { note: input.note }),
+        },
       }),
     onSuccess: () => invalidateAcademics(client),
   });
@@ -609,10 +617,13 @@ export function useEnrollStudent() {
 export function useWithdrawStudent() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (input: { enrollmentId: string; leftOn: string }) =>
+    mutationFn: (input: { enrollmentId: string; leftOn: string; note?: string | null }) =>
       apiRequest(`/api/enrollments/${input.enrollmentId}`, enrollmentSchema, {
         method: 'PATCH',
-        body: { leftOn: input.leftOn },
+        body: {
+          leftOn: input.leftOn,
+          ...(input.note === undefined || input.note === null ? {} : { note: input.note }),
+        },
       }),
     onSuccess: () => invalidateAcademics(client),
   });

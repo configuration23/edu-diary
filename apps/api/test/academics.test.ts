@@ -1,4 +1,4 @@
-import { describe, expect, it, afterAll, beforeAll } from 'vitest';
+﻿import { describe, expect, it, afterAll, beforeAll } from 'vitest';
 
 import {
   completeSetup,
@@ -244,6 +244,75 @@ describeWithDatabase('группы, зачисления и справочник
     });
 
     expect(same.statusCode).toBe(409);
+  });
+
+  it('примечание зачисления сохраняется и при отчислении не теряется', async () => {
+    const student = await testApp.app.inject({
+      method: 'POST',
+      url: '/api/students',
+      headers: auth(),
+      payload: { fullName: 'Примечание Проверкин' },
+    });
+    const studentId = (student.json() as Json).id as string;
+
+    const groups = await testApp.app.inject({
+      method: 'GET',
+      url: '/api/groups?search=ПКС-21',
+      headers: auth(),
+    });
+    const groupId = (groups.json() as { items: Array<{ id: string }> }).items[0]?.id ?? '';
+
+    const enrolled = await testApp.app.inject({
+      method: 'POST',
+      url: `/api/groups/${groupId}/enrollments`,
+      headers: auth(),
+      payload: { studentId, joinedOn: '2025-09-01', note: 'Зачислен по приказу №15' },
+    });
+    expect(enrolled.statusCode).toBe(201);
+    expect(((enrolled.json() as { enrollment: Json }).enrollment as Json).note).toBe(
+      'Зачислен по приказу №15',
+    );
+
+    const enrollmentId = ((enrolled.json() as { enrollment: Json }).enrollment as Json)
+      .id as string;
+
+    // Отчисление без примечания: основание зачисления должно сохраниться.
+    const withdrawn = await testApp.app.inject({
+      method: 'PATCH',
+      url: `/api/enrollments/${enrollmentId}`,
+      headers: auth(),
+      payload: { leftOn: '2026-05-31' },
+    });
+    expect(withdrawn.statusCode).toBe(200);
+    expect((withdrawn.json() as Json).note).toBe('Зачислен по приказу №15');
+
+    // Второй ученик: примечание при отчислении перезаписывает причину.
+    const second = await testApp.app.inject({
+      method: 'POST',
+      url: '/api/students',
+      headers: auth(),
+      payload: { fullName: 'Причина Причинина' },
+    });
+    const secondId = (second.json() as Json).id as string;
+
+    const secondEnrolled = await testApp.app.inject({
+      method: 'POST',
+      url: `/api/groups/${groupId}/enrollments`,
+      headers: auth(),
+      payload: { studentId: secondId, joinedOn: '2025-09-01', note: 'Зачислена' },
+    });
+    const secondEnrollmentId = ((secondEnrolled.json() as { enrollment: Json }).enrollment as Json)
+      .id as string;
+
+    const secondWithdrawn = await testApp.app.inject({
+      method: 'PATCH',
+      url: `/api/enrollments/${secondEnrollmentId}`,
+      headers: auth(),
+      payload: { leftOn: '2025-12-31', note: 'Переведена в другую группу' },
+    });
+
+    expect(secondWithdrawn.statusCode).toBe(200);
+    expect((secondWithdrawn.json() as Json).note).toBe('Переведена в другую группу');
   });
 
   it('справочники: предмет, аудитория и категория создаются и правятся', async () => {

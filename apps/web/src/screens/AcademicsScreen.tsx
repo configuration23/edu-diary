@@ -24,6 +24,7 @@ import {
   useCreateAcademicYear,
   useCreatePeriod,
   useDeletePeriod,
+  useUpdateAcademicYear,
   useUpdatePeriod,
 } from '../lib/queries';
 
@@ -308,15 +309,78 @@ function YearDetails({ yearId, onClose }: { yearId: string; onClose: () => void 
   );
 }
 
+/**
+ * Правка года: название и границы. Активность меняется отдельной кнопкой —
+ * «активный» это состояние года, а не поле формы.
+ */
+function EditYearForm({
+  year,
+  onDone,
+}: {
+  year: AcademicYearDto;
+  onDone: (message: string) => void;
+}) {
+  const update = useUpdateAcademicYear();
+  const form = useForm<z.infer<typeof yearFormSchema>>({
+    resolver: zodResolver(yearFormSchema),
+    defaultValues: {
+      title: year.title,
+      startsOn: year.startsOn,
+      endsOn: year.endsOn,
+      isActive: year.isActive,
+    },
+  });
+
+  return (
+    <form
+      className="mt-4 flex flex-wrap items-end gap-3 rounded-md border border-slate-200 p-4"
+      noValidate
+      onSubmit={form.handleSubmit(async (values) => {
+        try {
+          await update.mutateAsync({
+            id: year.id,
+            title: values.title.trim(),
+            startsOn: values.startsOn,
+            endsOn: values.endsOn,
+          });
+          onDone(`Год «${values.title.trim()}» сохранён.`);
+        } catch {
+          // Ошибка показывается ниже.
+        }
+      })}
+    >
+      <Field label="Название" error={form.formState.errors.title?.message}>
+        <TextInput {...form.register('title')} />
+      </Field>
+      <Field label="Начало" error={form.formState.errors.startsOn?.message}>
+        <TextInput type="date" {...form.register('startsOn')} />
+      </Field>
+      <Field label="Окончание" error={form.formState.errors.endsOn?.message}>
+        <TextInput type="date" {...form.register('endsOn')} />
+      </Field>
+      <Button type="submit" disabled={update.isPending}>
+        Сохранить
+      </Button>
+      <Button tone="secondary" onClick={() => onDone('')}>
+        Отмена
+      </Button>
+      {update.isError && <Alert tone="error">{errorMessage(update.error)}</Alert>}
+    </form>
+  );
+}
+
 export function AcademicsScreen() {
   const years = useAcademicYears();
   const activate = useActivateAcademicYear();
   const [openYearId, setOpenYearId] = useState<string | null>(null);
+  const [editingYear, setEditingYear] = useState<AcademicYearDto | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   return (
     <div className="flex flex-col gap-6">
       <CreateYearCard />
 
+      {notice !== null && <Alert tone="success">{notice}</Alert>}
       {activate.isError && <Alert tone="error">{errorMessage(activate.error)}</Alert>}
 
       <Card
@@ -345,6 +409,9 @@ export function AcademicsScreen() {
                     <Button tone="secondary" onClick={() => setOpenYearId(year.id)}>
                       Периоды
                     </Button>
+                    <Button tone="ghost" onClick={() => setEditingYear(year)}>
+                      Править
+                    </Button>
                     {!year.isActive && (
                       <Button
                         tone="ghost"
@@ -359,6 +426,16 @@ export function AcademicsScreen() {
               </tr>
             ))}
           </Table>
+        )}
+
+        {editingYear !== null && (
+          <EditYearForm
+            year={editingYear}
+            onDone={(message) => {
+              setEditingYear(null);
+              if (message !== '') setNotice(message);
+            }}
+          />
         )}
       </Card>
 

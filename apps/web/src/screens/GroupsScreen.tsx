@@ -129,6 +129,7 @@ function EnrollForm({ groupId, groupName }: { groupId: string; groupName: string
   const enroll = useEnrollStudent();
   const [studentId, setStudentId] = useState('');
   const [joinedOn, setJoinedOn] = useState('');
+  const [note, setNote] = useState('');
 
   return (
     <form
@@ -136,9 +137,15 @@ function EnrollForm({ groupId, groupName }: { groupId: string; groupName: string
       onSubmit={async (event) => {
         event.preventDefault();
         try {
-          await enroll.mutateAsync({ groupId, studentId, joinedOn });
+          await enroll.mutateAsync({
+            groupId,
+            studentId,
+            joinedOn,
+            note: note === '' ? null : note,
+          });
           setStudentId('');
           setJoinedOn('');
+          setNote('');
         } catch {
           // Ошибка показывается ниже.
         }
@@ -158,7 +165,7 @@ function EnrollForm({ groupId, groupName }: { groupId: string; groupName: string
         </Alert>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-4">
         <Field label="Ученик">
           <select
             required
@@ -182,6 +189,9 @@ function EnrollForm({ groupId, groupName }: { groupId: string; groupName: string
             onChange={(event) => setJoinedOn(event.target.value)}
           />
         </Field>
+        <Field label="Примечание" hint="Необязательно: основание, документ">
+          <TextInput value={note} onChange={(event) => setNote(event.target.value)} />
+        </Field>
         <div className="flex items-end pb-2">
           <Button type="submit" tone="secondary" disabled={enroll.isPending}>
             Зачислить
@@ -199,6 +209,7 @@ function GroupComposition({ groupId, groupName }: { groupId: string; groupName: 
   const withdraw = useWithdrawStudent();
   const [withdrawFor, setWithdrawFor] = useState<string | null>(null);
   const [leftOn, setLeftOn] = useState('');
+  const [leftNote, setLeftNote] = useState('');
 
   return (
     <Card title={`Состав группы «${groupName}»`} description="Отчисление закрывает запись датой.">
@@ -249,11 +260,18 @@ function GroupComposition({ groupId, groupName }: { groupId: string; groupName: 
                 onChange={(event) => setLeftOn(event.target.value)}
               />
             </Field>
+            <Field label="Примечание" hint="Необязательно: причина отчисления">
+              <TextInput value={leftNote} onChange={(event) => setLeftNote(event.target.value)} />
+            </Field>
             <Button
               tone="secondary"
               disabled={withdraw.isPending || leftOn === ''}
               onClick={() => {
-                void withdraw.mutateAsync({ enrollmentId: withdrawFor, leftOn });
+                void withdraw.mutateAsync({
+                  enrollmentId: withdrawFor,
+                  leftOn,
+                  note: leftNote === '' ? null : leftNote,
+                });
                 setWithdrawFor(null);
                 setLeftOn('');
               }}

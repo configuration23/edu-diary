@@ -215,6 +215,7 @@ export interface AcademicsRepository {
   closeEnrollment(
     id: string,
     leftOn: string,
+    note?: string | undefined,
     executor?: Executor,
   ): Promise<EnrollmentRecord | null>;
 
@@ -620,11 +621,14 @@ export function createAcademicsRepository(db: Database): AcademicsRepository {
     async closeEnrollment(
       id: string,
       leftOn: string,
+      note?: string | undefined,
       executor: Executor = db.orm,
     ): Promise<EnrollmentRecord | null> {
       const rows = await executor
         .update(studentEnrollment)
-        .set({ leftOn })
+        // Примечание перезаписываем только когда его передали: иначе причина
+        // зачисления потерялась бы при отчислении.
+        .set(note === undefined ? { leftOn } : { leftOn, note })
         .where(eq(studentEnrollment.id, id))
         .returning({ id: studentEnrollment.id });
 

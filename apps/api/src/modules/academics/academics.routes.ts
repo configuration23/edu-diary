@@ -505,7 +505,12 @@ export function registerAcademicsRoutes(
     async (request) => {
       const { id } = request.params as { id: string };
       const body = withdrawStudentRequestSchema.parse(request.body);
-      const updated = await academics.withdrawStudent(id, body.leftOn, mutation(request));
+      const updated = await academics.withdrawStudent(
+        id,
+        body.leftOn,
+        body.note,
+        mutation(request),
+      );
 
       return enrollmentSchema.parse(toEnrollmentDto(updated));
     },

@@ -117,6 +117,54 @@ export function PrivacyScreen() {
         )}
       </Card>
 
+      {/* Редакции политики: текст и история. Раньше на экране была только
+          строка с версией, и посмотреть саму политику было негде. */}
+      <Card
+        title="Редакции политики"
+        description="Версия редакции уникальна: задним числом текст не переписать, изменения выходят новой редакцией."
+      >
+        {policy.isLoading && <p className="text-sm text-slate-500">Загружаем…</p>}
+        {policy.isError && <Alert tone="error">{errorMessage(policy.error)}</Alert>}
+
+        {policy.data !== undefined && policy.data.editions.length === 0 && (
+          <EmptyState>
+            Политика ещё не опубликована. Опубликуйте редакцию — на неё будут ссылаться согласия.
+          </EmptyState>
+        )}
+
+        {policy.data !== undefined && policy.data.editions.length > 0 && (
+          <ul className="flex flex-col gap-3">
+            {policy.data.editions.map((edition) => (
+              <li key={edition.version} className="rounded-md border border-slate-200 p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge
+                    tone={edition.version === policy.data?.current?.version ? 'success' : 'neutral'}
+                  >
+                    редакция {edition.version}
+                  </Badge>
+                  <span className="text-xs text-slate-500">
+                    {formatDateTime(edition.publishedAt)}
+                    {edition.publishedByName === null ? '' : ` · ${edition.publishedByName}`}
+                  </span>
+                  {edition.version === policy.data?.current?.version && (
+                    <span className="text-xs text-slate-500">действующая</span>
+                  )}
+                </div>
+
+                <details className="mt-2">
+                  <summary className="cursor-pointer text-sm text-slate-700">
+                    Показать текст
+                  </summary>
+                  <pre className="mt-2 whitespace-pre-wrap break-words font-sans text-sm text-slate-800">
+                    {edition.text}
+                  </pre>
+                </details>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+
       {notice !== null && <Alert tone="success">{notice}</Alert>}
 
       <Card

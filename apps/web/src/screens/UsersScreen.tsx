@@ -71,6 +71,11 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
   const [passwordFor, setPasswordFor] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
+  /** Подсказка по логину — рядом с полем, а не в общей плашке страницы. */
+  const [loginHint, setLoginHint] = useState<{
+    tone: 'success' | 'warning' | 'error';
+    text: string;
+  } | null>(null);
 
   const users = useUsers({ search });
   const roles = useRoles();
@@ -131,29 +136,57 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
                     tone="secondary"
                     disabled={suggest.isPending}
                     onClick={async () => {
+                      // Результат показываем здесь же, у поля: общая плашка
+                      // наверху страницы не видна при прокрученной форме.
+                      setLoginHint(null);
                       const fullName = form.getValues('fullName').trim();
                       if (fullName === '') {
-                        setNotice('Сначала заполните ФИО — логин строится из него.');
+                        setLoginHint({
+                          tone: 'warning',
+                          text: 'Сначала заполните ФИО — логин строится из него.',
+                        });
                         return;
                       }
 
-                      const result = await suggest.mutateAsync(fullName);
-                      if (result.username === null) {
-                        setNotice('Не удалось построить логин из ФИО — введите его вручную.');
-                        return;
-                      }
+                      try {
+                        const result = await suggest.mutateAsync(fullName);
+                        if (result.username === null) {
+                          setLoginHint({
+                            tone: 'error',
+                            text: 'Не удалось построить логин из ФИО — введите его вручную.',
+                          });
+                          return;
+                        }
 
-                      form.setValue('username', result.username, { shouldValidate: true });
-                      setNotice(
-                        result.taken.length === 0
-                          ? `Логин свободен: ${result.username}`
-                          : `Базовый логин занят, предложен ${result.username}`,
-                      );
+                        form.setValue('username', result.username, { shouldValidate: true });
+                        setLoginHint({
+                          tone: 'success',
+                          text:
+                            result.taken.length === 0
+                              ? `Логин свободен: ${result.username}`
+                              : `Базовый логин занят, предложен ${result.username}`,
+                        });
+                      } catch (error) {
+                        setLoginHint({ tone: 'error', text: errorMessage(error) });
+                      }
                     }}
                   >
                     По ФИО
                   </Button>
                 </div>
+                {loginHint !== null && (
+                  <p
+                    className={
+                      loginHint.tone === 'error'
+                        ? 'mt-1 text-xs text-red-700'
+                        : loginHint.tone === 'warning'
+                          ? 'mt-1 text-xs text-amber-700'
+                          : 'mt-1 text-xs text-emerald-700'
+                    }
+                  >
+                    {loginHint.text}
+                  </p>
+                )}
               </Field>
               <Field
                 label="Временный пароль"
