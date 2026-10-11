@@ -14,6 +14,12 @@ import { createGuardiansRepository } from './modules/iam/iam.guardians.repositor
 import { createUsersRepository } from './modules/iam/iam.users.repository';
 import type { UsersService } from './modules/iam/iam.users.service';
 import { buildPrivacyService, createPrivacyModule } from './modules/privacy';
+import {
+  buildScheduleService,
+  createScheduleModule,
+  type CatalogLookupPort as ScheduleCatalogPort,
+  type UserLookupPort as ScheduleUserPort,
+} from './modules/schedule';
 import { buildSecurityService, createSecurityModule } from './modules/security';
 import {
   createSettingsModule,
@@ -160,6 +166,63 @@ export async function buildApp({
     catalog: catalogLookup,
   });
 
+  /**
+   * Расписание и уроки (Этап 3).
+   *
+   * Порты собираются здесь: расписанию нужны назначения и группы (без импорта
+   * модулей `staffing`/`academics`), а также имена преподавателей.
+   */
+  const scheduleCatalog: ScheduleCatalogPort = {
+    async findAssignment(id) {
+      const assignment = await staffingRepository.find(id);
+      if (assignment === null) return null;
+
+      return {
+        id: assignment.id,
+        teacherUserId: assignment.teacherUserId,
+        subjectId: assignment.subjectId,
+        studyGroupId: assignment.studyGroupId,
+        startsOn: assignment.startsOn,
+        endsOn: assignment.endsOn,
+        subjectName: assignment.subjectName,
+        groupName: assignment.groupName,
+      };
+    },
+    async findRoom(id) {
+      const room = await academicsRepository.findRoom(id);
+      return room === null ? null : { id: room.id, name: room.name };
+    },
+    async findGroup(id) {
+      const group = await academicsRepository.findGroup(id);
+      return group === null ? null : { id: group.id, name: group.name };
+    },
+    async groupIdsOfStudent(studentId) {
+      const enrollments = await academicsRepository.listStudentEnrollments(studentId);
+      return enrollments.filter((item) => item.leftOn === null).map((item) => item.studyGroupId);
+    },
+  };
+  const scheduleUsers: ScheduleUserPort = {
+    findActiveUser: (userId) => userLookup.findActiveUser(userId),
+    findActiveTeacher: (userId) => userLookup.findActiveTeacher(userId),
+    async findUsers(userIds) {
+      const users = await usersRepository.findUsernamesByIds([...userIds]);
+      void users;
+      const names = new Map<string, string>();
+      for (const id of userIds) {
+        const found = await usersRepository.findById(id);
+        if (found !== null) names.set(id, found.fullName);
+      }
+      return names;
+    },
+  };
+
+  const schedule = buildScheduleService({
+    db,
+    audit,
+    catalog: scheduleCatalog,
+    users: scheduleUsers,
+  });
+
   let authService: SessionRevokerPort | null = null;
   const sessionsPort: SessionRevokerPort = {
     revokeUserSessions(userId, options, executor) {
@@ -235,6 +298,12 @@ export async function buildApp({
   await app.register(createIamModule({ services: iam }), { prefix: '/api' });
   await app.register(createAcademicsModule({ academics, users: userLookup }), { prefix: '/api' });
   await app.register(createStaffingModule({ staffing }), { prefix: '/api' });
+  await app.register(
+    createScheduleModule({ schedule, catalog: scheduleCatalog, users: scheduleUsers }),
+    {
+      prefix: '/api',
+    },
+  );
   await app.register(createAuditModule({ audit }), { prefix: '/api' });
   await app.register(createSecurityModule({ security, audit }), { prefix: '/api' });
   await app.register(createPrivacyModule({ privacy }), { prefix: '/api' });

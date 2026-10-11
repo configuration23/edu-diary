@@ -2,6 +2,14 @@ import type { FastifyPluginAsync } from 'fastify';
 
 import type { Database } from '../../shared/db/client';
 import type { AuditService } from '../audit';
+import { createScheduleRepository, type ScheduleRepository } from './schedule.repository';
+import { registerScheduleRoutes } from './schedule.routes';
+import {
+  createScheduleService,
+  type CatalogLookupPort,
+  type ScheduleService,
+  type UserLookupPort,
+} from './schedule.service';
 
 /**
  * Публичный интерфейс модуля `schedule` (Этап 3).
@@ -10,37 +18,56 @@ import type { AuditService } from '../audit';
  * (необязательным) окончанием, исключения на конкретную дату — отмена, перенос,
  * замена, — порождённые уроки и замены преподавателя на урок или диапазон дат.
  *
- * Состояние: схема БД и каталог прав готовы (шаги 3 и 5 плана этапа), сервис,
- * маршруты и интерфейс — следующие шаги (`docs/PHASE-3-PLAN.md`). Поэтому здесь
- * пока только описание схемы и пустой набор маршрутов: раздел не отвечает
- * `404`-заглушками, а просто ещё не зарегистрирован.
+ * Наружу отдаёт сервис и фабрику маршрутов. Порты (`catalog`, `users`) приходят
+ * снаружи и собираются в `app.ts`: так модуль не импортирует `staffing` и
+ * `academics` напрямую, и границы модулей остаются проверяемыми.
  */
 
+export {
+  createScheduleRepository,
+  type LessonListFilters,
+  type LessonRecord,
+  type ScheduleEntryInput,
+  type ScheduleEntryRecord,
+  type ScheduleExceptionRecord,
+  type ScheduleRepository,
+  type SubstitutionRecord,
+} from './schedule.repository';
+export {
+  createScheduleService,
+  type AssignmentLookup,
+  type CatalogLookupPort,
+  type ScheduleService,
+  type ScheduleServiceDependencies,
+  type UserLookupPort,
+} from './schedule.service';
 export { lesson, scheduleEntry, scheduleException, substitution } from './schedule.schema';
 
-/**
- * Маршруты расписания.
- *
- * Регистрируется в `app.ts` сразу: когда появится сервис, сюда добавятся
- * обработчики, и приложение соберётся тем же кодом, без правок в композиции.
- */
-export function createScheduleModule(_dependencies: {
-  /** Сервис расписания появится на следующем шаге этапа. */
-  service?: unknown;
-}): FastifyPluginAsync {
-  return async () => {
-    // Маршруты добавляются вместе с сервисом (шаг 4 плана).
-  };
+export function buildScheduleService(dependencies: {
+  db: Database;
+  audit: AuditService;
+  catalog: CatalogLookupPort;
+  users: UserLookupPort;
+  today?: (() => string) | undefined;
+}): ScheduleService {
+  const repository: ScheduleRepository = createScheduleRepository(dependencies.db);
+
+  return createScheduleService({
+    db: dependencies.db,
+    schedule: repository,
+    audit: dependencies.audit,
+    catalog: dependencies.catalog,
+    users: dependencies.users,
+    today: dependencies.today,
+  });
 }
 
-/**
- * Сборка сервиса расписания.
- *
- * Заглушка до шага 4: сообщение говорит, что именно осталось сделать, вместо
- * невнятной ошибки «undefined is not a function».
- */
-export function buildScheduleService(_dependencies: { db: Database; audit: AuditService }): never {
-  throw new Error(
-    'Сервис расписания ещё не реализован: остались шаги 4, 6 и 7 плана Этапа 3 (docs/PHASE-3-PLAN.md)',
-  );
+export function createScheduleModule(dependencies: {
+  schedule: ScheduleService;
+  catalog: CatalogLookupPort;
+  users: UserLookupPort;
+}): FastifyPluginAsync {
+  return async (app) => {
+    registerScheduleRoutes(app, dependencies.schedule, dependencies.catalog, dependencies.users);
+  };
 }

@@ -250,6 +250,14 @@ export type SubstitutionDto = z.infer<typeof substitutionSchema>;
 export const listSubstitutionsResponseSchema = pageSchema(substitutionSchema);
 export type ListSubstitutionsResponseDto = z.infer<typeof listSubstitutionsResponseSchema>;
 
+/** Список замен фильтруется по уроку, назначению или заменяющему. */
+export const listSubstitutionsQuerySchema = paginationQuerySchema.extend({
+  lessonId: uuidSchema.optional(),
+  assignmentId: uuidSchema.optional(),
+  substituteUserId: uuidSchema.optional(),
+});
+export type ListSubstitutionsQueryDto = z.infer<typeof listSubstitutionsQuerySchema>;
+
 export const createSubstitutionRequestSchema = z
   .object({
     /** На один урок: тогда даты берутся из урока. */
