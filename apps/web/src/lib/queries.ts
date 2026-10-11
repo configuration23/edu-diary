@@ -31,6 +31,7 @@ import {
   studentsWithoutConsentResponseSchema,
   studyGroupSchema,
   subjectSchema,
+  suggestUsernameResponseSchema,
   userSummarySchema,
   type SessionResponseDto,
   type SetupStatusResponseDto,
@@ -353,9 +354,38 @@ function invalidateStudents(client: ReturnType<typeof useQueryClient>): void {
 export function useCreateStudent() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (input: { fullName: string; userId?: string | null }) =>
-      apiRequest('/api/students', studentSummarySchema, { method: 'POST', body: input }),
+    mutationFn: (input: {
+      fullName: string;
+      birthDate?: string | null;
+      note?: string | null;
+      /** Учётная запись создаётся по необходимости, вместе с карточкой ученика. */
+      account?: { username: string; password: string } | undefined;
+    }) => apiRequest('/api/students', studentSummarySchema, { method: 'POST', body: input }),
     onSuccess: () => invalidateStudents(client),
+  });
+}
+
+/** Учётная запись ученику, заведённому ранее (карточкой без учётки). */
+export function useCreateStudentAccount() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { studentId: string; username: string; password: string }) =>
+      apiRequest(`/api/students/${input.studentId}/account`, studentSummarySchema, {
+        method: 'POST',
+        body: { username: input.username, password: input.password },
+      }),
+    onSuccess: () => invalidateStudents(client),
+  });
+}
+
+/** Свободный логин по ФИО: транслитерация и занятость считаются на сервере. */
+export function useSuggestUsername() {
+  return useMutation({
+    mutationFn: (fullName: string) =>
+      apiRequest(
+        `/api/users/suggest-username?${toQueryString({ fullName })}`,
+        suggestUsernameResponseSchema,
+      ),
   });
 }
 

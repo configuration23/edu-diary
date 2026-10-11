@@ -8,6 +8,7 @@ import { AssignmentsScreen } from '../src/screens/AssignmentsScreen';
 import { CatalogsScreen } from '../src/screens/CatalogsScreen';
 import { GroupsScreen } from '../src/screens/GroupsScreen';
 import { SettingsScreen } from '../src/screens/SettingsScreen';
+import { StudentsCard } from '../src/screens/StudentsCard';
 
 /**
  * Смоук-тесты экранов Этапа 2.
@@ -100,5 +101,16 @@ describe('экраны Этапа 2 монтируются', () => {
     expect(html).toContain('Настройки заведения');
     expect(html).toContain('Короткое название');
     expect(html).toContain('Логотип');
+  });
+
+  it('ученики и представители: заведение ученика и привязка', () => {
+    const html = renderWithQueries(<StudentsCard onNotice={() => {}} />);
+
+    // Карточка ученика — основное действие, учётная запись — по выбору.
+    expect(html).toContain('Новый ученик');
+    expect(html).toContain('Сразу создать учётную запись');
+    expect(html).toContain('Ученики');
+    expect(html).toContain('Привязка законного представителя');
+    expect(html).toContain('Кем является');
   });
 });

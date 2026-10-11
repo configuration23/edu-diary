@@ -7,8 +7,6 @@ import { errorMessage } from '../lib/api-client';
 import {
   useConsents,
   useCreateConsent,
-  useCreateStudent,
-  useLinkGuardian,
   useMissingConsents,
   usePolicy,
   usePublishPolicy,
@@ -28,9 +26,18 @@ import {
   formatDateTime,
 } from '../components/ui';
 
+/**
+ * Согласия на обработку персональных данных и редакции политики (ADR-021).
+ *
+ * Раздел отвечает только за приватность: редакции политики, согласия законных
+ * представителей и список учеников без согласия. Ученики и привязка
+ * представителей ведутся в разделе «Пользователи и роли» — там же, где остальной
+ * учёт людей: карточка ученика и учётная запись создаются одним действием.
+ */
+
 const policyFormSchema = z.object({
   version: z.string().min(1, 'Укажите версию').max(40),
-  text: z.string().min(20, 'Текст политики слишком короткий').max(50_000),
+  text: z.string().min(20, 'Текст политики слишком короткий').max(100_000),
 });
 
 const consentFormSchema = z.object({
@@ -38,10 +45,6 @@ const consentFormSchema = z.object({
   guardianUserId: z.string().min(1, 'Выберите законного представителя'),
   grantedVia: z.enum(['paper', 'electronic']),
   documentRef: z.string().max(200).optional(),
-});
-
-const studentFormSchema = z.object({
-  fullName: z.string().min(1, 'Укажите ФИО').max(200),
 });
 
 export function PrivacyScreen() {
@@ -52,14 +55,12 @@ export function PrivacyScreen() {
   const policy = usePolicy();
   const consents = useConsents({});
   const missing = useMissingConsents();
-  const students = useStudents({});
+  const students = useStudents({ limit: 200 });
   const users = useUsers({ role: 'parent' });
 
   const publishPolicy = usePublishPolicy();
   const createConsent = useCreateConsent();
   const revokeConsent = useRevokeConsent();
-  const createStudent = useCreateStudent();
-  const linkGuardian = useLinkGuardian();
 
   const policyForm = useForm<z.infer<typeof policyFormSchema>>({
     resolver: zodResolver(policyFormSchema),
@@ -71,52 +72,29 @@ export function PrivacyScreen() {
     defaultValues: { studentId: '', guardianUserId: '', grantedVia: 'paper', documentRef: '' },
   });
 
-  const studentForm = useForm<z.infer<typeof studentFormSchema>>({
-    resolver: zodResolver(studentFormSchema),
-    defaultValues: { fullName: '' },
-  });
-
   const guardians = users.data?.items ?? [];
 
   return (
     <div className="flex flex-col gap-6">
       <Card
         title="Политика обработки персональных данных"
-        description="Согласие фиксируется на конкретную редакцию: видно, на какую версию оно получено."
+        description="Каждая публикация — новая редакция с версией: согласие ссылается на неё."
       >
-        {policy.data?.current != null ? (
-          <div className="mb-4 rounded-md border border-slate-200 p-4 text-sm">
-            <p className="font-medium">
-              Действующая редакция: {policy.data.current.version} от{' '}
-              {formatDateTime(policy.data.current.publishedAt)}
-            </p>
-            <p className="mt-2 whitespace-pre-wrap text-slate-700">{policy.data.current.text}</p>
-          </div>
-        ) : (
-          <div className="mb-4">
-            <Alert tone="warning">
-              Политика ещё не опубликована. Согласия нельзя регистрировать без действующей редакции.
-            </Alert>
-          </div>
-        )}
-
         <form
           className="flex flex-col gap-4"
           onSubmit={policyForm.handleSubmit(async (values) => {
             setNotice(null);
-            await publishPolicy.mutateAsync(values);
+            await publishPolicy.mutateAsync({ version: values.version.trim(), text: values.text });
             policyForm.reset({ version: '', text: '' });
             setNotice('Редакция политики опубликована.');
           })}
           noValidate
         >
-          <Field
-            label="Версия"
-            hint="Например: 1.0"
-            error={policyForm.formState.errors.version?.message}
-          >
-            <TextInput {...policyForm.register('version')} />
-          </Field>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Field label="Версия" error={policyForm.formState.errors.version?.message}>
+              <TextInput placeholder="1.0" {...policyForm.register('version')} />
+            </Field>
+          </div>
           <Field label="Текст политики" error={policyForm.formState.errors.text?.message}>
             <textarea
               rows={6}
@@ -131,101 +109,38 @@ export function PrivacyScreen() {
             </Button>
           </div>
         </form>
+
+        {policy.data?.current != null && (
+          <p className="mt-3 text-sm text-slate-600">
+            Действующая редакция: <Badge tone="success">{policy.data.current.version}</Badge>
+          </p>
+        )}
       </Card>
 
       {notice !== null && <Alert tone="success">{notice}</Alert>}
 
-      <Card title="Ученики" description="Ученик нужен для привязки представителя и согласия.">
-        <form
-          className="mb-4 flex flex-wrap items-end gap-3"
-          onSubmit={studentForm.handleSubmit(async (values) => {
-            await createStudent.mutateAsync({ fullName: values.fullName.trim() });
-            studentForm.reset({ fullName: '' });
-          })}
-          noValidate
-        >
-          <Field label="ФИО ученика" error={studentForm.formState.errors.fullName?.message}>
-            <TextInput {...studentForm.register('fullName')} />
-          </Field>
-          <Button type="submit" disabled={createStudent.isPending}>
-            Добавить ученика
-          </Button>
-        </form>
-
-        {students.data !== undefined && students.data.items.length === 0 && (
-          <EmptyState>Учеников пока нет</EmptyState>
+      <Card
+        title="Ученики без согласия"
+        description="Список для работы с законными представителями: у этих учеников согласия ещё нет."
+      >
+        {missing.data !== undefined && missing.data.items.length === 0 && (
+          <EmptyState>У всех учеников есть действующее согласие.</EmptyState>
         )}
-        {students.data !== undefined && students.data.items.length > 0 && (
-          <Table head={['ФИО', 'Дата рождения', 'Учётная запись']}>
-            {students.data.items.map((student) => (
-              <tr key={student.id} className="border-b border-slate-100">
+        {missing.data !== undefined && missing.data.items.length > 0 && (
+          <Table head={['Ученик', 'Состояние']}>
+            {missing.data.items.map((student) => (
+              <tr key={student.studentId} className="border-b border-slate-100">
                 <td className="px-3 py-2">{student.fullName}</td>
-                <td className="px-3 py-2 text-slate-500">{student.birthDate ?? '—'}</td>
                 <td className="px-3 py-2">
-                  {student.userId === null ? (
-                    <span className="text-slate-400">не привязана</span>
+                  {student.hasRevokedConsent ? (
+                    <Badge tone="warning">согласие отозвано</Badge>
                   ) : (
-                    <Badge tone="success">привязана</Badge>
+                    <Badge>согласия нет</Badge>
                   )}
                 </td>
               </tr>
             ))}
           </Table>
-        )}
-      </Card>
-
-      <Card title="Привязка представителя" description="Родитель видит только привязанных детей.">
-        <form
-          className="flex flex-wrap items-end gap-3"
-          onSubmit={async (event) => {
-            event.preventDefault();
-            const data = new FormData(event.currentTarget);
-            const studentId = String(data.get('studentId') ?? '');
-            const guardianUserId = String(data.get('guardianUserId') ?? '');
-            if (studentId === '' || guardianUserId === '') {
-              setNotice('Выберите ученика и представителя');
-              return;
-            }
-            await linkGuardian.mutateAsync({ studentId, guardianUserId, relation: 'other' });
-            setNotice('Представитель привязан к ученику.');
-          }}
-        >
-          <Field label="Ученик">
-            <select
-              name="studentId"
-              className="rounded-md border border-slate-300 px-3 py-2 text-sm"
-              defaultValue=""
-            >
-              <option value="">— выберите —</option>
-              {(students.data?.items ?? []).map((student) => (
-                <option key={student.id} value={student.id}>
-                  {student.fullName}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Законный представитель">
-            <select
-              name="guardianUserId"
-              className="rounded-md border border-slate-300 px-3 py-2 text-sm"
-              defaultValue=""
-            >
-              <option value="">— выберите —</option>
-              {guardians.map((user) => (
-                <option key={user.id} value={user.id}>
-                  {user.fullName} ({user.username})
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Button type="submit" disabled={linkGuardian.isPending}>
-            Привязать
-          </Button>
-        </form>
-        {guardians.length === 0 && (
-          <p className="mt-2 text-xs text-slate-500">
-            Нет пользователей с ролью «Родитель» — создайте их в разделе «Пользователи».
-          </p>
         )}
       </Card>
 
@@ -275,7 +190,7 @@ export function PrivacyScreen() {
               <option value="">— выберите —</option>
               {guardians.map((user) => (
                 <option key={user.id} value={user.id}>
-                  {user.fullName}
+                  {user.fullName} ({user.username})
                 </option>
               ))}
             </select>
@@ -298,44 +213,30 @@ export function PrivacyScreen() {
         </form>
 
         {createConsent.isError && <Alert tone="error">{errorMessage(createConsent.error)}</Alert>}
+        {consents.isError && <Alert tone="error">{errorMessage(consents.error)}</Alert>}
 
-        {consents.data !== undefined && consents.data.items.length > 0 ? (
-          <Table head={['Ученик', 'Представитель', 'Редакция', 'Получено', 'Состояние', '']}>
+        {consents.data !== undefined && consents.data.items.length === 0 && (
+          <EmptyState>Согласий пока нет.</EmptyState>
+        )}
+
+        {consents.data !== undefined && consents.data.items.length > 0 && (
+          <Table head={['Ученик', 'Представитель', 'Редакция', 'Получено', 'Отозвано', '']}>
             {consents.data.items.map((consent) => (
-              <tr key={consent.id} className="border-b border-slate-100 align-top">
-                <td className="px-3 py-2">{consent.studentName ?? '—'}</td>
+              <tr key={consent.id} className="border-b border-slate-100">
+                <td className="px-3 py-2">{consent.studentName}</td>
                 <td className="px-3 py-2">{consent.guardianName ?? '—'}</td>
                 <td className="px-3 py-2">{consent.policyVersion}</td>
+                <td className="px-3 py-2 text-slate-500">{formatDateTime(consent.grantedAt)}</td>
                 <td className="px-3 py-2 text-slate-500">
-                  {formatDateTime(consent.grantedAt)}
-                  <span className="block text-xs">
-                    {consent.grantedVia === 'paper' ? 'бумажное' : 'электронное'}
-                    {consent.documentRef !== null ? `, ${consent.documentRef}` : ''}
-                  </span>
-                </td>
-                <td className="px-3 py-2">
                   {consent.revokedAt === null ? (
                     <Badge tone="success">действует</Badge>
                   ) : (
-                    <>
-                      <Badge tone="danger">отозвано</Badge>
-                      {consent.revokedReason !== null && (
-                        <span className="block text-xs text-slate-500">
-                          {consent.revokedReason}
-                        </span>
-                      )}
-                    </>
+                    formatDateTime(consent.revokedAt)
                   )}
                 </td>
-                <td className="px-3 py-2 text-right">
+                <td className="px-3 py-2">
                   {consent.revokedAt === null && (
-                    <Button
-                      tone="ghost"
-                      onClick={() => {
-                        setRevokeFor(consent.id);
-                        setRevokeReason('');
-                      }}
-                    >
+                    <Button tone="ghost" onClick={() => setRevokeFor(consent.id)}>
                       Отозвать
                     </Button>
                   )}
@@ -343,8 +244,6 @@ export function PrivacyScreen() {
               </tr>
             ))}
           </Table>
-        ) : (
-          <EmptyState>Согласий нет</EmptyState>
         )}
 
         {revokeFor !== null && (
@@ -357,16 +256,13 @@ export function PrivacyScreen() {
             </Field>
             <div className="mt-3 flex gap-2">
               <Button
-                tone="danger"
-                disabled={revokeReason.trim().length < 3 || revokeConsent.isPending}
                 onClick={async () => {
-                  await revokeConsent.mutateAsync({
-                    consentId: revokeFor,
-                    reason: revokeReason.trim(),
-                  });
+                  await revokeConsent.mutateAsync({ consentId: revokeFor, reason: revokeReason });
                   setRevokeFor(null);
+                  setRevokeReason('');
                   setNotice('Согласие отозвано.');
                 }}
+                disabled={revokeConsent.isPending || revokeReason.trim() === ''}
               >
                 Отозвать согласие
               </Button>
@@ -374,25 +270,10 @@ export function PrivacyScreen() {
                 Отмена
               </Button>
             </div>
+            {revokeConsent.isError && (
+              <Alert tone="error">{errorMessage(revokeConsent.error)}</Alert>
+            )}
           </div>
-        )}
-      </Card>
-
-      <Card
-        title="Ученики без согласия"
-        description="Список для работы с законными представителями."
-      >
-        {missing.data !== undefined && missing.data.total === 0 ? (
-          <EmptyState>У всех учеников есть действующее согласие</EmptyState>
-        ) : (
-          <Table head={['Ученик', 'Было отозвано']}>
-            {(missing.data?.items ?? []).map((item) => (
-              <tr key={item.studentId} className="border-b border-slate-100">
-                <td className="px-3 py-2">{item.fullName}</td>
-                <td className="px-3 py-2">{item.hasRevokedConsent ? 'да' : 'нет'}</td>
-              </tr>
-            ))}
-          </Table>
         )}
       </Card>
     </div>

@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
 import type { SessionResponseDto, UserSummaryDto } from '@edu-diary/contracts';
+import { StudentsCard } from './StudentsCard';
 import { errorMessage } from '../lib/api-client';
 import {
   useCreateUser,
@@ -305,6 +306,10 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
           </div>
         )}
       </Card>
+
+      {/* Ученики и законные представители: раньше жили в «Согласиях», из-за чего
+          учеников не было видно среди пользователей. */}
+      {canManage && <StudentsCard onNotice={setNotice} />}
     </div>
   );
 }
