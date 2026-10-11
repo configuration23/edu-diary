@@ -634,16 +634,25 @@ describeWithDatabase('расписание и уроки', () => {
     });
     const first = (lessons.json() as { items: Json[] }).items[0];
 
+    // Переносим на другой день недели: шаблон занятия — вторник, поэтому в
+    // расписании остаётся ровно один урок, и он перенесённый. Иначе на дневном
+    // виде было бы видно пусто: все плановые уроки ушли с вторника.
     const moved = await testApp.app.inject({
       method: 'PATCH',
       url: `/api/lessons/${first?.id as string}`,
       headers: auth(),
-      payload: { pairNumber: 5, timeStart: '14:50', timeEnd: '16:20' },
+      payload: {
+        lessonDate: nextWeekday(3),
+        pairNumber: 5,
+        timeStart: '14:50',
+        timeEnd: '16:20',
+      },
     });
     expect(moved.statusCode).toBe(200);
     const updated = moved.json() as Json;
     expect(updated.pairNumber).toBe(5);
     expect(updated.timeStart).toBe('14:50');
+    expect(updated.lessonDate).toBe(nextWeekday(3));
     // Перенос — ручная правка: генерация её не перезапишет.
     expect(updated.isManual).toBe(true);
   });

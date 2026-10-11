@@ -40,6 +40,11 @@ const NAVIGATION: NavigationItem[] = [
     visible: (session) => has(session, 'schedule:read'),
   },
   {
+    to: '/schedule/template',
+    label: 'Сетка (шаблон)',
+    visible: (session) => has(session, 'schedule:read'),
+  },
+  {
     to: '/lessons',
     label: 'Уроки',
     visible: (session) => has(session, 'lessons:read'),

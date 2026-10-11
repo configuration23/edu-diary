@@ -170,8 +170,8 @@ test.describe('Этап 3: звонки, расписание, уроки', () =
 
     await expect(bells.getByRole('cell', { name: '11:30' })).toBeVisible();
 
-    // --- Расписание: занятие в сетке группы ---
-    await page.getByRole('link', { name: 'Расписание' }).click();
+    // --- Сетка (шаблон): занятие группы ---
+    await page.getByRole('link', { name: 'Сетка (шаблон)' }).click();
     // Экран открывается блоком добавления занятия: группа выбирается в нём,
     // список занятий идёт ниже и подгружается по выбранной группе.
     await expect(
@@ -234,10 +234,25 @@ test.describe('Этап 3: звонки, расписание, уроки', () =
     await expect(page.getByRole('heading', { name: 'Создать уроки' })).toHaveCount(0);
 
     await page.getByRole('link', { name: 'Расписание' }).click();
-    await expect(page.getByRole('cell', { name: SUBJECT })).toBeVisible();
-    // Расписание преподаватель только смотрит.
+    await expect(
+      page.getByRole('heading', { level: 2, name: 'Расписание', exact: true }),
+    ).toBeVisible();
+    // Дневной вид: преподаватель выбирает свою группу.
+    await page.locator('select[name="studyGroupId"]').selectOption({ label: GROUP });
+    // Расписание преподаватель только смотрит: конструктора сетки у него нет.
+    await expect(page.getByRole('link', { name: 'Сетка (шаблон)' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Добавить занятие' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Убрать' })).toHaveCount(0);
+
+    // Переключение вида «неделя» работает: матрица показывает пары и дни недели,
+    // а клик по ячейке возвращает в дневной вид выбранного дня.
+    await page.locator('#view-week').click();
+    await expect(page.getByRole('cell', { name: '3-я' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Пара' })).toBeVisible();
+    await page.locator('#view-day').click();
+    await expect(
+      page.getByRole('heading', { level: 2, name: 'Расписание', exact: true }),
+    ).toBeVisible();
 
     // --- Ученик: расписание и уроки своей группы ---
     await page.getByRole('button', { name: 'Выйти' }).click();
@@ -276,8 +291,17 @@ test.describe('Этап 3: звонки, расписание, уроки', () =
     await expect(studentGroupSelect.locator('option', { hasText: GROUP })).toHaveCount(1);
     await studentGroupSelect.selectOption({ label: GROUP });
 
-    await expect(page.getByRole('cell', { name: SUBJECT })).toBeVisible();
+    // Дневной и недельный виды работают на одних данных: дневной показывает
+    // выбранный день, недельный — матрицу пар и дней.
+    await page.locator('#view-week').click();
+    await expect(page.getByRole('cell', { name: '3-я' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Пара' })).toBeVisible();
+    await page.locator('#view-day').click();
+    await expect(
+      page.getByRole('heading', { level: 2, name: 'Расписание', exact: true }),
+    ).toBeVisible();
 
+    // Уроки своей группы ученик видит в разделе «Уроки»: там список по датам.
     await page.getByRole('link', { name: 'Уроки' }).click();
     await expect(page.getByRole('cell', { name: SUBJECT }).first()).toBeVisible();
   });

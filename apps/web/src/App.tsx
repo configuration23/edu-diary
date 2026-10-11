@@ -17,6 +17,7 @@ import { LoginScreen } from './screens/LoginScreen';
 import { LessonsScreen } from './screens/LessonsScreen';
 import { PrivacyScreen } from './screens/PrivacyScreen';
 import { ScheduleScreen } from './screens/ScheduleScreen';
+import { ScheduleTemplateScreen } from './screens/ScheduleTemplateScreen';
 import { SecurityScreen } from './screens/SecurityScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { SetupScreen } from './screens/SetupScreen';
@@ -139,6 +140,12 @@ const scheduleRoute = createRoute({
   component: withSession((session) => <ScheduleScreen session={session} />),
 });
 
+const scheduleTemplateRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/schedule/template',
+  component: withSession((session) => <ScheduleTemplateScreen session={session} />),
+});
+
 const lessonsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/lessons',
@@ -158,6 +165,7 @@ const routeTree = rootRoute.addChildren([
   catalogsRoute,
   assignmentsRoute,
   scheduleRoute,
+  scheduleTemplateRoute,
   lessonsRoute,
   usersRoute,
   privacyRoute,
