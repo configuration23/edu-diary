@@ -1,5 +1,4 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Link } from '@tanstack/react-router';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -158,11 +157,7 @@ function EnrollForm({ groupId, groupName }: { groupId: string; groupName: string
 
       {students.data !== undefined && students.data.items.length === 0 && (
         <Alert tone="warning">
-          Учеников ещё нет — заведите их в разделе{' '}
-          <Link to="/users" className="underline">
-            Пользователи и роли
-          </Link>{' '}
-          (блок «Новый ученик»).
+          Учеников ещё нет — заведите их блоком «Новый ученик» выше на этой странице.
         </Alert>
       )}
 
