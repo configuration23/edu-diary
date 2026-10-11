@@ -26,6 +26,8 @@ export const studentSummarySchema = z.object({
   id: uuidSchema,
   /** Учётная запись ученика: без неё он не увидит свои данные. */
   userId: uuidSchema.nullable(),
+  /** Логин учётной записи: `null`, если учётной записи ещё нет. */
+  username: z.string().nullable().default(null),
   fullName: z.string(),
   shortName: z.string().nullable(),
   birthDate: z.string().nullable(),
@@ -46,13 +48,34 @@ export type ListStudentsQueryDto = z.infer<typeof listStudentsQuerySchema>;
 export const listStudentsResponseSchema = pageSchema(studentSummarySchema);
 export type ListStudentsResponseDto = z.infer<typeof listStudentsResponseSchema>;
 
+/**
+ * Учётная запись ученика создаётся по необходимости: карточка ученика — это
+ * запись учебного процесса, а вход в систему нужен не всем и не сразу.
+ * Логин и пароль передаются вместе с учеником, чтобы запись и учётная запись
+ * создавались одной операцией.
+ */
+export const studentAccountRequestSchema = z.object({
+  username: z
+    .string()
+    .min(3)
+    .max(64)
+    .regex(/^[a-z0-9][a-z0-9._-]*$/, {
+      message: 'Логин: строчные латинские буквы, цифры, точка, подчёркивание и дефис',
+    }),
+  /** Временный пароль: при первом входе его нужно сменить. */
+  password: z.string().min(1).max(200),
+});
+export type StudentAccountRequestDto = z.infer<typeof studentAccountRequestSchema>;
+
 export const createStudentRequestSchema = z.object({
   fullName: z.string().min(1).max(200),
   shortName: z.string().max(60).optional(),
   birthDate: isoDateSchema.nullable().optional(),
   note: z.string().max(500).optional(),
-  /** Привязка учётной записи ученика (если она уже создана администратором). */
+  /** Привязка уже существующей учётной записи (например, созданной заранее). */
   userId: uuidSchema.nullable().optional(),
+  /** Новая учётная запись ученика: необязательна. */
+  account: studentAccountRequestSchema.optional(),
 });
 export type CreateStudentRequestDto = z.infer<typeof createStudentRequestSchema>;
 
@@ -79,3 +102,15 @@ export const exportInfoSchema = z.object({
   rows: z.number().int().nonnegative(),
 });
 export type ExportInfoDto = z.infer<typeof exportInfoSchema>;
+
+/**
+ * Подсказка логина по ФИО: транслитерация «Чумаков Сергей Петрович» → `chumakovsp`
+ * с проверкой занятости (при совпадении добавляется цифра).
+ */
+export const suggestUsernameResponseSchema = z.object({
+  /** Готовый свободный логин; `null` — из ФИО ничего не получилось. */
+  username: z.string().nullable(),
+  /** Логины, которые уже заняты и потому пропущены. */
+  taken: z.array(z.string()),
+});
+export type SuggestUsernameResponseDto = z.infer<typeof suggestUsernameResponseSchema>;
