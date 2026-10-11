@@ -8,6 +8,8 @@ import {
   listUsersResponseSchema,
   resetPasswordRequestSchema,
   setUserRolesRequestSchema,
+  suggestUsernameQuerySchema,
+  suggestUsernameResponseSchema,
   updateRoleRequestSchema,
   updateUserRequestSchema,
   type GuardianLinkDto,
@@ -81,6 +83,23 @@ export function registerIamRoutes(
   },
 ): void {
   const { users, roles, guardians } = services;
+
+  /**
+   * Подсказка логина по ФИО: транслитерация и проверка занятости.
+   *
+   * Правило живёт в домене, занятость проверяет сервис одним запросом. Доступно
+   * тому, кто создаёт пользователей: логин нужен и работнику, и ученику.
+   */
+  app.get(
+    '/users/suggest-username',
+    { preHandler: requirePermission('users:write', 'all') },
+    async (request) => {
+      const query = suggestUsernameQuerySchema.parse(request.query);
+      const suggestion = await users.suggestUsername(query.fullName);
+
+      return suggestUsernameResponseSchema.parse(suggestion);
+    },
+  );
 
   app.get('/users', { preHandler: requirePermission('users:read', 'all') }, async (request) => {
     const query = listUsersQuerySchema.parse(request.query);

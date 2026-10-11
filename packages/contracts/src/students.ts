@@ -107,6 +107,11 @@ export type ExportInfoDto = z.infer<typeof exportInfoSchema>;
  * Подсказка логина по ФИО: транслитерация «Чумаков Сергей Петрович» → `chumakovsp`
  * с проверкой занятости (при совпадении добавляется цифра).
  */
+export const suggestUsernameQuerySchema = z.object({
+  fullName: z.string().min(1).max(200),
+});
+export type SuggestUsernameQueryDto = z.infer<typeof suggestUsernameQuerySchema>;
+
 export const suggestUsernameResponseSchema = z.object({
   /** Готовый свободный логин; `null` — из ФИО ничего не получилось. */
   username: z.string().nullable(),

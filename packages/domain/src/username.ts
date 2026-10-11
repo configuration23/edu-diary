@@ -92,30 +92,48 @@ export function baseUsernameFromFullName(fullName: string): string | null {
 }
 
 /**
- * Подбирает свободный логин по ФИО.
+ * Подбирает свободный логин по ФИО, зная список занятых.
  *
- * `isTaken` — проверка занятости (поиск по базе без учёта регистра). Возвращает
- * `null`, если из ФИО логин не получается или все варианты до
- * `MAX_USERNAME_ATTEMPTS` заняты: тогда администратор вводит логин сам.
+ * Список передаётся готовым: занятость проверяет хранилище (один запрос к базе),
+ * а правило подбора остаётся чистым и проверяемым. `null` — из ФИО логин не
+ * получается или заняты все варианты до `MAX_USERNAME_ATTEMPTS`: тогда
+ * администратор вводит логин сам.
  */
 export function suggestUsername(
   fullName: string,
-  isTaken: (username: string) => boolean,
+  takenUsernames: Iterable<string>,
 ): { username: string | null; taken: string[] } {
   const base = baseUsernameFromFullName(fullName);
   if (base === null) return { username: null, taken: [] };
 
-  const taken: string[] = [];
+  const taken = new Set([...takenUsernames].map((name) => name.toLowerCase()));
+  const skipped: string[] = [];
 
-  if (!isTaken(base)) return { username: base, taken };
+  if (!taken.has(base)) return { username: base, taken: skipped };
 
-  taken.push(base);
+  skipped.push(base);
 
   for (let index = 1; index <= MAX_USERNAME_ATTEMPTS; index += 1) {
     const candidate = `${base}${index}`;
-    if (!isTaken(candidate)) return { username: candidate, taken };
-    taken.push(candidate);
+    if (!taken.has(candidate)) return { username: candidate, taken: skipped };
+    skipped.push(candidate);
   }
 
-  return { username: null, taken };
+  return { username: null, taken: skipped };
+}
+
+/**
+ * Возвращает `base` и все варианты с цифрами — их и запрашиваем у хранилища,
+ * чтобы одним запросом узнать занятость.
+ */
+export function usernameCandidates(fullName: string): string[] {
+  const base = baseUsernameFromFullName(fullName);
+  if (base === null) return [];
+
+  const candidates = [base];
+  for (let index = 1; index <= MAX_USERNAME_ATTEMPTS; index += 1) {
+    candidates.push(`${base}${index}`);
+  }
+
+  return candidates;
 }

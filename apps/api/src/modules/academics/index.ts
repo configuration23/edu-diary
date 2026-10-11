@@ -57,9 +57,11 @@ export {
 
 export function createAcademicsModule(dependencies: {
   academics: AcademicsService;
+  /** Логины учётных записей для списка учеников: реализует модуль `iam`. */
+  users: UserLookupPort;
 }): FastifyPluginAsync {
   return async (app) => {
-    registerAcademicsRoutes(app, dependencies.academics);
+    registerAcademicsRoutes(app, dependencies.academics, dependencies.users);
   };
 }
 

@@ -5,6 +5,7 @@ import {
   MAX_USERNAME_ATTEMPTS,
   suggestUsername,
   transliterate,
+  usernameCandidates,
 } from '../src/username';
 
 /**
@@ -47,29 +48,42 @@ describe('baseUsernameFromFullName', () => {
 
 describe('suggestUsername', () => {
   it('отдаёт базовый логин, если он свободен', () => {
-    const result = suggestUsername('Чумаков Сергей Петрович', () => false);
+    const result = suggestUsername('Чумаков Сергей Петрович', []);
 
     expect(result.username).toBe('chumakovsp');
     expect(result.taken).toEqual([]);
   });
 
   it('добавляет цифру, если логин занят', () => {
-    const busy = new Set(['chumakovsp', 'chumakovsp1']);
-
-    const result = suggestUsername('Чумаков Сергей Петрович', (name) => busy.has(name));
+    const result = suggestUsername('Чумаков Сергей Петрович', ['chumakovsp', 'ChumakovSP1']);
 
     expect(result.username).toBe('chumakovsp2');
     expect(result.taken).toEqual(['chumakovsp', 'chumakovsp1']);
   });
 
   it('сдаётся, когда свободных вариантов нет', () => {
-    const result = suggestUsername('Чумаков Сергей Петрович', () => true);
+    const busy = usernameCandidates('Чумаков Сергей Петрович');
+    const result = suggestUsername('Чумаков Сергей Петрович', busy);
 
     expect(result.username).toBeNull();
     expect(result.taken).toHaveLength(MAX_USERNAME_ATTEMPTS + 1);
   });
 
   it('не предлагает логин из неподходящего ФИО', () => {
-    expect(suggestUsername('Я', () => false)).toEqual({ username: null, taken: [] });
+    expect(suggestUsername('Я', [])).toEqual({ username: null, taken: [] });
+  });
+});
+
+describe('usernameCandidates', () => {
+  it('перечисляет базовый логин и варианты с цифрами', () => {
+    const candidates = usernameCandidates('Чумаков Сергей Петрович');
+
+    expect(candidates[0]).toBe('chumakovsp');
+    expect(candidates[1]).toBe('chumakovsp1');
+    expect(candidates).toHaveLength(MAX_USERNAME_ATTEMPTS + 1);
+  });
+
+  it('для неподходящего ФИО список пуст', () => {
+    expect(usernameCandidates('Я')).toEqual([]);
   });
 });

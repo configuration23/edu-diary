@@ -65,14 +65,29 @@ export interface AssignmentUsagePort {
 }
 
 /**
- * Порт проверки пользователя: реализует модуль `iam`.
+ * Порт проверки и создания пользователя: реализует модуль `iam`.
  *
- * Нужен для куратора группы и будущего преподавателя в назначениях: ссылки на
- * `app_user` объявлены без внешнего ключа (ADR-027), поэтому существование
- * проверяет сервис.
+ * Нужен для куратора группы, преподавателя в назначениях и учётной записи
+ * ученика: ссылки на `app_user` объявлены без внешнего ключа (ADR-027), поэтому
+ * существование проверяет сервис. Создание учётной записи ученика идёт сюда же:
+ * политика паролей и нормирование логина живут в одном месте.
  */
 export interface UserLookupPort {
   findActiveUser(userId: string): Promise<{ id: string; fullName: string } | null>;
+  /** Поиск по логину без учёта регистра: проверка занятости перед созданием. */
+  findActiveUserByUsername(username: string): Promise<{ id: string } | null>;
+  /** Логины по идентификаторам учётных записей: для списка учеников. */
+  findUsernames(userIds: readonly string[]): Promise<Map<string, string>>;
+  /** Создаёт учётную запись с указанными ролями; пароль временный. */
+  createUser(
+    input: {
+      username: string;
+      password: string;
+      fullName: string;
+      roles: readonly string[];
+    },
+    executor?: Executor,
+  ): Promise<{ id: string }>;
 }
 
 export interface CreateStudentInput {
@@ -81,6 +96,8 @@ export interface CreateStudentInput {
   birthDate?: string | null | undefined;
   note?: string | undefined;
   userId?: string | null | undefined;
+  /** Новая учётная запись ученика: необязательна (создаётся по необходимости). */
+  account?: { username: string; password: string } | undefined;
 }
 
 export interface UpdateStudentInput {
@@ -185,6 +202,12 @@ export interface AcademicsService {
   getStudentForViewer(studentId: string, viewer: StudentViewer): Promise<StudentRecord>;
   studentExists(id: string): Promise<boolean>;
   createStudent(input: CreateStudentInput, options: MutationOptions): Promise<StudentRecord>;
+  /** Учётная запись ученику, созданному ранее (учётка — по необходимости). */
+  createStudentAccount(
+    studentId: string,
+    input: { username: string; password: string },
+    options: MutationOptions,
+  ): Promise<StudentRecord>;
   updateStudent(
     id: string,
     input: UpdateStudentInput,
@@ -487,10 +510,48 @@ export function createAcademicsService(
     },
 
     async createStudent(input, options): Promise<StudentRecord> {
+      // Учётная запись — по необходимости: карточка ученика нужна всегда, вход в
+      // систему не всем. Если учётка запрошена, обе записи создаются одной
+      // транзакцией: «ученик без учётки» и «учётка без ученика» — это разные
+      // сущности, и связь между ними должна появиться целиком.
+      if (input.account !== undefined) {
+        if (input.userId !== undefined && input.userId !== null) {
+          throw new AppError(
+            'VALIDATION_FAILED',
+            'Нельзя одновременно привязать существующую учётную запись и создать новую',
+            { details: { userId: input.userId } },
+          );
+        }
+      }
+
       return withTransaction(db, options.executor, async (tx) => {
+        let userId = input.userId ?? null;
+
+        // Локальная переменная: внутри транзакции сужение типа для `input.account`
+        // теряется, а обращаться к нему нужно несколько раз.
+        const account = input.account;
+
+        if (account !== undefined) {
+          // Перевод ошибок БД: гонка двух администраторов на один логин должна
+          // давать понятный отказ, а не «внутреннюю ошибку сервера».
+          const accountUser = await withDatabaseErrors(
+            () =>
+              users.createUser(
+                {
+                  username: account.username,
+                  password: account.password,
+                  fullName: input.fullName,
+                  roles: ['student'],
+                },
+                tx,
+              ),
+            { unique: `Логин «${account.username}» уже занят` },
+          );
+          userId = accountUser.id;
+        }
         const created = await academics.insertStudent(
           {
-            userId: input.userId ?? null,
+            userId,
             fullName: input.fullName,
             shortName: input.shortName ?? null,
             birthDate: input.birthDate ?? null,
@@ -509,6 +570,7 @@ export function createAcademicsService(
               shortName: created.shortName,
               birthDate: created.birthDate,
               userId: created.userId,
+              accountCreated: input.account !== undefined,
             },
           },
           options.actor,
@@ -516,6 +578,58 @@ export function createAcademicsService(
         );
 
         return created;
+      });
+    },
+
+    async createStudentAccount(studentId, input, options): Promise<StudentRecord> {
+      const student = await requireStudent(studentId);
+
+      if (student.userId !== null) {
+        throw new AppError('CONFLICT', 'У ученика уже есть учётная запись', {
+          details: { studentId, userId: student.userId },
+        });
+      }
+
+      if ((await users.findActiveUserByUsername(input.username)) !== null) {
+        throw new AppError('CONFLICT', `Логин «${input.username}» уже занят`, {
+          details: { username: input.username },
+        });
+      }
+
+      return withTransaction(db, options.executor, async (tx) => {
+        const account = await withDatabaseErrors(
+          () =>
+            users.createUser(
+              {
+                username: input.username,
+                password: input.password,
+                fullName: student.fullName,
+                roles: ['student'],
+              },
+              tx,
+            ),
+          { unique: `Логин «${input.username}» уже занят` },
+        );
+
+        const updated = await academics.updateStudent(studentId, { userId: account.id }, tx);
+        if (updated === null) {
+          throw new AppError('NOT_FOUND', 'Ученик не найден');
+        }
+
+        await audit.record(
+          {
+            action: 'update',
+            entityKind: 'student',
+            entityId: studentId,
+            before: { userId: null },
+            after: { userId: account.id, username: input.username },
+            context: { accountCreated: true },
+          },
+          options.actor,
+          tx,
+        );
+
+        return updated;
       });
     },
 
