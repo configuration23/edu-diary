@@ -41,6 +41,9 @@ jobs:
       - name: Утечка секретов
         run: npm run check:secrets
 
+      - name: Версии пакетов совпадают
+        run: npm run check:version
+
       - name: Сборка (падает при внешнем домене в бандле)
         run: npm run build
 

@@ -9,6 +9,7 @@ import { CatalogsScreen } from '../src/screens/CatalogsScreen';
 import { GroupsScreen } from '../src/screens/GroupsScreen';
 import { SettingsScreen } from '../src/screens/SettingsScreen';
 import { StudentsCard } from '../src/screens/StudentsCard';
+import { DashboardScreen } from '../src/screens/DashboardScreen';
 
 /**
  * Смоук-тесты экранов Этапа 2.
@@ -112,5 +113,31 @@ describe('экраны Этапа 2 монтируются', () => {
     expect(html).toContain('Ученики');
     expect(html).toContain('Привязка законного представителя');
     expect(html).toContain('Кем является');
+  });
+
+  it('обзор: блок версии вместо обещаний этапов', () => {
+    const html = renderWithQueries(
+      <DashboardScreen
+        session={{
+          user: {
+            id: 'u-1',
+            username: 'admin',
+            fullName: 'Админ Системы',
+            email: null,
+            phone: null,
+            isActive: true,
+            mustChangePassword: false,
+            roles: [{ code: 'admin', title: 'Администратор' }],
+          },
+          permissions: [],
+        }}
+      />,
+    );
+
+    expect(html).toContain('О версии');
+    expect(html).toContain('Версия API');
+    expect(html).toContain('Версия интерфейса');
+    expect(html).toContain('Схема БД (миграций)');
+    expect(html).not.toContain('Что дальше');
   });
 });

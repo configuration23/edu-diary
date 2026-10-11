@@ -5,9 +5,18 @@ import { z } from 'zod';
 
 import type { SessionResponseDto } from '@edu-diary/contracts';
 import { SystemStatus, type HealthState } from '../components/SystemStatus';
-import { Alert, Badge, Button, Card, Field, TextInput } from '../components/ui';
+import { Alert, Badge, Button, Card, Field, TextInput, formatDateTime } from '../components/ui';
 import { errorMessage } from '../lib/api-client';
 import { useChangePassword, useHealth } from '../lib/queries';
+
+/**
+ * Версия интерфейса, вшитая при сборке (`vite.config.ts`).
+ *
+ * В тестах и в dev-режиме без определения значение отсутствует — тогда
+ * показывается прочерк, а не падение экрана.
+ */
+const CLIENT_VERSION: string =
+  typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : 'версия не определена';
 
 function healthState(query: ReturnType<typeof useHealth>): HealthState {
   if (query.isLoading) return { kind: 'loading' };
@@ -137,14 +146,53 @@ export function DashboardScreen({ session }: { session: SessionResponseDto }) {
 
       <ChangePasswordCard />
 
-      <Card title="Что дальше" description="Этап 1 закрывает вход, права и аудит.">
-        <ul className="list-inside list-disc text-sm text-slate-700">
-          <li>Учебные годы, группы и учеников добавляет Этап 2.</li>
-          <li>Расписание и уроки — Этап 3.</li>
-          <li>Оценки и посещаемость — Этап 4.</li>
-          <li>Домашние задания и файлы — Этап 5.</li>
-        </ul>
-      </Card>
+      <VersionCard health={health} />
     </div>
+  );
+}
+
+/**
+ * Версия системы.
+ *
+ * Показываются обе версии — приложения и клиента, — потому что они собираются
+ * отдельно: если в браузере остался старый бандл, версии разойдутся, и это
+ * видно сразу, без догадок. Число применённых миграций показывает версию схемы
+ * базы: по ней понятно, применены ли изменения после обновления.
+ */
+function VersionCard({ health }: { health: ReturnType<typeof useHealth> }) {
+  const api = health.data;
+  const client = CLIENT_VERSION;
+
+  return (
+    <Card
+      title="О версии"
+      description="Версия приложения меняется вместе с закрытым этапом роадмапа."
+    >
+      <ul className="grid gap-1 text-sm text-slate-700 sm:grid-cols-2">
+        <li className="flex justify-between gap-3 border-b border-slate-100 py-1">
+          <span>Версия API</span>
+          <span className="font-mono">{api?.version ?? 'недоступна'}</span>
+        </li>
+        <li className="flex justify-between gap-3 border-b border-slate-100 py-1">
+          <span>Версия интерфейса</span>
+          <span className="font-mono">{client}</span>
+        </li>
+        <li className="flex justify-between gap-3 border-b border-slate-100 py-1">
+          <span>Схема БД (миграций)</span>
+          <span className="font-mono">{api?.checks.migrations.applied ?? '—'}</span>
+        </li>
+        <li className="flex justify-between gap-3 border-b border-slate-100 py-1">
+          <span>Запущен</span>
+          <span>{api === undefined ? '—' : formatDateTime(api.startedAt)}</span>
+        </li>
+      </ul>
+
+      {api !== undefined && api.version !== client && (
+        <Alert tone="warning">
+          Версии API и интерфейса различаются: скорее всего, браузер держит старую сборку — обновите
+          страницу с очисткой кеша (Ctrl+Shift+R).
+        </Alert>
+      )}
+    </Card>
   );
 }
