@@ -10,7 +10,20 @@ import {
 
 /** Ученики и привязка законных представителей (Этап 1: минимум для согласий). */
 
-export const guardianRelationSchema = z.enum(['mother', 'father', 'other']);
+/**
+ * Кем представитель приходится ученику.
+ *
+ * Набор совпадает с тем, что предлагает форма: пока схема знала только «мать,
+ * отец, другое», выбор «законный представитель» или «опекун» отвергался с 400 —
+ * а это как раз типичные случаи для второго родителя и опекуна.
+ */
+export const guardianRelationSchema = z.enum([
+  'mother',
+  'father',
+  'representative',
+  'custodian',
+  'other',
+]);
 export type GuardianRelationDto = z.infer<typeof guardianRelationSchema>;
 
 export const guardianLinkSchema = z.object({
@@ -127,6 +140,12 @@ export type GuardianLinkDetailDto = z.infer<typeof guardianLinkDetailSchema>;
 
 export const listGuardianLinksResponseSchema = pageSchema(guardianLinkDetailSchema);
 export type ListGuardianLinksResponseDto = z.infer<typeof listGuardianLinksResponseSchema>;
+
+/** Список связей: целиком или по одному ученику (для форм привязки). */
+export const listGuardianLinksQuerySchema = paginationQuerySchema.extend({
+  studentId: uuidSchema.optional(),
+});
+export type ListGuardianLinksQueryDto = z.infer<typeof listGuardianLinksQuerySchema>;
 
 /**
  * Подсказка логина по ФИО: транслитерация «Чумаков Сергей Петрович» → `chumakovsp`

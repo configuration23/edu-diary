@@ -2,12 +2,12 @@ import {
   createRoleRequestSchema,
   createUserRequestSchema,
   linkGuardianRequestSchema,
+  listGuardianLinksQuerySchema,
   listGuardianLinksResponseSchema,
   listPermissionsResponseSchema,
   listRolesResponseSchema,
   listUsersQuerySchema,
   listUsersResponseSchema,
-  paginationQuerySchema,
   resetPasswordRequestSchema,
   setUserRolesRequestSchema,
   suggestUsernameQuerySchema,
@@ -217,13 +217,21 @@ export function registerIamRoutes(
     },
   );
 
-  /** Все связи: в разделе «Пользователи и роли» видно, кто к кому привязан. */
+  /**
+   * Связи «ученик ↔ представитель»: весь список или по одному ученику.
+   *
+   * Фильтр по ученику нужен формам привязки: чтобы не предлагать того, кто уже
+   * привязан (в том числе под другим отношением).
+   */
   app.get(
     '/guardian-links',
     { preHandler: requirePermission('students:read', 'assigned') },
     async (request) => {
-      const query = paginationQuerySchema.parse(request.query);
-      const links = await guardians.listAll(query.limit);
+      const query = listGuardianLinksQuerySchema.parse(request.query);
+      const links =
+        query.studentId === undefined
+          ? await guardians.listAll(query.limit)
+          : await guardians.listByStudentWithName(query.studentId);
 
       return listGuardianLinksResponseSchema.parse({
         items: links.map((link) => ({

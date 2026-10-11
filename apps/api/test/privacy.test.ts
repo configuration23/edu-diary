@@ -226,36 +226,92 @@ describeWithDatabase('политика и согласия', () => {
     expect(create.statusCode).toBe(403);
   });
 
-  it('список связей показывает, кто к кому привязан, и умеет отвязывать', async () => {
+  it('к ученику можно привязать второго представителя и указать «опекун»', async () => {
+    const secondGuardian = await createUserAndLogin(testApp.app, adminCookie, {
+      username: 'opekun-soglasie',
+      fullName: 'Опекун Согласие',
+      password: 'opekun-2025-secret',
+      roles: ['parent'],
+    });
+
+    // «Опекун» раньше отвергался схемой с 400: она знала только мать, отца и
+    // «другое», хотя форма предлагает больше вариантов.
+    const linked = await testApp.app.inject({
+      method: 'POST',
+      url: `/api/students/${studentId}/guardians`,
+      headers: { cookie: adminCookie },
+      payload: { guardianUserId: secondGuardian.id, relation: 'custodian' },
+    });
+
+    expect(linked.statusCode).toBe(201);
+    expect((linked.json() as { relation: string }).relation).toBe('custodian');
+
+    // У одного ученика теперь два представителя — это нормально.
     const links = await testApp.app.inject({
       method: 'GET',
-      url: '/api/guardian-links?limit=50',
+      url: `/api/guardian-links?studentId=${studentId}`,
+      headers: { cookie: adminCookie },
+    });
+    expect((links.json() as { items: unknown[] }).items).toHaveLength(2);
+
+    // А второй ученик у того же представителя — тоже нормально.
+    const secondStudent = await createStudent(testApp.app, adminCookie, {
+      fullName: 'Второй Ребёнок',
+    });
+    const secondLink = await testApp.app.inject({
+      method: 'POST',
+      url: `/api/students/${secondStudent.id}/guardians`,
+      headers: { cookie: adminCookie },
+      payload: { guardianUserId: secondGuardian.id, relation: 'representative' },
+    });
+
+    expect(secondLink.statusCode).toBe(201);
+    expect((secondLink.json() as { relation: string }).relation).toBe('representative');
+  });
+
+  it('одного человека нельзя привязать к ученику дважды', async () => {
+    // Повторная привязка той же пары — в том числе под другим отношением:
+    // иначе человека можно записать и матерью, и отцом одного ребёнка.
+    const again = await testApp.app.inject({
+      method: 'POST',
+      url: `/api/students/${studentId}/guardians`,
+      headers: { cookie: adminCookie },
+      payload: { guardianUserId, relation: 'mother' },
+    });
+
+    expect(again.statusCode).toBe(409);
+  });
+
+  it('список связей отдаёт, кто к кому привязан, и умеет отвязывать', async () => {
+    const links = await testApp.app.inject({
+      method: 'GET',
+      url: `/api/guardian-links?studentId=${studentId}`,
       headers: { cookie: adminCookie },
     });
 
     expect(links.statusCode).toBe(200);
     const items = (links.json() as { items: Array<Record<string, unknown>> }).items;
-    expect(items).toHaveLength(1);
 
-    const link = items[0] ?? {};
+    const link = items.find((item) => item.guardianUsername === 'roditel-soglasie');
+    expect(link).toBeDefined();
     // Имя ученика приходит вместе со связью: иначе связку не видно в интерфейсе.
-    expect(link.studentName).toBe('Ученик Согласие');
-    expect(link.guardianName).toBe('Родитель Согласие');
-    expect(link.guardianUsername).toBe('roditel-soglasie');
-    expect(link.relation).toBe('father');
+    expect(link?.studentName).toBe('Ученик Согласие');
+    expect(link?.guardianName).toBe('Родитель Согласие');
+    expect(link?.relation).toBe('father');
 
     const unlinked = await testApp.app.inject({
       method: 'DELETE',
-      url: `/api/students/${studentId}/guardians/${String(link.id)}`,
+      url: `/api/students/${studentId}/guardians/${String(link?.id)}`,
       headers: { cookie: adminCookie },
     });
     expect(unlinked.statusCode).toBe(204);
 
     const after = await testApp.app.inject({
       method: 'GET',
-      url: '/api/guardian-links?limit=50',
+      url: `/api/guardian-links?studentId=${studentId}`,
       headers: { cookie: adminCookie },
     });
-    expect((after.json() as { items: unknown[] }).items).toHaveLength(0);
+    const remaining = (after.json() as { items: Array<Record<string, unknown>> }).items;
+    expect(remaining.some((item) => item.guardianUsername === 'roditel-soglasie')).toBe(false);
   });
 });

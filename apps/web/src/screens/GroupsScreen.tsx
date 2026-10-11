@@ -161,7 +161,9 @@ function EnrollForm({ groupId, groupName }: { groupId: string; groupName: string
         </Alert>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-4">
+      {/* Сетка из трёх полей: примечание идёт отдельной строкой, иначе в узкой
+          колонке подпись и поле наезжают друг на друга. */}
+      <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Ученик">
           <select
             required
@@ -185,14 +187,16 @@ function EnrollForm({ groupId, groupName }: { groupId: string; groupName: string
             onChange={(event) => setJoinedOn(event.target.value)}
           />
         </Field>
-        <Field label="Примечание" hint="Необязательно: основание, документ">
-          <TextInput value={note} onChange={(event) => setNote(event.target.value)} />
-        </Field>
-        <div className="flex items-end pb-2">
-          <Button type="submit" tone="secondary" disabled={enroll.isPending}>
-            Зачислить
-          </Button>
-        </div>
+      </div>
+
+      <Field label="Примечание" hint="Необязательно: основание, документ">
+        <TextInput value={note} onChange={(event) => setNote(event.target.value)} />
+      </Field>
+
+      <div>
+        <Button type="submit" tone="secondary" disabled={enroll.isPending}>
+          Зачислить
+        </Button>
       </div>
 
       {enroll.isError && <Alert tone="error">{errorMessage(enroll.error)}</Alert>}
@@ -370,7 +374,10 @@ export function GroupsScreen({ canManageStudents = false }: { canManageStudents?
   const groups = useGroups({ search: search === '' ? undefined : search });
   const [openGroup, setOpenGroup] = useState<{ id: string; name: string } | null>(null);
   const [editingGroup, setEditingGroup] = useState<StudyGroupDto | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  // Два независимых уведомления: сообщение об ученике не должно подменяться
+  // сообщением о группе и наоборот.
+  const [studentNotice, setStudentNotice] = useState<string | null>(null);
+  const [groupNotice, setGroupNotice] = useState<string | null>(null);
   const removeGroup = useDeleteGroup();
 
   return (
@@ -378,11 +385,15 @@ export function GroupsScreen({ canManageStudents = false }: { canManageStudents?
       {/* Ученики идут первыми: группа собирается из них. Раньше этот блок жил в
           «Пользователях и ролях» и путал — он выглядел частью учётных записей,
           хотя ученик это запись учебного процесса. */}
-      {canManageStudents && <StudentsCard onNotice={setNotice} />}
+      {canManageStudents && <StudentsCard onNotice={setStudentNotice} />}
+
+      {/* Уведомление об ученике — сразу под блоком учеников: раньше оно стояло
+          ниже, под карточкой группы, и читалось как сообщение о группе. */}
+      {canManageStudents && studentNotice !== null && <Alert tone="success">{studentNotice}</Alert>}
 
       <CreateGroupCard />
 
-      {notice !== null && <Alert tone="success">{notice}</Alert>}
+      {groupNotice !== null && <Alert tone="success">{groupNotice}</Alert>}
       {removeGroup.isError && <Alert tone="error">{errorMessage(removeGroup.error)}</Alert>}
 
       <Card
@@ -432,11 +443,11 @@ export function GroupsScreen({ canManageStudents = false }: { canManageStudents?
                       tone="ghost"
                       disabled={removeGroup.isPending || group.studentsCount > 0}
                       onClick={() => {
-                        setNotice(null);
+                        setGroupNotice(null);
                         void removeGroup
                           .mutateAsync(group.id)
-                          .then(() => setNotice(`Группа «${group.name}» удалена.`))
-                          .catch(() => setNotice(null));
+                          .then(() => setGroupNotice(`Группа «${group.name}» удалена.`))
+                          .catch(() => setGroupNotice(null));
                       }}
                     >
                       Удалить
@@ -453,7 +464,7 @@ export function GroupsScreen({ canManageStudents = false }: { canManageStudents?
             group={editingGroup}
             onDone={(message) => {
               setEditingGroup(null);
-              if (message !== '') setNotice(message);
+              if (message !== '') setGroupNotice(message);
             }}
           />
         )}

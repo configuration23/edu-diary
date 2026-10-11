@@ -1,4 +1,4 @@
-import {
+﻿import {
   academicYearSchema,
   academicYearWithPeriodsSchema,
   assignmentSchema,
@@ -420,16 +420,19 @@ export function useLinkGuardian() {
       }),
     onSuccess: () => {
       invalidateStudents(client);
+      // Инвалидируем и общий список, и выборки по конкретному ученику.
       void client.invalidateQueries({ queryKey: ['guardian-links'] });
     },
   });
 }
 
 /** Все связи «ученик ↔ представитель»: список в разделе «Пользователи и роли». */
-export function useGuardianLinks() {
+export function useGuardianLinks(studentId?: string) {
+  const query = toQueryString({ limit: 200, ...(studentId === undefined ? {} : { studentId }) });
+
   return useQuery({
-    queryKey: ['guardian-links'],
-    queryFn: () => apiRequest('/api/guardian-links?limit=200', listGuardianLinksResponseSchema),
+    queryKey: ['guardian-links', studentId ?? 'all'],
+    queryFn: () => apiRequest(`/api/guardian-links${query}`, listGuardianLinksResponseSchema),
   });
 }
 
@@ -443,6 +446,7 @@ export function useUnlinkGuardian() {
       }).then(() => input.linkId),
     onSuccess: () => {
       invalidateStudents(client);
+      // Инвалидируем и общий список, и выборки по конкретному ученику.
       void client.invalidateQueries({ queryKey: ['guardian-links'] });
     },
   });

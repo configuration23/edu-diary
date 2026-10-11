@@ -7,6 +7,7 @@ import {
   primaryKey,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
 
@@ -98,12 +99,16 @@ export const guardianLink = pgTable(
     guardianUserId: uuid('guardian_user_id')
       .notNull()
       .references(() => appUser.id, { onDelete: 'cascade' }),
-    /** mother | father | other */
+    /** mother | father | representative | custodian | other */
     relation: text('relation'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     index('guardian_link_student_idx').on(table.studentId),
     index('guardian_link_user_idx').on(table.guardianUserId),
+    // Один человек привязывается к ученику один раз: без этого ту же пару можно
+    // было записать дважды, в том числе как «мать» и как «отец». Проверка в
+    // сервисе защищает от обычной ошибки, ограничение — от гонки.
+    uniqueIndex('guardian_link_student_user_key').on(table.studentId, table.guardianUserId),
   ],
 );

@@ -196,12 +196,26 @@ export function LinkGuardianForm({ onLinked }: { onLinked: (message: string) => 
   const [guardianUserId, setGuardianUserId] = useState('');
   const [relation, setRelation] = useState<string>('representative');
 
-  const guardians = users.data?.items ?? [];
+  // Связи выбранного ученика: чтобы не предлагать того, кто уже привязан, в том
+  // числе под другим отношением (иначе человека можно записать и матерью, и отцом).
+  const linked = useGuardianLinks(studentId === '' ? undefined : studentId);
+  const linkedGuardianIds = new Set(
+    (linked.data?.items ?? [])
+      .filter((link) => link.studentId === studentId)
+      .map((link) => link.guardianUserId),
+  );
+
+  const guardians = (users.data?.items ?? []).filter(
+    (user: UserSummaryDto) => !linkedGuardianIds.has(user.id),
+  );
+  const linkedGuardians = (users.data?.items ?? []).filter((user: UserSummaryDto) =>
+    linkedGuardianIds.has(user.id),
+  );
 
   return (
     <Card
       title="Привязка законного представителя"
-      description="Представитель видит только привязанных детей."
+      description="Один представитель привязывается к ученику один раз; к ученику можно привязать несколько представителей."
     >
       <form
         className="flex flex-col gap-4"
@@ -252,7 +266,7 @@ export function LinkGuardianForm({ onLinked }: { onLinked: (message: string) => 
                 </option>
               ))}
             </select>
-          </Field>
+          </Field>{' '}
           <Field label="Кем является">
             <select
               className="rounded-md border border-slate-300 px-3 py-2 text-sm"
@@ -270,9 +284,19 @@ export function LinkGuardianForm({ onLinked }: { onLinked: (message: string) => 
 
         {guardians.length === 0 && (
           <Alert tone="warning">
-            Пользователей с ролью «Родитель» пока нет — создайте их блоком выше.
+            {linkedGuardians.length > 0
+              ? 'Все законные представители этого ученика уже привязаны. Другого можно создать блоком «Новый законный представитель» в разделе «Пользователи и роли».'
+              : 'Пользователей с ролью «Родитель» пока нет — создайте их блоком «Новый законный представитель» в разделе «Пользователи и роли».'}
           </Alert>
         )}
+
+        {linkedGuardians.length > 0 && (
+          <p className="text-xs text-slate-500">
+            Уже привязаны: {linkedGuardians.map((user: UserSummaryDto) => user.fullName).join(', ')}
+            . Одного и того же человека нельзя привязать дважды.
+          </p>
+        )}
+
         {link.isError && <Alert tone="error">{errorMessage(link.error)}</Alert>}
 
         <div>
@@ -363,6 +387,7 @@ function AccountForm({
 export function StudentsCard({ onNotice }: { onNotice: (message: string) => void }) {
   const students = useStudents({ limit: 200 });
   const [accountFor, setAccountFor] = useState<{ id: string; name: string } | null>(null);
+  const [accountNotice, setAccountNotice] = useState<string | null>(null);
 
   return (
     <div className="flex flex-col gap-6">
@@ -411,10 +436,14 @@ export function StudentsCard({ onNotice }: { onNotice: (message: string) => void
             studentName={accountFor.name}
             onDone={(message) => {
               setAccountFor(null);
-              onNotice(message);
+              setAccountNotice(message);
             }}
           />
         )}
+
+        {/* Результат создания учётной записи показывается здесь же, под списком,
+            а не общей плашкой внизу страницы. */}
+        {accountNotice !== null && <Alert tone="success">{accountNotice}</Alert>}
       </Card>
     </div>
   );

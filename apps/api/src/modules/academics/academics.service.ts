@@ -206,6 +206,8 @@ export interface AcademicsService {
   studentExists(id: string): Promise<boolean>;
   /** Ученик по идентификатору для служебных связок (имя, проверка существования). */
   findStudentForLookup(id: string): Promise<StudentRecord | null>;
+  /** Имена учеников одним запросом: списки связей и составов групп. */
+  namesOfStudents(ids: readonly string[]): Promise<Map<string, string>>;
   createStudent(input: CreateStudentInput, options: MutationOptions): Promise<StudentRecord>;
   /** Учётная запись ученику, созданному ранее (учётка — по необходимости). */
   createStudentAccount(
@@ -518,6 +520,18 @@ export function createAcademicsService(
 
     findStudentForLookup(id) {
       return academics.findStudent(id);
+    },
+
+    async namesOfStudents(ids) {
+      const unique = [...new Set(ids.filter((id) => id !== ''))];
+      const names = new Map<string, string>();
+
+      for (const id of unique) {
+        const student = await academics.findStudent(id);
+        if (student !== null) names.set(id, student.fullName);
+      }
+
+      return names;
     },
 
     async createStudent(input, options): Promise<StudentRecord> {

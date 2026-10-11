@@ -25,6 +25,8 @@ export interface LinkGuardianInput {
 
 export interface GuardiansService {
   listByStudent(studentId: string): Promise<GuardianLinkRow[]>;
+  /** Связи одного ученика вместе с его именем: для форм привязки и списков. */
+  listByStudentWithName(studentId: string): Promise<GuardianLinkWithStudentRow[]>;
   /** Все связи с именами учеников: список показывается в разделе «Пользователи». */
   listAll(limit: number): Promise<GuardianLinkWithStudentRow[]>;
   link(input: LinkGuardianInput, options: MutationOptions): Promise<GuardianLinkRow>;
@@ -48,6 +50,14 @@ export function createGuardiansService(
   return {
     listByStudent(studentId) {
       return guardians.listByStudent(studentId);
+    },
+
+    async listByStudentWithName(studentId) {
+      const links = await guardians.listByStudent(studentId);
+      const names = await academics.namesOfStudents([studentId]);
+      const name = names.get(studentId) ?? 'Ученик не найден';
+
+      return links.map((link) => ({ ...link, studentName: name }));
     },
 
     listAll(limit) {
