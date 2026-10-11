@@ -76,7 +76,7 @@ function SubjectsCard() {
           <Field label="Название">
             <TextInput required value={name} onChange={(event) => setName(event.target.value)} />
           </Field>
-          <Field label="Короткое имя" hint="Для журнала">
+          <Field label="Короткое имя" hint="Код для плиток расписания, 2–4 символа (необязательно)">
             <TextInput value={shortName} onChange={(event) => setShortName(event.target.value)} />
           </Field>
           <Field label="Вид">
@@ -175,7 +175,7 @@ function SubjectsCard() {
                 onChange={(event) => setEditName(event.target.value)}
               />
             </Field>
-            <Field label="Короткое имя">
+            <Field label="Короткое имя" hint="Код для плиток расписания, 2–4 символа">
               <TextInput
                 value={editShortName}
                 onChange={(event) => setEditShortName(event.target.value)}

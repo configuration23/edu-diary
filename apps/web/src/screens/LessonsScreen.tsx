@@ -1,27 +1,43 @@
 import type { LessonDto, SessionResponseDto } from '@edu-diary/contracts';
+import { subjectCode } from '@edu-diary/domain';
+import { useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 
 import { useAcademicContext } from '../components/AcademicContext';
-import { Alert, Badge, Button, Card, EmptyState, Field, Table, TextInput } from '../components/ui';
+import { Alert, Badge, Button, Card, EmptyState, Field, TextInput } from '../components/ui';
 import { errorMessage } from '../lib/api-client';
 import {
-  useCreateSubstitution,
   useDeleteLesson,
   useGenerateLessons,
   useLessons,
   useRestoreLesson,
   useScheduleGroups,
-  useTeachers,
+  useSubstitutions,
   useUpdateLesson,
 } from '../lib/queries';
 
 /**
- * Уроки: занятия по датам, порождённые из шаблона расписания.
+ * Уроки: рабочий инструмент администратора и преподавателя.
  *
- * Здесь же оформляются отклонения от шаблона: отмена конкретного урока, правка
- * темы и замена преподавателя с причиной. Генерация идемпотентна: повторный
- * запуск за период не создаёт дублей и не трогает уроки, правленные вручную.
+ * Период показываем сеткой («пары × дни»), а не длинным списком: так видно
+ * загрузку группы и свободные пары. Плитка компактная (код предмета и цвет),
+ * подробности и действия — в панели деталей, поэтому править в ячейке не нужно.
+ *
+ * Ученику и родителю этот раздел не нужен: у них есть «Расписание».
  */
+
+const PAIRS = [1, 2, 3, 4, 5, 6, 7, 8];
+const DAYS_SHORT = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+
+/** Палитра плиток: цвет закрепляется за предметом, а не за позицией в списке. */
+const PALETTE = [
+  'bg-sky-100 text-sky-900 border-sky-200',
+  'bg-emerald-100 text-emerald-900 border-emerald-200',
+  'bg-amber-100 text-amber-900 border-amber-200',
+  'bg-violet-100 text-violet-900 border-violet-200',
+  'bg-rose-100 text-rose-900 border-rose-200',
+  'bg-teal-100 text-teal-900 border-teal-200',
+];
 
 const STATUS: Record<
   string,
@@ -33,35 +49,104 @@ const STATUS: Record<
   replaced: { label: 'Замена', tone: 'warning' },
 };
 
+const STATUS_TILE: Record<string, string> = {
+  cancelled: 'bg-slate-100 text-slate-400 border-slate-200 line-through',
+  replaced: 'bg-amber-100 text-amber-900 border-amber-300',
+};
+
 const selectClass = 'w-full rounded-md border border-slate-300 px-3 py-2 text-sm';
 
-/** Сдвиг даты на дни от сегодняшнего дня. */
-function shiftDays(days: number): string {
-  const date = new Date();
+function toIso(date: Date): string {
+  return [
+    String(date.getFullYear()).padStart(4, '0'),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-');
+}
+
+function todayIso(): string {
+  return toIso(new Date());
+}
+
+function shiftIso(iso: string, days: number): string {
+  const date = new Date(`${iso}T00:00:00`);
   date.setDate(date.getDate() + days);
-  return date.toISOString().slice(0, 10);
+  return toIso(date);
 }
 
-function canManageAll(session: SessionResponseDto, permission: string): boolean {
-  return session.permissions.some(
-    (grant) => grant.permission === permission && grant.scope === 'all',
-  );
+/** Понедельник недели, в которую попадает дата. */
+function mondayOf(iso: string): string {
+  const date = new Date(`${iso}T00:00:00`);
+  const weekday = date.getDay() === 0 ? 7 : date.getDay();
+  return shiftIso(iso, 1 - weekday);
 }
 
-/** Правка темы урока и замена преподавателя. */
-function LessonEditor({ lesson, canReplace }: { lesson: LessonDto; canReplace: boolean }) {
+function dayIndex(iso: string): number {
+  const date = new Date(`${iso}T00:00:00`);
+  return date.getDay() === 0 ? 6 : date.getDay() - 1;
+}
+
+/** Устойчивый цвет плитки: один предмет — один цвет. */
+function colorOf(subjectId: string): string {
+  let hash = 0;
+  for (const char of subjectId) hash = (hash + char.charCodeAt(0)) % PALETTE.length;
+  return PALETTE[hash] ?? PALETTE[0]!;
+}
+
+/** Действия и подробности одного урока: заменяет правку прямо в ячейке. */
+function LessonDetails({
+  lesson,
+  reasons,
+  onClose,
+  canEditTopic,
+  canManage,
+}: {
+  lesson: LessonDto;
+  reasons: string[];
+  onClose: () => void;
+  canEditTopic: boolean;
+  canManage: boolean;
+}) {
   const update = useUpdateLesson();
-  const teachers = useTeachers();
-  const createSubstitution = useCreateSubstitution();
-
+  const remove = useDeleteLesson();
+  const restore = useRestoreLesson();
+  const navigate = useNavigate();
   const [topic, setTopic] = useState(lesson.topic ?? '');
-  const [substituteUserId, setSubstituteUserId] = useState('');
-  const [reason, setReason] = useState('');
+
+  const status = STATUS[lesson.status] ?? { label: lesson.status, tone: 'neutral' as const };
 
   return (
-    <div className="flex flex-col gap-3 border-t border-slate-200 pt-3">
+    <div className="flex flex-col gap-3 rounded-md border border-slate-200 bg-slate-50 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-medium">
+            {lesson.lessonDate}, {lesson.pairNumber}-я пара, {lesson.timeStart}–{lesson.timeEnd}
+          </span>
+          <Badge tone={status.tone}>{status.label}</Badge>
+          {lesson.isManual && <Badge tone="warning">Правка вручную</Badge>}
+        </div>
+        <Button tone="ghost" type="button" onClick={onClose}>
+          Закрыть
+        </Button>
+      </div>
+
+      <div className="text-sm text-slate-700">
+        {lesson.subjectName} · {lesson.groupName}
+      </div>
+      <div className="text-sm text-slate-600">
+        {lesson.teacherName}
+        {lesson.plannedTeacherName !== null && (
+          <span className="text-amber-800"> · вместо: {lesson.plannedTeacherName}</span>
+        )}
+        {` · ${lesson.roomName ?? 'аудитория не указана'}`}
+      </div>
+
+      {reasons.length > 0 && (
+        <div className="text-sm text-amber-800">Замены: {reasons.join('; ')}</div>
+      )}
+
       <form
-        className="flex flex-col gap-3 sm:flex-row sm:items-end"
+        className="flex flex-col gap-2 sm:flex-row sm:items-end"
         onSubmit={async (event) => {
           event.preventDefault();
           try {
@@ -77,184 +162,164 @@ function LessonEditor({ lesson, canReplace }: { lesson: LessonDto; canReplace: b
               name="topic"
               value={topic}
               onChange={(event) => setTopic(event.target.value)}
-              placeholder="Например: Введение в язык"
+              disabled={!canEditTopic || lesson.status === 'cancelled'}
             />
           </Field>
         </div>
-        <Button type="submit" disabled={update.isPending}>
-          Сохранить тему
-        </Button>
+        {canEditTopic && lesson.status !== 'cancelled' && (
+          <Button type="submit" disabled={update.isPending}>
+            Сохранить тему
+          </Button>
+        )}
       </form>
 
+      {canManage && (
+        <div className="flex flex-wrap gap-2">
+          {lesson.status !== 'cancelled' && (
+            <Button
+              tone="ghost"
+              type="button"
+              onClick={() =>
+                void navigate({ to: '/substitutions', search: { lessonId: lesson.id } })
+              }
+            >
+              Заменить
+            </Button>
+          )}
+
+          {lesson.status !== 'cancelled' && (
+            <Button
+              tone="ghost"
+              type="button"
+              disabled={remove.isPending}
+              onClick={() =>
+                void remove
+                  .mutateAsync(lesson.id)
+                  .then(() => onClose())
+                  .catch(() => undefined)
+              }
+            >
+              Отменить занятие
+            </Button>
+          )}
+
+          {lesson.status === 'cancelled' && (
+            <Button
+              tone="ghost"
+              type="button"
+              disabled={restore.isPending}
+              onClick={() =>
+                void restore
+                  .mutateAsync(lesson)
+                  .then(() => onClose())
+                  .catch(() => undefined)
+              }
+            >
+              Восстановить
+            </Button>
+          )}
+
+          {reasons.length > 0 && (
+            <Button
+              tone="ghost"
+              type="button"
+              onClick={() =>
+                void navigate({ to: '/substitutions', search: { lessonId: undefined } })
+              }
+            >
+              Открыть журнал замен
+            </Button>
+          )}
+        </div>
+      )}
+
       {update.isError && <Alert tone="error">{errorMessage(update.error)}</Alert>}
-
-      {canReplace && (
-        <form
-          className="flex flex-col gap-3 sm:flex-row sm:items-end"
-          onSubmit={async (event) => {
-            event.preventDefault();
-            try {
-              await createSubstitution.mutateAsync({
-                lessonId: lesson.id,
-                substituteUserId,
-                startsOn: lesson.lessonDate,
-                endsOn: lesson.lessonDate,
-                reason,
-              });
-              setSubstituteUserId('');
-              setReason('');
-            } catch {
-              // Ошибка показывается ниже.
-            }
-          }}
-        >
-          <div className="flex-1">
-            <Field label="Замена: кто ведёт" hint="Причина обязательна">
-              <select
-                required
-                name="substituteUserId"
-                className={selectClass}
-                value={substituteUserId}
-                onChange={(event) => setSubstituteUserId(event.target.value)}
-              >
-                <option value="">Выберите преподавателя</option>
-                {(teachers.data?.items ?? [])
-                  .filter((teacher) => teacher.roles.some((role) => role.code === 'teacher'))
-                  .filter((teacher) => teacher.id !== lesson.teacherUserId)
-                  .map((teacher) => (
-                    <option key={teacher.id} value={teacher.id}>
-                      {teacher.fullName}
-                    </option>
-                  ))}
-              </select>
-            </Field>
-          </div>
-          <div className="flex-1">
-            <Field label="Причина">
-              <TextInput
-                required
-                name="reason"
-                value={reason}
-                onChange={(event) => setReason(event.target.value)}
-                placeholder="Болезнь, обучение, сессия"
-              />
-            </Field>
-          </div>
-          <Button
-            type="submit"
-            disabled={createSubstitution.isPending || substituteUserId === '' || reason === ''}
-          >
-            Оформить замену
-          </Button>
-        </form>
-      )}
-
-      {createSubstitution.isError && (
-        <Alert tone="error">{errorMessage(createSubstitution.error)}</Alert>
-      )}
+      {remove.isError && <Alert tone="error">{errorMessage(remove.error)}</Alert>}
+      {restore.isError && <Alert tone="error">{errorMessage(restore.error)}</Alert>}
     </div>
   );
 }
 
-/**
- * Выбор группы для уроков.
- *
- * Группа выбирается в блоке «Создать уроки» (или в списке, если генерации нет по
- * правам): два разных «Группа» на одной странице путают.
- */
-function GroupField({
-  groups,
-  selectedGroupId,
-  selectGroup,
-}: {
-  groups: Array<{ id: string; name: string }>;
-  selectedGroupId: string | null;
-  selectGroup: (id: string | null) => void;
-}) {
-  return (
-    <Field label="Группа" hint="«Все доступные» — уроки по всем группам">
-      <select
-        name="studyGroupId"
-        className={`${selectClass} max-w-sm`}
-        value={selectedGroupId ?? ''}
-        onChange={(event) => selectGroup(event.target.value === '' ? null : event.target.value)}
-      >
-        <option value="">Все доступные группы</option>
-        {groups.map((group) => (
-          <option key={group.id} value={group.id}>
-            {group.name}
-          </option>
-        ))}
-      </select>
-    </Field>
-  );
-}
-
-/** Генерация уроков за период: только администратор. */
-function GenerateForm({
+/** Группа, период и генерация уроков: то, с чего начинается работа на экране. */
+function PeriodForm({
   groupId,
   groups,
   selectedGroupId,
   selectGroup,
+  canGenerate,
 }: {
   groupId: string | null;
   groups: Array<{ id: string; name: string }>;
   selectedGroupId: string | null;
   selectGroup: (id: string | null) => void;
+  canGenerate: boolean;
 }) {
   const generate = useGenerateLessons();
-  const [from, setFrom] = useState(shiftDays(1));
-  const [to, setTo] = useState(shiftDays(28));
+  const [from, setFrom] = useState(todayIso());
+  const [to, setTo] = useState(shiftIso(todayIso(), 7));
   const [result, setResult] = useState<string | null>(null);
 
   return (
-    <form
-      className="flex flex-col gap-3"
-      onSubmit={async (event) => {
-        event.preventDefault();
-        if (groupId === null) return;
-        setResult(null);
-        try {
-          const response = await generate.mutateAsync({ studyGroupId: groupId, from, to });
-          setResult(
-            `Создано уроков: ${response.created}, обновлено: ${response.updated}, ` +
-              `пропущено (правки вручную): ${response.skippedManual}.`,
-          );
-        } catch {
-          // Ошибка показывается ниже.
-        }
-      }}
-    >
-      <GroupField groups={groups} selectedGroupId={selectedGroupId} selectGroup={selectGroup} />
+    <div className="flex flex-col gap-3">
+      <Field label="Группа" hint="Сетка уроков строится по одной группе">
+        <select
+          name="studyGroupId"
+          className={selectClass}
+          value={selectedGroupId ?? ''}
+          onChange={(event) => selectGroup(event.target.value === '' ? null : event.target.value)}
+        >
+          <option value="">Все доступные группы</option>
+          {groups.map((group) => (
+            <option key={group.id} value={group.id}>
+              {group.name}
+            </option>
+          ))}
+        </select>
+      </Field>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="С даты">
-          <TextInput
-            required
-            type="date"
-            value={from}
-            onChange={(event) => setFrom(event.target.value)}
-          />
-        </Field>
-        <Field label="По дату">
-          <TextInput
-            required
-            type="date"
-            value={to}
-            onChange={(event) => setTo(event.target.value)}
-          />
-        </Field>
-      </div>
-
-      <div>
-        <Button type="submit" disabled={generate.isPending || groupId === null}>
-          Создать уроки за период
-        </Button>
-      </div>
+      {canGenerate && (
+        <form
+          className="flex flex-col gap-2 sm:flex-row sm:items-end"
+          onSubmit={async (event) => {
+            event.preventDefault();
+            if (groupId === null) return;
+            setResult(null);
+            try {
+              const response = await generate.mutateAsync({ studyGroupId: groupId, from, to });
+              setResult(
+                `Создано за ${from} — ${to}: уроков ${response.created}, обновлено ${response.updated}, ` +
+                  `пропущено правок вручную ${response.skippedManual}. Смотрите сетку ниже.`,
+              );
+            } catch {
+              // Ошибка показывается ниже.
+            }
+          }}
+        >
+          <Field label="С даты">
+            <TextInput
+              required
+              type="date"
+              value={from}
+              onChange={(event) => setFrom(event.target.value)}
+            />
+          </Field>
+          <Field label="По дату">
+            <TextInput
+              required
+              type="date"
+              value={to}
+              onChange={(event) => setTo(event.target.value)}
+            />
+          </Field>
+          <Button type="submit" disabled={generate.isPending || groupId === null}>
+            Создать уроки за период
+          </Button>
+        </form>
+      )}
 
       {result !== null && <Alert tone="success">{result}</Alert>}
       {generate.isError && <Alert tone="error">{errorMessage(generate.error)}</Alert>}
-    </form>
+    </div>
   );
 }
 
@@ -267,173 +332,279 @@ export function LessonsScreen({ session }: { session: SessionResponseDto }) {
   } = useAcademicContext();
   const ownGroups = useScheduleGroups();
 
-  /**
-   * Список групп для выбора. У ролей без права на справочник групп контекст
-   * пуст, поэтому берём свои группы у расписания — иначе выбрать расписание
-   * нечего (ученик и родитель).
-   */
   const groups =
     contextGroups.length > 0
       ? contextGroups
       : (ownGroups.data?.items ?? []).map((group) => ({ id: group.id, name: group.name }));
+
+  const [period, setPeriod] = useState<'week' | 'month'>('week');
+  const [view, setView] = useState<'grid' | 'list'>('grid');
+  const [anchor, setAnchor] = useState(todayIso());
+  const [showCancelled, setShowCancelled] = useState(false);
+  const [selectedLessonId, setSelectedLessonId] = useState<string | null>(null);
+
+  /** Окно запроса: неделя — 7 дней с понедельника, месяц — календарный месяц. */
+  const rangeStart = period === 'week' ? mondayOf(anchor) : `${anchor.slice(0, 7)}-01`;
+  const rangeEnd =
+    period === 'week'
+      ? shiftIso(rangeStart, 6)
+      : toIso(new Date(Number(anchor.slice(0, 4)), Number(anchor.slice(5, 7)), 0));
+
   const lessons = useLessons({
     ...(selectedGroupId === null ? {} : { studyGroupId: selectedGroupId }),
-    from: shiftDays(-14),
-    to: shiftDays(28),
+    from: rangeStart,
+    to: rangeEnd,
   });
-  const remove = useDeleteLesson();
-  const restore = useRestoreLesson();
+  const substitutions = useSubstitutions();
 
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [showCancelled, setShowCancelled] = useState(false);
-
-  const canReplace = canManageAll(session, 'substitutions:write');
+  const canManage = session.permissions.some(
+    (grant) => grant.permission === 'lessons:write' && grant.scope === 'all',
+  );
   const canEditTopic = session.permissions.some((grant) => grant.permission === 'lessons:write');
-  const canRemove = canManageAll(session, 'lessons:write');
-  const canGenerate = canManageAll(session, 'schedule:write');
+  const canGenerate = session.permissions.some(
+    (grant) => grant.permission === 'schedule:write' && grant.scope === 'all',
+  );
 
-  const allItems = lessons.data?.items ?? [];
-  /**
-   * Отменённые уроки по умолчанию скрыты: их накапливается много, и они мешают
-   * читать расписание. Переключатель возвращает их в список — вместе с кнопкой
-   * восстановления, потому что отмена не должна быть дорогой в одну сторону.
-   */
-  const items = showCancelled
-    ? allItems
-    : allItems.filter((lesson) => lesson.status !== 'cancelled');
-  const cancelledCount = allItems.filter((lesson) => lesson.status === 'cancelled').length;
+  const items = lessons.data?.items ?? [];
+  const visible = items.filter((lesson) => showCancelled || lesson.status !== 'cancelled');
+  const selectedLesson = items.find((lesson) => lesson.id === selectedLessonId) ?? null;
+
+  const reasonsFor = (lessonId: string): string[] =>
+    (substitutions.data?.items ?? [])
+      .filter((item) => item.lessonId === lessonId)
+      .map((item) => item.reason);
+
+  const daysInRange: string[] = [];
+  for (let iso = rangeStart; iso <= rangeEnd; iso = shiftIso(iso, 1)) daysInRange.push(iso);
+
+  const weeks: string[][] = [];
+  for (let index = 0; index < daysInRange.length; index += 7) {
+    weeks.push(daysInRange.slice(index, index + 7));
+  }
+
+  const cancelledCount = items.filter((lesson) => lesson.status === 'cancelled').length;
+
+  const tile = (lesson: LessonDto) => (
+    <button
+      key={lesson.id}
+      type="button"
+      onClick={() => setSelectedLessonId(lesson.id)}
+      title={`${lesson.subjectName} · ${lesson.teacherName} · ${lesson.roomName ?? 'без аудитории'}`}
+      className={`w-full rounded border px-1 py-0.5 text-left text-[11px] leading-tight ${
+        STATUS_TILE[lesson.status] ?? colorOf(lesson.subjectId)
+      }`}
+    >
+      <span className="font-medium">{subjectCode(lesson.subjectName)}</span>
+      {selectedGroupId === null && <span className="block truncate">{lesson.groupName}</span>}
+    </button>
+  );
 
   return (
     <div className="flex flex-col gap-6">
-      {canGenerate && (
-        <Card
-          title="Создать уроки"
-          description="Повторный запуск за тот же период ничего не дублирует и не перезаписывает правки. Группа выбирается здесь — список ниже показывает её уроки."
-        >
-          <GenerateForm
-            groupId={selectedGroupId}
-            groups={groups}
-            selectedGroupId={selectedGroupId}
-            selectGroup={selectGroup}
-          />
-        </Card>
-      )}
-
       <Card
         title="Уроки"
-        description={`Занятия по датам${activeYearTitle === null ? '' : ` · ${activeYearTitle}`}. Показаны две недели назад и четыре вперёд.`}
+        description={`Занятия по датам${activeYearTitle === null ? '' : ` · ${activeYearTitle}`}. Сетка показывает загрузку группы, список — быстрый поиск.`}
       >
-        {!canGenerate && (
-          <GroupField groups={groups} selectedGroupId={selectedGroupId} selectGroup={selectGroup} />
-        )}
+        <PeriodForm
+          groupId={selectedGroupId}
+          groups={groups}
+          selectedGroupId={selectedGroupId}
+          selectGroup={selectGroup}
+          canGenerate={canGenerate}
+        />
 
-        <div className="mt-3 text-sm text-slate-600">
+        <div className="mt-4 flex flex-wrap items-end gap-3">
+          <Field label="Период">
+            <span className="flex gap-2">
+              <Button
+                tone={period === 'week' ? 'primary' : 'secondary'}
+                type="button"
+                id="period-week"
+                onClick={() => setPeriod('week')}
+              >
+                Неделя
+              </Button>
+              <Button
+                tone={period === 'month' ? 'primary' : 'secondary'}
+                type="button"
+                id="period-month"
+                onClick={() => setPeriod('month')}
+              >
+                Месяц
+              </Button>
+            </span>
+          </Field>
+
+          <Field label="Вид">
+            <span className="flex gap-2">
+              <Button
+                tone={view === 'grid' ? 'primary' : 'secondary'}
+                type="button"
+                id="view-grid"
+                onClick={() => setView('grid')}
+              >
+                Сетка
+              </Button>
+              <Button
+                tone={view === 'list' ? 'primary' : 'secondary'}
+                type="button"
+                id="view-list"
+                onClick={() => setView('list')}
+              >
+                Список
+              </Button>
+            </span>
+          </Field>
+
+          <Field label="Отсчёт">
+            <span className="flex items-center gap-2">
+              <Button
+                tone="ghost"
+                type="button"
+                onClick={() => setAnchor(shiftIso(anchor, period === 'week' ? -7 : -30))}
+              >
+                ←
+              </Button>
+              <input
+                type="date"
+                name="anchor"
+                className={selectClass}
+                value={anchor}
+                onChange={(event) =>
+                  setAnchor(event.target.value === '' ? todayIso() : event.target.value)
+                }
+              />
+              <Button
+                tone="ghost"
+                type="button"
+                onClick={() => setAnchor(shiftIso(anchor, period === 'week' ? 7 : 30))}
+              >
+                →
+              </Button>
+              <Button tone="secondary" type="button" onClick={() => setAnchor(todayIso())}>
+                Сегодня
+              </Button>
+            </span>
+          </Field>
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-slate-600">
+          <span>
+            {rangeStart} — {rangeEnd}
+          </span>
           <label className="flex items-center gap-2">
             <input
               type="checkbox"
               checked={showCancelled}
               onChange={(event) => setShowCancelled(event.target.checked)}
             />
-            Показать отменённые ({cancelledCount})
+            Показывать отменённые ({cancelledCount})
           </label>
         </div>
 
         {lessons.isError && <Alert tone="error">{errorMessage(lessons.error)}</Alert>}
 
+        {selectedLesson !== null && (
+          <div className="mt-4">
+            <LessonDetails
+              lesson={selectedLesson}
+              reasons={reasonsFor(selectedLesson.id)}
+              onClose={() => setSelectedLessonId(null)}
+              canEditTopic={canEditTopic}
+              canManage={canManage}
+            />
+          </div>
+        )}
+
         {items.length === 0 && !lessons.isLoading && (
           <div className="mt-4">
             <EmptyState>
               {selectedGroupId === null
-                ? 'Выберите группу, чтобы увидеть её уроки, или создайте уроки для всех групп.'
-                : cancelledCount > 0 && !showCancelled
-                  ? 'За этот период есть только отменённые занятия — включите их показ выше.'
-                  : 'Уроков за этот период нет. Их можно создать из расписания группы.'}
+                ? 'Выберите группу: сетка строится по одной группе.'
+                : 'За этот период уроков нет. Их можно создать выше.'}
             </EmptyState>
           </div>
         )}
 
-        {items.length > 0 && (
-          <div className="mt-4">
-            <Table
-              head={['Дата', 'Пара', 'Время', 'Предмет и группа', 'Преподаватель', 'Тема', '']}
-            >
-              {items.map((lesson) => {
-                const status = STATUS[lesson.status] ?? {
-                  label: lesson.status,
-                  tone: 'neutral' as const,
-                };
+        {view === 'grid' && items.length > 0 && (
+          <div className="mt-4 flex flex-col gap-4">
+            {weeks.map((week) => (
+              <div key={week[0]} className="overflow-x-auto">
+                <table className="w-full border-collapse text-sm">
+                  <thead>
+                    <tr>
+                      <th className="w-14 px-1 py-1 text-left text-xs text-slate-500">Пара</th>
+                      {week.map((iso) => (
+                        <th
+                          key={iso}
+                          className={`px-1 py-1 text-left text-xs ${
+                            iso === todayIso() ? 'text-sky-700' : 'text-slate-500'
+                          }`}
+                        >
+                          {iso.slice(8)} {DAYS_SHORT[dayIndex(iso)]}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {PAIRS.map((pair) => (
+                      <tr key={pair} className="border-t border-slate-100">
+                        <td className="px-1 py-1 align-top text-xs font-medium text-slate-500">
+                          {pair}
+                        </td>
+                        {week.map((iso) => {
+                          const cell = visible.filter(
+                            (lesson) => lesson.lessonDate === iso && lesson.pairNumber === pair,
+                          );
 
-                return (
-                  <tr key={lesson.id} className="border-b border-slate-100 align-top">
-                    <td className="px-3 py-2 whitespace-nowrap">{lesson.lessonDate}</td>
-                    <td className="px-3 py-2">{lesson.pairNumber}-я</td>
-                    <td className="px-3 py-2 whitespace-nowrap">
-                      {lesson.timeStart}–{lesson.timeEnd}
-                    </td>
-                    <td className="px-3 py-2">
-                      {lesson.subjectName}
-                      <div className="text-xs text-slate-500">{lesson.groupName}</div>
-                      <div className="mt-1 flex flex-wrap gap-1">
-                        <Badge tone={status.tone}>{status.label}</Badge>
-                        {lesson.isManual && <Badge tone="warning">Правка вручную</Badge>}
-                      </div>
-                    </td>
-                    <td className="px-3 py-2">
-                      {lesson.teacherName}
-                      {lesson.plannedTeacherName !== null && (
-                        <div className="text-xs text-slate-500">
-                          вместо: {lesson.plannedTeacherName}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-3 py-2">
-                      {lesson.topic ?? <span className="text-slate-400">не задана</span>}
-                      {editingId === lesson.id && (
-                        <LessonEditor lesson={lesson} canReplace={canReplace} />
-                      )}
-                    </td>
-                    <td className="px-3 py-2">
-                      {editingId !== lesson.id && (
-                        <span className="flex flex-wrap gap-2">
-                          {canEditTopic && lesson.status !== 'cancelled' && (
-                            <Button tone="ghost" onClick={() => setEditingId(lesson.id)}>
-                              Править
-                            </Button>
-                          )}
-                          {canRemove && lesson.status !== 'cancelled' && (
-                            <Button
-                              tone="ghost"
-                              disabled={remove.isPending}
-                              onClick={() =>
-                                void remove.mutateAsync(lesson.id).catch(() => undefined)
-                              }
-                            >
-                              Отменить занятие
-                            </Button>
-                          )}
-                          {canRemove && lesson.status === 'cancelled' && (
-                            <Button
-                              tone="ghost"
-                              disabled={restore.isPending}
-                              onClick={() =>
-                                void restore.mutateAsync(lesson).catch(() => undefined)
-                              }
-                            >
-                              Восстановить
-                            </Button>
-                          )}
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </Table>
+                          return (
+                            <td key={iso} className="px-0.5 py-1 align-top">
+                              {cell.length === 0 ? (
+                                <span className="text-[11px] text-slate-300">·</span>
+                              ) : (
+                                <span className="flex flex-col gap-0.5">
+                                  {cell.slice(0, 2).map((lesson) => tile(lesson))}
+                                  {cell.length > 2 && (
+                                    <span className="text-[11px] text-slate-500">
+                                      и ещё {cell.length - 2}
+                                    </span>
+                                  )}
+                                </span>
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ))}
           </div>
         )}
 
-        {remove.isError && <Alert tone="error">{errorMessage(remove.error)}</Alert>}
-        {restore.isError && <Alert tone="error">{errorMessage(restore.error)}</Alert>}
+        {view === 'list' && visible.length > 0 && (
+          <ul className="mt-4 flex flex-col divide-y divide-slate-100">
+            {visible.map((lesson) => (
+              <li key={lesson.id}>
+                <button
+                  type="button"
+                  onClick={() => setSelectedLessonId(lesson.id)}
+                  className="flex w-full flex-wrap items-center gap-2 px-2 py-2 text-left text-sm hover:bg-slate-50"
+                >
+                  <span className="w-24 text-slate-500">{lesson.lessonDate}</span>
+                  <span className="w-14 text-slate-500">{lesson.pairNumber}-я</span>
+                  <span className="font-medium">{lesson.subjectName}</span>
+                  <span className="text-slate-500">{lesson.groupName}</span>
+                  <span className="text-slate-500">{lesson.teacherName}</span>
+                  <Badge tone={(STATUS[lesson.status] ?? { tone: 'neutral' as const }).tone}>
+                    {(STATUS[lesson.status] ?? { label: lesson.status }).label}
+                  </Badge>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </Card>
     </div>
   );

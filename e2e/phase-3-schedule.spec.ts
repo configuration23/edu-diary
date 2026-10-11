@@ -46,10 +46,10 @@ function shiftDays(days: number): string {
   ].join('-');
 }
 
-/** Дата ближайшего нужного дня недели (1 — понедельник). */
+/** Дата нужного дня недели: сегодня, если совпало, иначе ближайший такой день. */
 function nextWeekday(dayOfWeek: number): string {
   const date = new Date();
-  date.setDate(date.getDate() + 1);
+  if (date.getDay() !== dayOfWeek % 7) date.setDate(date.getDate() + 1);
   while (date.getDay() !== dayOfWeek % 7) {
     date.setDate(date.getDate() + 1);
   }
@@ -202,36 +202,55 @@ test.describe('Этап 3: звонки, расписание, уроки', () =
     await expect(page.getByRole('cell', { name: TEACHER.fullName })).toBeVisible();
     await expect(page.getByRole('cell', { name: '11:30–13:00' })).toBeVisible();
 
-    // --- Уроки: генерация за период ---
+    // --- Уроки: генерация за период и сетка ---
     await page.getByRole('link', { name: 'Уроки' }).click();
     await expect(page.getByRole('heading', { level: 2, name: 'Уроки', exact: true })).toBeVisible();
-    // Группа уже выбрана в шапке — тот же переключатель контекста, что и выше.
 
-    const generateForm = page
-      .locator('section')
-      .filter({ has: page.getByRole('heading', { name: 'Создать уроки' }) });
+    // Группа и период: генерация уроков живёт на этом же экране.
+    await page.locator('select[name="studyGroupId"]').selectOption({ label: GROUP });
+    await page.getByLabel('С даты').fill(nextWeekday(2));
+    await page.getByLabel('По дату').fill(shiftDays(30));
+    await page.getByRole('button', { name: 'Создать уроки за период' }).click();
 
-    await generateForm.getByLabel('С даты').fill(nextWeekday(2));
-    await generateForm.getByLabel('По дату').fill(shiftDays(30));
-    await generateForm.getByRole('button', { name: 'Создать уроки за период' }).click();
+    await expect(page.getByText(/Создано за .*уроков \d+/)).toBeVisible();
 
-    await expect(generateForm.getByText(/Создано уроков: \d+/)).toBeVisible();
-    // В таблице появились даты занятий с тем же предметом.
-    await expect(page.getByRole('cell', { name: SUBJECT }).first()).toBeVisible();
-    await expect(page.getByText('Правка вручную')).toHaveCount(0);
+    // Сетка периода показывает занятие: плитка с кодом предмета открывает панель
+    // деталей, где видны подробности и действия.
+    // Плитка в сетке: код предмета. Доступное имя включает и название группы,
+    // поэтому ищем по вхождению кода.
+    const tile = page.getByRole('button').filter({ hasText: 'ОА' }).first();
+    await expect(tile).toBeVisible();
+    await tile.click();
+    // Панель деталей: заголовок с датой и пара, предмет, тема и кнопка закрытия.
+    await expect(page.getByRole('button', { name: 'Закрыть' })).toBeVisible();
+    await expect(page.getByLabel('Тема занятия')).toBeVisible();
+    await page.getByRole('button', { name: 'Закрыть' }).click();
+    await expect(page.getByRole('button', { name: 'Закрыть' })).toHaveCount(0);
+
+    // Список — второй вид того же периода: там занятие видно текстом.
+    await page.locator('#view-list').click();
+    await expect(page.getByText(SUBJECT).first()).toBeVisible();
+    await page.locator('#view-grid').click();
 
     // Повторный запуск ничего не создаёт: генерация идемпотентна.
-    await generateForm.getByRole('button', { name: 'Создать уроки за период' }).click();
-    await expect(generateForm.getByText('Создано уроков: 0')).toBeVisible();
+    await page.getByRole('button', { name: 'Создать уроки за период' }).click();
+    await expect(page.getByText(/уроков 0/)).toBeVisible();
 
     // --- Преподаватель: видит свои уроки, но не правит расписание ---
     await page.getByRole('button', { name: 'Выйти' }).click();
     await login(page, TEACHER.username, TEACHER.password);
 
     await page.getByRole('link', { name: 'Уроки' }).click();
+    // Группу выбираем явно: у преподавателя контекст мог остаться от админа.
+    await page.locator('select[name="studyGroupId"]').selectOption({ label: GROUP });
+    // Список — там занятие видно полным текстом, без кода предмета.
+    await page.locator('#view-list').click();
     await expect(page.getByText(SUBJECT).first()).toBeVisible();
     // Формы генерации у преподавателя нет: уроки создаёт администратор.
-    await expect(page.getByRole('heading', { name: 'Создать уроки' })).toHaveCount(0);
+    // Сетка периода доступна преподавателю, но генерации у него нет:
+    // кнопку видит только администратор.
+    await expect(page.getByRole('button', { name: 'Создать уроки за период' })).toHaveCount(0);
+    await page.locator('#view-grid').click();
 
     await page.getByRole('link', { name: 'Расписание' }).click();
     await expect(

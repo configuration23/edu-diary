@@ -45,14 +45,24 @@ function shiftDays(days: number): string {
 }
 
 /** Замена на один урок: выбор урока, кандидата и причины. */
-function QuickSubstitution({ groupId }: { groupId: string | null }) {
+function QuickSubstitution({
+  groupId,
+  initialLessonId,
+}: {
+  groupId: string | null;
+  initialLessonId: string | null;
+}) {
+  /**
+   * Урок мог прийти ссылкой из раздела «Уроки»: тогда окно шире, чтобы занятие
+   * нашлось даже за пределами текущего месяца, а поле уже заполнено.
+   */
   const lessons = useLessons({
     ...(groupId === null ? {} : { studyGroupId: groupId }),
-    from: shiftDays(-7),
-    to: shiftDays(30),
+    from: shiftDays(-60),
+    to: shiftDays(120),
     status: 'planned',
   });
-  const [lessonId, setLessonId] = useState('');
+  const [lessonId, setLessonId] = useState(initialLessonId ?? '');
   const [substituteUserId, setSubstituteUserId] = useState('');
   const [reason, setReason] = useState(REASONS[0] ?? '');
   const [customReason, setCustomReason] = useState('');
@@ -230,9 +240,11 @@ function SubstitutionJournal() {
 export function SubstitutionsScreen({
   groupId,
   canManage,
+  initialLessonId = null,
 }: {
   groupId: string | null;
   canManage: boolean;
+  initialLessonId?: string | null;
 }) {
   return (
     <div className="flex flex-col gap-6">
@@ -241,7 +253,7 @@ export function SubstitutionsScreen({
           title="Быстрая замена"
           description="Замена на один урок: занятие, заменяющий и причина. Публикуется сразу, причина остаётся в журнале."
         >
-          <QuickSubstitution groupId={groupId} />
+          <QuickSubstitution groupId={groupId} initialLessonId={initialLessonId} />
         </Card>
       )}
 

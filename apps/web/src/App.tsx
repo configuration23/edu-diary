@@ -150,6 +150,11 @@ const scheduleTemplateRoute = createRoute({
 const substitutionsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/substitutions',
+  // `lessonId` приходит ссылкой из раздела «Уроки»: так администратор попадает в
+  // форму замены с уже выбранным занятием.
+  validateSearch: (search: Record<string, unknown>) => ({
+    lessonId: typeof search.lessonId === 'string' ? search.lessonId : undefined,
+  }),
   component: () => <SubstitutionsRoute />,
 });
 
@@ -169,6 +174,7 @@ const settingsRoute = createRoute({
 function SubstitutionsRoute() {
   const { selectedGroupId } = useAcademicContext();
   const session = useSession();
+  const search = substitutionsRoute.useSearch();
 
   if (session.data == null) return <Splash />;
 
@@ -176,7 +182,13 @@ function SubstitutionsRoute() {
     (grant) => grant.permission === 'substitutions:write' && grant.scope === 'all',
   );
 
-  return <SubstitutionsScreen groupId={selectedGroupId} canManage={canManage} />;
+  return (
+    <SubstitutionsScreen
+      groupId={selectedGroupId}
+      canManage={canManage}
+      initialLessonId={search.lessonId ?? null}
+    />
+  );
 }
 
 const routeTree = rootRoute.addChildren([
