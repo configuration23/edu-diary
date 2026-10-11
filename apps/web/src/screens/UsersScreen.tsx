@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
 import type { SessionResponseDto, UserSummaryDto } from '@edu-diary/contracts';
-import { StudentsCard } from './StudentsCard';
+import { GuardianLinksCard, LinkGuardianForm } from './StudentsCard';
 import { errorMessage } from '../lib/api-client';
 import {
   useCreateUser,
@@ -404,9 +404,14 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
         )}
       </Card>
 
-      {/* Ученики и законные представители: раньше жили в «Согласиях», из-за чего
-          учеников не было видно среди пользователей. */}
-      {canManage && <StudentsCard onNotice={setNotice} />}
+      {/* Учеников ведут в «Группах и учениках»: там список людей и группы,
+          которые из них собираются. Здесь остаётся связка с представителем. */}
+      {canManage && (
+        <>
+          <LinkGuardianForm onLinked={setNotice} />
+          <GuardianLinksCard onNotice={setNotice} />
+        </>
+      )}
     </div>
   );
 }

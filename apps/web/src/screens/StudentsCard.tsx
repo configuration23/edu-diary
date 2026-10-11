@@ -195,7 +195,7 @@ function CreateStudentForm({ onCreated }: { onCreated: (message: string) => void
   );
 }
 
-function LinkGuardianForm({ onLinked }: { onLinked: (message: string) => void }) {
+export function LinkGuardianForm({ onLinked }: { onLinked: (message: string) => void }) {
   const students = useStudents({ limit: 200 });
   const users = useUsers({ role: 'parent' });
   const link = useLinkGuardian();
@@ -352,6 +352,12 @@ function AccountForm({
   );
 }
 
+/**
+ * Ученики: заведение (с учётной записью по необходимости) и список.
+ *
+ * Живёт в разделе «Группы и ученики»: группа собирается из учеников, поэтому
+ * список людей идёт первым, а группа — следом.
+ */
 export function StudentsCard({ onNotice }: { onNotice: (message: string) => void }) {
   const students = useStudents({ limit: 200 });
   const [accountFor, setAccountFor] = useState<{ id: string; name: string } | null>(null);
@@ -408,10 +414,6 @@ export function StudentsCard({ onNotice }: { onNotice: (message: string) => void
           />
         )}
       </Card>
-
-      <LinkGuardianForm onLinked={onNotice} />
-
-      <GuardianLinksCard onNotice={onNotice} />
     </div>
   );
 }
@@ -422,7 +424,7 @@ export function StudentsCard({ onNotice }: { onNotice: (message: string) => void
  * Без этого списка привязка выглядела как «нажал и ничего не произошло»: запись
  * в базе появлялась, но её нигде не было видно.
  */
-function GuardianLinksCard({ onNotice }: { onNotice: (message: string) => void }) {
+export function GuardianLinksCard({ onNotice }: { onNotice: (message: string) => void }) {
   const links = useGuardianLinks();
   const unlink = useUnlinkGuardian();
 

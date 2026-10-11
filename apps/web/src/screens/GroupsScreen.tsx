@@ -6,6 +6,7 @@ import { z } from 'zod';
 
 import { requiredISODateSchema } from '@edu-diary/contracts';
 import type { StudyGroupDto } from '@edu-diary/contracts';
+import { StudentsCard } from './StudentsCard';
 import {
   Alert,
   Badge,
@@ -369,7 +370,7 @@ function EditGroupForm({
   );
 }
 
-export function GroupsScreen() {
+export function GroupsScreen({ canManageStudents = false }: { canManageStudents?: boolean }) {
   const [search, setSearch] = useState('');
   const groups = useGroups({ search: search === '' ? undefined : search });
   const [openGroup, setOpenGroup] = useState<{ id: string; name: string } | null>(null);
@@ -379,6 +380,11 @@ export function GroupsScreen() {
 
   return (
     <div className="flex flex-col gap-6">
+      {/* Ученики идут первыми: группа собирается из них. Раньше этот блок жил в
+          «Пользователях и ролях» и путал — он выглядел частью учётных записей,
+          хотя ученик это запись учебного процесса. */}
+      {canManageStudents && <StudentsCard onNotice={setNotice} />}
+
       <CreateGroupCard />
 
       {notice !== null && <Alert tone="success">{notice}</Alert>}

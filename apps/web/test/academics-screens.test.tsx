@@ -53,13 +53,22 @@ describe('экраны Этапа 2 монтируются', () => {
     expect(html).toContain('Сделать активным');
   });
 
-  it('группы: форма создания, поиск и состав', () => {
+  it('группы: ученики первыми, затем группы', () => {
+    const html = renderWithQueries(<GroupsScreen canManageStudents />);
+
+    // Порядок отражает работу: сначала люди, потом группа из них.
+    expect(html.indexOf('Новый ученик')).toBeGreaterThan(-1);
+    expect(html.indexOf('Новый ученик')).toBeLessThan(html.indexOf('Новая группа'));
+    expect(html).toContain('Ученики');
+    expect(html).toContain('Поиск по названию');
+    expect(html).toContain('Загружаем');
+  });
+
+  it('группы: преподавателю блоки учеников не показывают', () => {
     const html = renderWithQueries(<GroupsScreen />);
 
+    expect(html).not.toContain('Новый ученик');
     expect(html).toContain('Новая группа');
-    expect(html).toContain('Поиск по названию');
-    // Пока список не загрузился, показывается состояние загрузки.
-    expect(html).toContain('Загружаем');
   });
 
   it('справочники: предметы, аудитории и категории', () => {
@@ -111,8 +120,6 @@ describe('экраны Этапа 2 монтируются', () => {
     expect(html).toContain('Новый ученик');
     expect(html).toContain('Сразу создать учётную запись');
     expect(html).toContain('Ученики');
-    expect(html).toContain('Привязка законного представителя');
-    expect(html).toContain('Кем является');
   });
 
   it('обзор: блок версии вместо обещаний этапов', () => {

@@ -108,7 +108,15 @@ const academicsRoute = createRoute({
 const groupsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/groups',
-  component: GroupsScreen,
+  // Блоки учеников показываются только тем, кто может их заводить: у
+  // преподавателя раздел остаётся про группы и состав.
+  component: withSession((session) => (
+    <GroupsScreen
+      canManageStudents={session.permissions.some(
+        (grant) => grant.permission === 'students:write' && grant.scope === 'all',
+      )}
+    />
+  )),
 });
 
 const catalogsRoute = createRoute({
