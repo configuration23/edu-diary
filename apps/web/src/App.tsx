@@ -14,7 +14,9 @@ import { CatalogsScreen } from './screens/CatalogsScreen';
 import { DashboardScreen } from './screens/DashboardScreen';
 import { GroupsScreen } from './screens/GroupsScreen';
 import { LoginScreen } from './screens/LoginScreen';
+import { LessonsScreen } from './screens/LessonsScreen';
 import { PrivacyScreen } from './screens/PrivacyScreen';
+import { ScheduleScreen } from './screens/ScheduleScreen';
 import { SecurityScreen } from './screens/SecurityScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { SetupScreen } from './screens/SetupScreen';
@@ -131,6 +133,18 @@ const assignmentsRoute = createRoute({
   component: withSession((session) => <AssignmentsScreen session={session} />),
 });
 
+const scheduleRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/schedule',
+  component: withSession((session) => <ScheduleScreen session={session} />),
+});
+
+const lessonsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/lessons',
+  component: withSession((session) => <LessonsScreen session={session} />),
+});
+
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/settings',
@@ -143,6 +157,8 @@ const routeTree = rootRoute.addChildren([
   groupsRoute,
   catalogsRoute,
   assignmentsRoute,
+  scheduleRoute,
+  lessonsRoute,
   usersRoute,
   privacyRoute,
   auditRoute,

@@ -196,9 +196,19 @@ export async function buildApp({
       const group = await academicsRepository.findGroup(id);
       return group === null ? null : { id: group.id, name: group.name };
     },
-    async groupIdsOfStudent(studentId) {
-      const enrollments = await academicsRepository.listStudentEnrollments(studentId);
-      return enrollments.filter((item) => item.leftOn === null).map((item) => item.studyGroupId);
+    async findGroups(ids) {
+      const groups = await academicsRepository.listGroups({ ids });
+      return groups.map((group) => ({ id: group.id, name: group.name }));
+    },
+    async groupsOfViewer(userId) {
+      // Ученик приходит своей учётной записью, родитель — через привязку к
+      // ученику: связь живёт в `iam`, поэтому спрашиваем её портом (ADR-031).
+      const own = await academicsRepository.findStudentByUserId(userId);
+      const studentIds = new Set<string>();
+      if (own !== null) studentIds.add(own.id);
+      for (const id of await guardiansRepository.studentIdsOfGuardian(userId)) studentIds.add(id);
+
+      return academicsRepository.listGroupsForStudents([...studentIds]);
     },
   };
   const scheduleUsers: ScheduleUserPort = {

@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useMemo, useState, type ReactNo
 
 import type { SessionResponseDto } from '@edu-diary/contracts';
 
-import { useAcademicYears, useAssignments, useGroups } from '../lib/queries';
+import { useAcademicYears, useAssignments, useGroups, useScheduleGroups } from '../lib/queries';
 
 /**
  * Контекст учебного процесса в шапке (ARCHITECTURE.md §4.1).
@@ -71,6 +71,12 @@ export function AcademicContextProvider({
     canSeeAllGroups && activeYear !== null ? { academicYearId: activeYear.id } : {},
   );
   const mine = useAssignments();
+  /**
+   * Группы из расписания: ученику и родителю справочник групп недоступен, а свои
+   * группы они получают вместе с расписанием. Без этого их список групп пуст, и
+   * расписание не из чего выбрать.
+   */
+  const scheduleGroups = useScheduleGroups();
 
   const groups = useMemo(() => {
     if (canSeeAllGroups) {
@@ -82,8 +88,15 @@ export function AcademicContextProvider({
     for (const assignment of mine.data?.items ?? []) {
       unique.set(assignment.studyGroupId, assignment.groupName);
     }
+
+    if (unique.size === 0) {
+      for (const group of scheduleGroups.data?.items ?? []) {
+        unique.set(group.id, group.name);
+      }
+    }
+
     return [...unique].map(([id, name]) => ({ id, name }));
-  }, [canSeeAllGroups, allGroups.data, mine.data]);
+  }, [canSeeAllGroups, allGroups.data, mine.data, scheduleGroups.data]);
 
   const selectGroup = useCallback((id: string | null) => setSelectedGroupId(id), []);
 

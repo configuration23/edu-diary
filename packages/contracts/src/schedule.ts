@@ -34,6 +34,13 @@ const timeOfDaySchema = z
 export const pairNumberSchema = z.number().int().min(MIN_PAIR_NUMBER).max(MAX_PAIR_NUMBER);
 export const dayOfWeekSchema = z.number().int().min(MIN_DAY_OF_WEEK).max(MAX_DAY_OF_WEEK);
 
+/** Вариант группы для выбора в расписании (только идентификатор и название). */
+export const groupOptionSchema = z.object({ id: uuidSchema, name: z.string() });
+export type GroupOptionDto = z.infer<typeof groupOptionSchema>;
+
+export const listGroupOptionsResponseSchema = z.object({ items: z.array(groupOptionSchema) });
+export type ListGroupOptionsResponseDto = z.infer<typeof listGroupOptionsResponseSchema>;
+
 /**
  * Звонки: сетка времени по номеру пары.
  *

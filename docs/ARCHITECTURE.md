@@ -357,17 +357,23 @@ interface StorageAdapter {
 | GET | `/api/consents/missing` | ученики без действующего согласия | есть |
 | POST | `/api/consents/:id/revoke` | отзыв согласия с причиной | есть |
 | GET/PUT | `/api/privacy-policy` | редакции политики обработки ПДн | есть |
+| GET | `/api/bells` | сетка звонков: номер пары → время | есть |
+| PUT/DELETE | `/api/bells`, `/api/bells/:pairNumber` | заполнение и удаление звонка (пара уникальна) | есть |
+| GET/POST | `/api/schedule` | шаблон расписания: список с фильтром группы и создание занятия | есть |
+| GET/PATCH/DELETE | `/api/schedule/:id` | чтение, перенос (пара, аудитория, даты) и удаление занятия | есть |
+| GET | `/api/schedule/my-groups` | группы, расписание которых доступно смотрящему (ученик и родитель) | есть |
+| GET/POST | `/api/schedule/exceptions` | исключения на дату: отмена, перенос, замена | есть |
+| DELETE | `/api/schedule/exceptions/:id` | снять исключение | есть |
+| POST | `/api/lessons/generate` | сгенерировать уроки из шаблона на период (идемпотентно) | есть |
+| GET | `/api/lessons?studyGroupId=&teacherUserId=&studentId=&from=&to=&status=` | уроки с учётом прав роли | есть |
+| GET/PATCH/DELETE | `/api/lessons/:id` | урок: чтение, тема/перенос/статус, отмена | есть |
+| GET/POST | `/api/substitutions` | замены преподавателя (на урок или диапазон, с причиной) | есть |
+| DELETE | `/api/substitutions/:id` | снять замену | есть |
 
-### 10.2 План (Этапы 3–6)
+### 10.2 План (Этапы 4–6)
 
 | Метод | Путь | Назначение | Этап |
 |---|---|---|---|
-| POST | `/api/assignments/:id/substitutions` | замена преподавателя | 3 |
-| GET | `/api/schedule?groupId=&from=&to=` | расписание с учётом исключений | 3 |
-| POST | `/api/schedule/entries`, `/api/schedule/exceptions` | изменения расписания | 3 |
-| POST | `/api/lessons/generate` | сгенерировать уроки из расписания на период | 3 |
-| GET | `/api/lessons?groupId=&date=` | уроки дня | 3 |
-| PATCH | `/api/lessons/:id` | тема, статус, замена, аудитория | 3 |
 | PUT | `/api/lessons/:id/attendance` | отметки посещаемости за урок | 4 |
 | POST | `/api/lessons/:id/grades` | поставить оценку/плюс/точку | 4 |
 | PATCH/DELETE | `/api/grades/:id` | правка и мягкое удаление (с причиной) | 4 |

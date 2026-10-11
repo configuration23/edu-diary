@@ -7,6 +7,7 @@ import {
   lessonSchema,
   listLessonsQuerySchema,
   listBellsResponseSchema,
+  listGroupOptionsResponseSchema,
   listLessonsResponseSchema,
   listSubstitutionsQuerySchema,
   listScheduleExceptionsResponseSchema,
@@ -142,7 +143,7 @@ export function registerScheduleRoutes(
   catalog: CatalogLookupPort,
   users: UserLookupPort,
 ): void {
-  /** Группы, доступные смотрящему: `null` — без ограничения. */
+  /** Группы, доступные смотрящему: `undefined` — без ограничения. */
   const visibleGroupIds = async (
     request: Parameters<typeof authOf>[0],
     permission: string,
@@ -155,12 +156,34 @@ export function registerScheduleRoutes(
       return undefined;
     }
 
-    // Область `own`: группа доступна, если ученик в ней учится. Для родителя
-    // привязки уже учтены в `groupIdsOfStudent` (ADR-005).
-    return catalog.groupIdsOfStudent(auth.userId);
+    // Область `own`: доступны только свои группы. Для ученика это группы, где он
+    // учится, для родителя — группы его подопечных (ADR-005, ADR-031).
+    return (await catalog.groupsOfViewer(auth.userId)).map((group) => group.id);
   };
 
   // --- Звонки: сетка времени по номеру пары ---
+
+  /**
+   * Группы, расписание которых доступно смотрящему.
+   *
+   * Нужно ролям без права `academics:read@all` (ученик, родитель): иначе список
+   * групп пуст, и расписание не из чего выбрать.
+   */
+  app.get(
+    '/schedule/my-groups',
+    { preHandler: requirePermission('schedule:read', 'own') },
+    async (request) => {
+      const auth = authOf(request);
+      const items = await schedule.listVisibleGroups({
+        userId: auth.userId,
+        seesAll:
+          authHasPermission(auth, 'schedule:read', 'all') ||
+          authHasPermission(auth, 'schedule:read', 'assigned'),
+      });
+
+      return listGroupOptionsResponseSchema.parse({ items });
+    },
+  );
 
   app.get('/bells', { preHandler: requirePermission('schedule:read', 'own') }, async () =>
     listBellsResponseSchema.parse({ items: await schedule.listBells() }),

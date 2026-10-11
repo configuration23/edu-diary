@@ -1,6 +1,12 @@
 import {
   academicYearSchema,
   bellScheduleSchema,
+  generateLessonsResponseSchema,
+  lessonSchema,
+  listLessonsResponseSchema,
+  listScheduleResponseSchema,
+  scheduleEntrySchema,
+  substitutionSchema,
   academicYearWithPeriodsSchema,
   assignmentSchema,
   brandingSchema,
@@ -17,6 +23,7 @@ import {
   listGradeCategoriesResponseSchema,
   listGuardianLinksResponseSchema,
   listBellsResponseSchema,
+  listGroupOptionsResponseSchema,
   listGroupsResponseSchema,
   listPermissionsResponseSchema,
   listRolesResponseSchema,
@@ -43,6 +50,7 @@ import {
   useMutation,
   useQuery,
   useQueryClient,
+  type QueryClient,
   type UseMutationResult,
   type UseQueryResult,
 } from '@tanstack/react-query';
@@ -896,6 +904,161 @@ export function useCloseAssignment() {
         body: { endsOn: input.endsOn },
       }),
     onSuccess: () => invalidateAcademics(client),
+  });
+}
+
+// --- Расписание и уроки (Этап 3) ---
+
+function invalidateSchedule(client: QueryClient): void {
+  void client.invalidateQueries({ queryKey: ['schedule'] });
+  void client.invalidateQueries({ queryKey: ['lessons'] });
+  void client.invalidateQueries({ queryKey: ['substitutions'] });
+}
+
+/**
+ * Группы, расписание которых доступно смотрящему.
+ *
+ * Ученик и родитель не имеют права `academics:read@all`, поэтому общий список
+ * групп им недоступен: свои группы отдаёт расписание.
+ */
+export function useScheduleGroups() {
+  return useQuery({
+    queryKey: ['schedule', 'my-groups'],
+    queryFn: () => apiRequest('/api/schedule/my-groups', listGroupOptionsResponseSchema),
+  });
+}
+
+export function useScheduleEntries(params: { studyGroupId?: string; teacherUserId?: string } = {}) {
+  const query = toQueryString(params);
+
+  return useQuery({
+    queryKey: ['schedule', query],
+    queryFn: () => apiRequest(`/api/schedule${query}`, listScheduleResponseSchema),
+  });
+}
+
+export function useCreateScheduleEntry() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      assignmentId: string;
+      roomId?: string | null;
+      dayOfWeek: number;
+      pairNumber: number;
+      /** Можно не указывать: время возьмётся из звонков. */
+      timeStart?: string;
+      timeEnd?: string;
+      validFrom: string;
+      validTo?: string | null;
+    }) => apiRequest('/api/schedule', scheduleEntrySchema, { method: 'POST', body: input }),
+    onSuccess: () => invalidateSchedule(client),
+  });
+}
+
+export function useUpdateScheduleEntry() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      id: string;
+      roomId?: string | null;
+      dayOfWeek?: number;
+      pairNumber?: number;
+      timeStart?: string;
+      timeEnd?: string;
+      validFrom?: string;
+      validTo?: string | null;
+    }) =>
+      apiRequest(`/api/schedule/${input.id}`, scheduleEntrySchema, {
+        method: 'PATCH',
+        body: input,
+      }),
+    onSuccess: () => invalidateSchedule(client),
+  });
+}
+
+export function useDeleteScheduleEntry() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiSend(`/api/schedule/${id}`, { method: 'DELETE' }).then(() => id),
+    onSuccess: () => invalidateSchedule(client),
+  });
+}
+
+export function useLessons(
+  params: {
+    studyGroupId?: string;
+    teacherUserId?: string;
+    from?: string;
+    to?: string;
+    status?: string;
+  } = {},
+) {
+  const query = toQueryString(params);
+
+  return useQuery({
+    queryKey: ['lessons', query],
+    queryFn: () => apiRequest(`/api/lessons${query}`, listLessonsResponseSchema),
+  });
+}
+
+export function useGenerateLessons() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { studyGroupId: string; from: string; to: string }) =>
+      apiRequest('/api/lessons/generate', generateLessonsResponseSchema, {
+        method: 'POST',
+        body: input,
+      }),
+    onSuccess: () => invalidateSchedule(client),
+  });
+}
+
+export function useUpdateLesson() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      id: string;
+      lessonDate?: string;
+      pairNumber?: number;
+      timeStart?: string;
+      timeEnd?: string;
+      topic?: string | null;
+      status?: string;
+      roomId?: string | null;
+    }) => apiRequest(`/api/lessons/${input.id}`, lessonSchema, { method: 'PATCH', body: input }),
+    onSuccess: () => invalidateSchedule(client),
+  });
+}
+
+export function useDeleteLesson() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiSend(`/api/lessons/${id}`, { method: 'DELETE' }).then(() => id),
+    onSuccess: () => invalidateSchedule(client),
+  });
+}
+
+export function useCreateSubstitution() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      lessonId?: string | null;
+      assignmentId?: string | null;
+      substituteUserId: string;
+      startsOn: string;
+      endsOn?: string | null;
+      reason: string;
+    }) => apiRequest('/api/substitutions', substitutionSchema, { method: 'POST', body: input }),
+    onSuccess: () => invalidateSchedule(client),
+  });
+}
+
+export function useDeleteSubstitution() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiSend(`/api/substitutions/${id}`, { method: 'DELETE' }).then(() => id),
+    onSuccess: () => invalidateSchedule(client),
   });
 }
 

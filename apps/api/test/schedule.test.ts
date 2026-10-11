@@ -1,6 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { completeSetup, createTestApp, createUserAndLogin, type TestApp } from './helpers/api';
+import {
+  completeSetup,
+  createTestApp,
+  createUserAndLogin,
+  login,
+  type TestApp,
+} from './helpers/api';
 import { createTestDatabase, hasTestDatabase, type TestDatabase } from './helpers/database';
 
 const describeWithDatabase = describe.skipIf(!hasTestDatabase);
@@ -47,6 +53,8 @@ describeWithDatabase('расписание и уроки', () => {
   let secondGroupId: string;
   let roomId: string;
   let assignmentId: string;
+  /** Сессия ученика: нужна позже, чтобы проверить выборку расписания его группы. */
+  let studentCookie: string;
 
   const auth = () => ({ cookie: adminCookie });
   const teacherAuth = () => ({ cookie: teacherCookie });
@@ -231,6 +239,112 @@ describeWithDatabase('расписание и уроки', () => {
       headers: auth(),
     });
     expect(cleaned.statusCode).toBe(204);
+  });
+
+  it('занятый логин при создании пользователя даёт 409, а не 500', async () => {
+    // Сквозной сценарий Этапа 3 упирался в это при повторном прогоне: конфликт
+    // уникальности логина приходил как внутренняя ошибка сервера.
+    const duplicate = await testApp.app.inject({
+      method: 'POST',
+      url: '/api/users',
+      headers: auth(),
+      payload: {
+        username: 'prepod-raspisanie',
+        fullName: 'Другой Преподаватель',
+        password: 'kolledzh-drugoy-2025',
+        roles: ['teacher'],
+      },
+    });
+
+    expect(duplicate.statusCode).toBe(409);
+    expect((duplicate.json() as { error: { code: string } }).error.code).toBe('CONFLICT');
+  });
+
+  it('ученик и родитель видят свои группы, преподаватель — все свои', async () => {
+    // Роли без права `academics:read@all` не могут получить общий список групп,
+    // поэтому расписание отдаёт им их собственные группы: иначе выбрать нечего.
+    const account = {
+      username: 'uchenik-raspisanie',
+      // Пароль не содержит логин: этого требует политика паролей.
+      password: 'kolledzh-uchenik-2025',
+    };
+
+    const student = await testApp.app.inject({
+      method: 'POST',
+      url: '/api/students',
+      headers: auth(),
+      payload: { fullName: 'Ученик Расписания', account },
+    });
+    if (student.statusCode !== 201) process.stdout.write(`СОЗДАНИЕ УЧЕНИКА: ${student.body}\n`);
+    expect(student.statusCode).toBe(201);
+    const studentId = (student.json() as Json).id as string;
+
+    const enrollment = await testApp.app.inject({
+      method: 'POST',
+      url: `/api/groups/${groupId}/enrollments`,
+      headers: auth(),
+      payload: { studentId, joinedOn: shiftDays(-30) },
+    });
+    if (enrollment.statusCode !== 201) process.stdout.write(`ЗАЧИСЛЕНИЕ: ${enrollment.body}\n`);
+    expect(enrollment.statusCode).toBe(201);
+
+    studentCookie = await login(testApp.app, account.username, account.password);
+
+    const own = await testApp.app.inject({
+      method: 'GET',
+      url: '/api/schedule/my-groups',
+      headers: { cookie: studentCookie },
+    });
+    expect(own.statusCode).toBe(200);
+    const ownItems = (own.json() as { items: Json[] }).items;
+    expect(ownItems).toHaveLength(1);
+    expect(ownItems[0]?.id).toBe(groupId);
+    // Название нужно интерфейсу: по одному идентификатору группу не показать.
+    expect(ownItems[0]?.name).toBe('РПС-21');
+
+    // Преподаватель видит все группы: он ведёт занятия в разных.
+    const teacherGroups = await testApp.app.inject({
+      method: 'GET',
+      url: '/api/schedule/my-groups',
+      headers: teacherAuth(),
+    });
+    expect(teacherGroups.statusCode).toBe(200);
+    expect((teacherGroups.json() as { items: Json[] }).items.length).toBeGreaterThanOrEqual(2);
+
+    // Родитель видит группу через привязку к ученику (ADR-031).
+    const parent = await createUserAndLogin(testApp.app, adminCookie, {
+      username: 'roditel-raspisanie',
+      fullName: 'Представитель Расписания',
+      password: 'kolledzh-roditel-2025',
+      roles: ['parent'],
+    });
+
+    const link = await testApp.app.inject({
+      method: 'POST',
+      url: `/api/students/${studentId}/guardians`,
+      headers: auth(),
+      payload: { guardianUserId: parent.id, relation: 'mother' },
+    });
+    expect(link.statusCode).toBe(201);
+
+    // Расписание своей группы ученик видит по фильтру группы. Проверяем в конце:
+    // к этому моменту занятие уже создано предыдущими тестами.
+    const studentView = await testApp.app.inject({
+      method: 'GET',
+      url: `/api/schedule?studyGroupId=${groupId}`,
+      headers: { cookie: studentCookie },
+    });
+    expect(studentView.statusCode).toBe(200);
+
+    const parentGroups = await testApp.app.inject({
+      method: 'GET',
+      url: '/api/schedule/my-groups',
+      headers: { cookie: parent.cookie },
+    });
+    expect(parentGroups.statusCode).toBe(200);
+    const parentItems = (parentGroups.json() as { items: Json[] }).items;
+    expect(parentItems).toHaveLength(1);
+    expect(parentItems[0]?.name).toBe('РПС-21');
   });
 
   it('занятие ставится в сетку группы', async () => {

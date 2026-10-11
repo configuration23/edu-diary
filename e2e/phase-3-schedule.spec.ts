@@ -1,0 +1,281 @@
+import { expect, test, type Page } from '@playwright/test';
+
+/**
+ * Сквозной сценарий Этапа 3 через интерфейс: администратор заполняет звонки,
+ * ставит занятие в расписание группы и создаёт уроки, а преподаватель видит
+ * только свои уроки.
+ *
+ * Данные (год, группа, предмет, назначение, ученик) готовятся через API в сессии
+ * администратора: цель сценария — расписание и уроки, а не повторное заполнение
+ * учебного процесса, которое уже проверено `phase-2-academics.spec.ts`.
+ *
+ * Ожидаемый порядок запуска: после `phase-1-flow.spec.ts` (он заводит
+ * администратора и активный год).
+ */
+
+const ADMIN = {
+  username: 'admin',
+  password: 'e2e-rukovoditel-2025',
+};
+
+const TEACHER = {
+  username: `prepod-rasp-${String(Date.now()).slice(-6)}`,
+  fullName: 'Преподаватель Расписания Е2Е',
+  password: 'kolledzh-raspisanie-2025',
+};
+
+const STUDENT = {
+  fullName: 'Ученик Расписания Е2Е',
+  username: `uchenik-rasp-${String(Date.now()).slice(-6)}`,
+  password: 'uchenik-raspisanie-2025',
+};
+
+/** Уникальный суффикс: повторный прогон не должен упираться в занятые имена. */
+const RUN = String(Date.now()).slice(-6);
+const YEAR_TITLE = `E2E Этап 3 ${RUN}`;
+const GROUP = `E2E-РП-${RUN}`;
+const SUBJECT = `Основы алгоритмов (E2E ${RUN})`;
+
+function shiftDays(days: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return [
+    String(date.getFullYear()).padStart(4, '0'),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-');
+}
+
+/** Дата ближайшего нужного дня недели (1 — понедельник). */
+function nextWeekday(dayOfWeek: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() + 1);
+  while (date.getDay() !== dayOfWeek % 7) {
+    date.setDate(date.getDate() + 1);
+  }
+  return [
+    String(date.getFullYear()).padStart(4, '0'),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-');
+}
+
+async function login(page: Page, username: string, password: string): Promise<void> {
+  await page.goto('/');
+  await page.getByLabel('Логин').fill(username);
+  await page.getByLabel('Пароль', { exact: true }).fill(password);
+  await page.getByRole('button', { name: 'Войти' }).click();
+  await expect(page.getByRole('button', { name: 'Выйти' })).toBeVisible();
+}
+
+/**
+ * Читает тело ответа или падает с понятным текстом.
+ *
+ * Имя запроса в сообщении нужно, чтобы падение сквозного сценария сразу
+ * указывало на шаг, а не на «какой-то запрос вернул 500».
+ */
+async function bodyOf<T>(
+  response: {
+    ok(): boolean;
+    status(): number;
+    json(): Promise<unknown>;
+    text(): Promise<string>;
+  },
+  what: string,
+): Promise<T> {
+  if (!response.ok()) {
+    throw new Error(`Запрос «${what}» не удался: ${response.status()} ${await response.text()}`);
+  }
+  return (await response.json()) as T;
+}
+
+test.describe.configure({ mode: 'serial' });
+
+// Сценарий длиннее обычного: справочник, расписание, генерация и два входа.
+test.setTimeout(180_000);
+
+test.describe('Этап 3: звонки, расписание, уроки', () => {
+  test('админ ведёт расписание и уроки, преподаватель видит только свои', async ({ page }) => {
+    await login(page, ADMIN.username, ADMIN.password);
+
+    // --- Данные учебного процесса через API ---
+    const year = await bodyOf<{ id: string }>(
+      await page.request.post('/api/academic-years', {
+        data: {
+          title: YEAR_TITLE,
+          startsOn: shiftDays(-200),
+          endsOn: shiftDays(500),
+          isActive: true,
+        },
+      }),
+      'учебный год',
+    );
+
+    const group = await bodyOf<{ id: string }>(
+      await page.request.post('/api/groups', {
+        data: {
+          academicYearId: year.id,
+          name: GROUP,
+          course: 2,
+          startsOn: shiftDays(-150),
+          endsOn: shiftDays(400),
+        },
+      }),
+      'группа',
+    );
+
+    const subject = await bodyOf<{ id: string }>(
+      await page.request.post('/api/subjects', {
+        data: { name: SUBJECT, kind: 'mandatory' },
+      }),
+      'предмет',
+    );
+
+    const teacher = await bodyOf<{ id: string }>(
+      await page.request.post('/api/users', {
+        data: {
+          username: TEACHER.username,
+          fullName: TEACHER.fullName,
+          password: TEACHER.password,
+          roles: ['teacher'],
+        },
+      }),
+      'преподаватель',
+    );
+
+    await page.request.post('/api/assignments', {
+      data: {
+        teacherUserId: teacher.id,
+        subjectId: subject.id,
+        studyGroupId: group.id,
+        startsOn: shiftDays(-140),
+      },
+    });
+
+    // --- Звонки: справочник ---
+    // Данные подготовлены через API, поэтому контекст года и групп обновляем
+    // перезагрузкой: иначе шапка и списки показывают прежний активный год.
+    await page.reload();
+    await page.getByRole('link', { name: 'Справочники' }).click();
+    await expect(page.getByRole('heading', { level: 2, name: 'Звонки' })).toBeVisible();
+
+    const bells = page
+      .locator('section')
+      .filter({ has: page.getByRole('heading', { level: 2, name: 'Звонки' }) });
+
+    await bells.getByLabel('Пара').selectOption('3');
+    await bells.getByLabel('Начало').fill('11:30');
+    await bells.getByLabel('Окончание').fill('13:00');
+    await bells.getByRole('button', { name: 'Сохранить звонок' }).click();
+
+    await expect(bells.getByRole('cell', { name: '11:30' })).toBeVisible();
+
+    // --- Расписание: занятие в сетке группы ---
+    await page.getByRole('link', { name: 'Расписание' }).click();
+    await expect(
+      page.getByRole('heading', { level: 2, name: 'Расписание', exact: true }),
+    ).toBeVisible();
+
+    // Группа выбирается в шапке: там же переключатель контекста, что и в других
+    // разделах, поэтому отдельного списка групп у расписания нет.
+    await page.locator('header select').selectOption({ label: GROUP });
+    await expect(page.getByText('В расписании этой группы пока нет занятий')).toBeVisible();
+
+    const entryForm = page
+      .locator('section')
+      .filter({ has: page.getByRole('heading', { name: 'Добавить занятие' }) });
+
+    await entryForm
+      .getByLabel('Назначение')
+      .selectOption({ label: `${SUBJECT} — ${TEACHER.fullName}` });
+    await entryForm.getByLabel('День недели').selectOption('2');
+    await entryForm.getByLabel('Пара').selectOption('3');
+
+    // Время берётся из звонков: форма показывает его и не требует ввода.
+    await expect(entryForm.getByText('Время по звонкам:')).toBeVisible();
+    await entryForm.getByRole('button', { name: 'Добавить в расписание' }).click();
+
+    // Занятие в таблице: предмет, преподаватель и время из звонков.
+    await expect(page.getByRole('cell', { name: SUBJECT })).toBeVisible();
+    await expect(page.getByRole('cell', { name: TEACHER.fullName })).toBeVisible();
+    await expect(page.getByRole('cell', { name: '11:30–13:00' })).toBeVisible();
+
+    // --- Уроки: генерация за период ---
+    await page.getByRole('link', { name: 'Уроки' }).click();
+    await expect(page.getByRole('heading', { level: 2, name: 'Уроки', exact: true })).toBeVisible();
+    // Группа уже выбрана в шапке — тот же переключатель контекста, что и выше.
+
+    const generateForm = page
+      .locator('section')
+      .filter({ has: page.getByRole('heading', { name: 'Создать уроки' }) });
+
+    await generateForm.getByLabel('С даты').fill(nextWeekday(2));
+    await generateForm.getByLabel('По дату').fill(shiftDays(30));
+    await generateForm.getByRole('button', { name: 'Создать уроки за период' }).click();
+
+    await expect(generateForm.getByText(/Создано уроков: \d+/)).toBeVisible();
+    // В таблице появились даты занятий с тем же предметом.
+    await expect(page.getByRole('cell', { name: SUBJECT }).first()).toBeVisible();
+    await expect(page.getByText('Правка вручную')).toHaveCount(0);
+
+    // Повторный запуск ничего не создаёт: генерация идемпотентна.
+    await generateForm.getByRole('button', { name: 'Создать уроки за период' }).click();
+    await expect(generateForm.getByText('Создано уроков: 0')).toBeVisible();
+
+    // --- Преподаватель: видит свои уроки, но не правит расписание ---
+    await page.getByRole('button', { name: 'Выйти' }).click();
+    await login(page, TEACHER.username, TEACHER.password);
+
+    await page.getByRole('link', { name: 'Уроки' }).click();
+    await expect(page.getByRole('cell', { name: SUBJECT }).first()).toBeVisible();
+    // Формы генерации у преподавателя нет: уроки создаёт администратор.
+    await expect(page.getByRole('heading', { name: 'Создать уроки' })).toHaveCount(0);
+
+    await page.getByRole('link', { name: 'Расписание' }).click();
+    await expect(page.getByRole('cell', { name: SUBJECT })).toBeVisible();
+    // Расписание преподаватель только смотрит.
+    await expect(page.getByRole('heading', { name: 'Добавить занятие' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Убрать' })).toHaveCount(0);
+
+    // --- Ученик: расписание и уроки своей группы ---
+    await page.getByRole('button', { name: 'Выйти' }).click();
+    await login(page, ADMIN.username, ADMIN.password);
+
+    const student = await bodyOf<{ id: string }>(
+      await page.request.post('/api/students', {
+        data: {
+          fullName: STUDENT.fullName,
+          account: {
+            username: STUDENT.username,
+            password: STUDENT.password,
+          },
+        },
+      }),
+      'ученик',
+    );
+
+    await page.request.post(`/api/groups/${group.id}/enrollments`, {
+      data: { studentId: student.id, joinedOn: shiftDays(-100) },
+    });
+
+    await page.getByRole('button', { name: 'Выйти' }).click();
+    await login(page, STUDENT.username, STUDENT.password);
+
+    // Свою группу ученик выбирает в шапке: справочник групп ему недоступен,
+    // поэтому список строит само расписание (маршрут «мои группы»).
+    //
+    // Раздел открываем адресом: группа должна попасть в первый же запрос
+    // расписания. Если сначала открыть раздел, а затем перезагрузить страницу,
+    // исходный запрос отменяется, и таблица остаётся пустой.
+    await page.goto('/schedule');
+
+    const studentGroupSelect = page.locator('header select');
+    await expect(studentGroupSelect.locator('option', { hasText: GROUP })).toHaveCount(1);
+    await studentGroupSelect.selectOption({ label: GROUP });
+
+    await expect(page.getByRole('cell', { name: SUBJECT })).toBeVisible();
+
+    await page.getByRole('link', { name: 'Уроки' }).click();
+    await expect(page.getByRole('cell', { name: SUBJECT }).first()).toBeVisible();
+  });
+});

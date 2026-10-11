@@ -60,8 +60,17 @@ export interface CatalogLookupPort {
   findAssignment(id: string): Promise<AssignmentLookup | null>;
   findRoom(id: string): Promise<{ id: string; name: string } | null>;
   findGroup(id: string): Promise<{ id: string; name: string } | null>;
-  /** Группы, доступные ученику (для области `own`, ADR-005). */
-  groupIdsOfStudent(studentId: string): Promise<string[]>;
+  /**
+   * Группы по идентификаторам; пустой список — «все группы»: так порт
+   * используется, когда смотрящий видит всё.
+   */
+  findGroups(ids: readonly string[]): Promise<{ id: string; name: string }[]>;
+  /**
+   * Группы, доступные смотрящему: ученику — где он учится, родителю — где
+   * учатся его подопечные. Связь «представитель ↔ ученик» живёт в `iam`, поэтому
+   * её разрешает порт, а не модуль расписания.
+   */
+  groupsOfViewer(userId: string): Promise<{ id: string; name: string }[]>;
 }
 
 export interface ScheduleService {
@@ -86,6 +95,16 @@ export interface ScheduleService {
     breakMinutes: number | null;
   }>;
   deleteBell(pairNumber: number, options: MutationOptions): Promise<void>;
+  /**
+   * Группы, расписание которых доступно смотрящему: администратору и
+   * преподавателю — все, ученику и родителю — только свои. Нужно интерфейсу:
+   * иначе у роли без права `academics:read@all` список групп пуст, и выбрать
+   * расписание нечем.
+   */
+  listVisibleGroups(viewer: {
+    userId: string;
+    seesAll: boolean;
+  }): Promise<{ id: string; name: string }[]>;
 
   listEntries(filter: {
     studyGroupId?: string | undefined;
@@ -325,6 +344,16 @@ export function createScheduleService(dependencies: ScheduleServiceDependencies)
   return {
     listBells() {
       return schedule.listBells();
+    },
+
+    async listVisibleGroups(viewer) {
+      // Преподаватель и администратор видят сетку целиком, поэтому получают все
+      // группы; ученик и родитель — только свои.
+      if (viewer.seesAll) {
+        return catalog.findGroups([]);
+      }
+
+      return catalog.groupsOfViewer(viewer.userId);
     },
 
     async saveBell(input, options) {
