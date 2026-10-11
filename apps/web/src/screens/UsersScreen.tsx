@@ -4,6 +4,8 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
 import type { SessionResponseDto, UserSummaryDto } from '@edu-diary/contracts';
+import { GuardianLinksCard, LinkGuardianForm } from './StudentsCard';
+import { NewGuardianCard } from './NewGuardianCard';
 import { errorMessage } from '../lib/api-client';
 import {
   useCreateUser,
@@ -39,13 +41,24 @@ const createUserFormSchema = z.object({
 
 type CreateUserForm = z.infer<typeof createUserFormSchema>;
 
+/**
+ * Подпись роли для человека.
+ *
+ * Код и заголовок роли приходят из каталога, но «parent» в интерфейсе точнее
+ * называть законным представителем: юридически это одно и то же, а в документах
+ * и в жизни используется второе. Схему и API не меняем — правим только показ.
+ */
+function roleTitle(code: string, fallback: string): string {
+  return code === 'parent' ? 'Законный представитель' : fallback;
+}
+
 function RolesCell({ user }: { user: UserSummaryDto }) {
   return (
     <span className="flex flex-wrap gap-1">
       {user.roles.length === 0 ? (
         <Badge tone="warning">нет ролей</Badge>
       ) : (
-        user.roles.map((role) => <Badge key={role.code}>{role.title}</Badge>)
+        user.roles.map((role) => <Badge key={role.code}>{roleTitle(role.code, role.title)}</Badge>)
       )}
     </span>
   );
@@ -70,6 +83,15 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
     resolver: zodResolver(createUserFormSchema),
     defaultValues: { username: '', fullName: '', password: '', email: '', roles: ['teacher'] },
   });
+
+  // В общей форме — только роли сотрудников: ученик заводится в разделе групп,
+  // представитель — отдельным блоком, где учётная запись связана с учеником.
+  const staffRoles = (roles.data?.items ?? []).filter(
+    (role) => role.code !== 'student' && role.code !== 'parent',
+  );
+
+  // Сколько ролей отмечено сейчас: две и больше — повод для предупреждения.
+  const selectedCount = form.watch('roles').length;
 
   const onCreate = form.handleSubmit(async (values) => {
     setNotice(null);
@@ -100,11 +122,16 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
         >
           <form className="flex flex-col gap-4" onSubmit={onCreate} noValidate>
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Логин" error={form.formState.errors.username?.message}>
-                <TextInput autoComplete="off" {...form.register('username')} />
-              </Field>
               <Field label="ФИО" error={form.formState.errors.fullName?.message}>
                 <TextInput {...form.register('fullName')} />
+              </Field>
+              <Field
+                label="Логин"
+                hint="Строчные латинские буквы, цифры, точка, дефис"
+                error={form.formState.errors.username?.message}
+              >
+                {/* Автоподстановка логина по ФИО отложена: поле заполняется вручную. */}
+                <TextInput autoComplete="off" {...form.register('username')} />
               </Field>
               <Field
                 label="Временный пароль"
@@ -127,12 +154,22 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
             </div>
 
             <fieldset>
-              <legend className="mb-2 text-sm font-medium text-slate-700">Роли</legend>
+              <legend className="mb-2 text-sm font-medium text-slate-700">Роли сотрудника</legend>
               <div className="flex flex-wrap gap-3">
-                {(roles.data?.items ?? []).map((role) => (
+                {staffRoles.map((role) => (
                   <label key={role.code} className="flex items-center gap-2 text-sm">
-                    <input type="checkbox" value={role.code} {...form.register('roles')} />
-                    {role.title}
+                    <input
+                      type="checkbox"
+                      value={role.code}
+                      {...form.register('roles')}
+                      onChange={(event) => {
+                        // Роли дают права все вместе: показываем предупреждение,
+                        // чтобы случайно не выдать лишнее.
+                        void form.register('roles').onChange(event);
+                        setNotice(null);
+                      }}
+                    />
+                    {roleTitle(role.code, role.title)}
                   </label>
                 ))}
               </div>
@@ -141,7 +178,17 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
                   {form.formState.errors.roles.message}
                 </span>
               )}
+              <p className="mt-2 text-xs text-slate-500">
+                Учеников заводят в разделе «Группы и ученики» (блок «Новый ученик»), законных
+                представителей — блоком ниже: у них учётная запись всегда связана с человеком.
+              </p>
             </fieldset>
+
+            {selectedCount > 1 && (
+              <Alert tone="warning">
+                Внимание! Вы выбрали больше одной роли! Пользователь получит расширенные права!
+              </Alert>
+            )}
 
             {createUser.isError && <Alert tone="error">{errorMessage(createUser.error)}</Alert>}
 
@@ -305,6 +352,16 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
           </div>
         )}
       </Card>
+
+      {/* Учеников ведут в «Группах и учениках»: там список людей и группы,
+          которые из них собираются. Здесь — учётные записи представителей. */}
+      {canManage && (
+        <>
+          <NewGuardianCard onCreated={setNotice} />
+          <LinkGuardianForm onLinked={setNotice} />
+          <GuardianLinksCard onNotice={setNotice} />
+        </>
+      )}
     </div>
   );
 }

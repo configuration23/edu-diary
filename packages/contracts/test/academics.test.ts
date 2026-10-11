@@ -10,6 +10,38 @@ import {
   updateAssignmentRequestSchema,
   updateBrandingRequestSchema,
 } from '../src/academics';
+import { requiredISODateSchema } from '../src/common';
+
+describe('requiredISODateSchema (даты в формах)', () => {
+  it('принимает существующие даты, включая високосный день', () => {
+    expect(requiredISODateSchema.safeParse('2026-02-28').success).toBe(true);
+    expect(requiredISODateSchema.safeParse('2024-02-29').success).toBe(true);
+  });
+
+  it('отвергает несуществующие даты, которые пропускал регексп', () => {
+    // Раньше в формах стояла проверка вида ГГГГ-ММ-ДД: «31 февраля» проходило.
+    const impossible = ['2026-02-31', '2026-04-31', '2026-13-01', '2026-00-10', '2023-02-29'];
+
+    for (const value of impossible) {
+      const parsed = requiredISODateSchema.safeParse(value);
+      expect(parsed.success, `${value} должна быть отвергнута`).toBe(false);
+      if (!parsed.success) {
+        expect(parsed.error.issues[0]?.message).toContain('не существует');
+      }
+    }
+  });
+
+  it('отвергает пустое значение и другой формат', () => {
+    for (const value of ['', '31.02.2026', '2026-2-1', 'вчера']) {
+      expect(requiredISODateSchema.safeParse(value).success, `${value}`).toBe(false);
+    }
+  });
+
+  it('требует строку', () => {
+    expect(requiredISODateSchema.safeParse(undefined).success).toBe(false);
+    expect(requiredISODateSchema.safeParse(20260228).success).toBe(false);
+  });
+});
 
 /**
  * Контракты Этапа 2: группы, зачисления, назначения, справочники и брендинг.

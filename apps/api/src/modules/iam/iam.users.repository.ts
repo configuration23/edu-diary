@@ -57,6 +57,10 @@ export interface UpdateUserRow {
 export interface UsersRepository {
   findById(id: string): Promise<UserWithRoles | null>;
   findByUsername(username: string): Promise<UserWithRoles | null>;
+  /** Логины по идентификаторам: списки (ученики) показывают состояние учётки. */
+  findUsernamesByIds(ids: readonly string[]): Promise<Map<string, string>>;
+  /** Из перечисленных логинов возвращает занятые (для подсказки логина). */
+  findTakenUsernames(candidates: readonly string[]): Promise<string[]>;
   list(filters: UserListFilters): Promise<{ items: UserWithRoles[]; total: number }>;
   findRoles(userId: string): Promise<UserRoleRow[]>;
   /** Возвращает созданную строку целиком: читать её обратно внутри транзакции нельзя. */
@@ -139,6 +143,31 @@ export function createUsersRepository(db: Database): UsersRepository {
         .limit(1);
       const found = await attachRoles(rows);
       return found[0] ?? null;
+    },
+
+    async findUsernamesByIds(ids: readonly string[]): Promise<Map<string, string>> {
+      const unique = [...new Set(ids.filter((id) => id !== ''))];
+      if (unique.length === 0) return new Map();
+
+      const rows = await db.orm
+        .select({ id: appUser.id, username: appUser.username })
+        .from(appUser)
+        .where(inArray(appUser.id, unique));
+
+      return new Map(rows.map((row) => [row.id, row.username]));
+    },
+
+    async findTakenUsernames(candidates: readonly string[]): Promise<string[]> {
+      const unique = [...new Set(candidates.filter((name) => name !== ''))];
+      if (unique.length === 0) return [];
+
+      const rows = await db.orm
+        .select({ username: appUser.username })
+        .from(appUser)
+        .where(inArray(appUser.username, unique));
+
+      // Колонка citext: база сравнивает без учёта регистра, приводим к нижнему.
+      return rows.map((row) => row.username.toLowerCase());
     },
 
     async list(filters: UserListFilters): Promise<{ items: UserWithRoles[]; total: number }> {

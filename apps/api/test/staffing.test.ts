@@ -43,10 +43,11 @@ describeWithDatabase('назначения преподавателей', () => 
   let otherTeacherUserId: string;
   let yearId: string;
   let groupId: string;
+  /** Вторая группа: проверяем, что преподаватель может вести предмет в двух группах. */
+  let secondGroupId: string;
   let subjectId: string;
   /** Второй предмет: нужен там, где первый уже занят другим назначением. */
   let secondSubjectId: string;
-
   const auth = () => ({ cookie: adminCookie });
 
   beforeAll(async () => {
@@ -115,6 +116,20 @@ describeWithDatabase('назначения преподавателей', () => 
       },
     });
     groupId = (group.json() as Json).id as string;
+
+    // Вторая группа нужна для проверки: один предмет в двух группах — норма.
+    const secondGroup = await testApp.app.inject({
+      method: 'POST',
+      url: '/api/groups',
+      headers: auth(),
+      payload: {
+        academicYearId: yearId,
+        name: 'ПКС-32',
+        startsOn: shiftDays(-760),
+        endsOn: shiftDays(760),
+      },
+    });
+    secondGroupId = (secondGroup.json() as Json).id as string;
   });
 
   afterAll(async () => {
@@ -242,17 +257,17 @@ describeWithDatabase('назначения преподавателей', () => 
     );
   });
 
-  it('у одного преподавателя не бывает двух назначений в один период', async () => {
-    const overlap = await createAssignment({
-      // Пересекается с уже созданным назначением (FUTURE).
+  it('один предмет в двух группах — можно: это обычная работа преподавателя', async () => {
+    // Пересекается по времени с уже созданным назначением того же преподавателя
+    // (FUTURE), но группа другая: правило «одно назначение в период» снято.
+    const secondGroupAssignment = await createAssignment({
+      studyGroupId: secondGroupId,
       startsOn: FUTURE.from,
-      endsOn: LATER.to,
-      subjectId,
+      endsOn: FUTURE.to,
     });
 
-    expect(overlap.statusCode).toBe(409);
-    const body = overlap.json() as { error: { details?: { reason?: string } } };
-    expect(body.error.details?.reason).toBe('teacher_overlap');
+    expect(secondGroupAssignment.statusCode).toBe(201);
+    expect((secondGroupAssignment.json() as Json).studyGroupId).toBe(secondGroupId);
   });
 
   it('предмет в группе ведёт один преподаватель в период', async () => {

@@ -15,8 +15,24 @@ export interface GuardianLinkRow {
   createdAt: Date;
 }
 
+/** Связь вместе с именем ученика: список связей показывается в разделе людей. */
+export interface GuardianLinkWithStudentRow extends GuardianLinkRow {
+  studentName: string;
+}
+
 export interface GuardiansRepository {
   listByStudent(studentId: string): Promise<GuardianLinkRow[]>;
+  /**
+   * Все связи «ученик ↔ представитель».
+   *
+   * Имена учеников подставляет переданный резолвер: таблица учеников
+   * принадлежит модулю `academics`, и читать её напрямую отсюда нельзя
+   * (правило границ модулей, `docs/ARCHITECTURE.md` §3).
+   */
+  listAll(
+    limit: number,
+    resolveStudentName: (studentId: string) => Promise<string | null>,
+  ): Promise<GuardianLinkWithStudentRow[]>;
   findById(id: string): Promise<GuardianLinkRow | null>;
   findLink(studentId: string, guardianUserId: string): Promise<{ id: string } | null>;
   insert(
@@ -47,6 +63,29 @@ export function createGuardiansRepository(db: Database): GuardiansRepository {
         .innerJoin(appUser, eq(appUser.id, guardianLink.guardianUserId))
         .where(eq(guardianLink.studentId, studentId))
         .orderBy(asc(appUser.fullName));
+    },
+
+    async listAll(
+      limit: number,
+      resolveStudentName: (studentId: string) => Promise<string | null>,
+    ): Promise<GuardianLinkWithStudentRow[]> {
+      const rows = await db.orm
+        .select(LINK_SELECTION)
+        .from(guardianLink)
+        .innerJoin(appUser, eq(appUser.id, guardianLink.guardianUserId))
+        .orderBy(asc(guardianLink.createdAt))
+        .limit(limit);
+
+      // Имена запрашиваем по одному разу на ученика: в списке их немного.
+      const names = new Map<string, string>();
+      for (const studentId of new Set(rows.map((row) => row.studentId))) {
+        const name = await resolveStudentName(studentId);
+        if (name !== null) names.set(studentId, name);
+      }
+
+      return rows
+        .map((row) => ({ ...row, studentName: names.get(row.studentId) ?? 'Ученик не найден' }))
+        .sort((left, right) => left.studentName.localeCompare(right.studentName, 'ru'));
     },
 
     async findById(id: string): Promise<GuardianLinkRow | null> {

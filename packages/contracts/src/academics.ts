@@ -158,6 +158,8 @@ export type EnrollStudentRequestDto = z.infer<typeof enrollStudentRequestSchema>
 /** Отчисление: закрываем зачисление датой, запись сохраняется в истории. */
 export const withdrawStudentRequestSchema = z.object({
   leftOn: isoDateSchema,
+  /** Причина или пояснение: «переведён», «по заявлению», «академический отпуск». */
+  note: z.string().max(500).optional(),
 });
 export type WithdrawStudentRequestDto = z.infer<typeof withdrawStudentRequestSchema>;
 

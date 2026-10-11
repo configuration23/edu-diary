@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
 import type { AcademicYearDto, PeriodDto } from '@edu-diary/contracts';
+import { requiredISODateSchema } from '@edu-diary/contracts';
 import {
   Alert,
   Badge,
@@ -22,6 +23,9 @@ import {
   useActivateAcademicYear,
   useCreateAcademicYear,
   useCreatePeriod,
+  useDeletePeriod,
+  useUpdateAcademicYear,
+  useUpdatePeriod,
 } from '../lib/queries';
 
 /**
@@ -35,8 +39,8 @@ import {
 const yearFormSchema = z
   .object({
     title: z.string().min(1, 'Укажите название').max(60),
-    startsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Формат ГГГГ-ММ-ДД'),
-    endsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Формат ГГГГ-ММ-ДД'),
+    startsOn: requiredISODateSchema,
+    endsOn: requiredISODateSchema,
     isActive: z.boolean(),
   })
   .refine((values) => values.startsOn <= values.endsOn, {
@@ -48,8 +52,8 @@ const periodFormSchema = z
   .object({
     title: z.string().min(1, 'Укажите название').max(60),
     kind: z.enum(['term', 'semester', 'quarter']),
-    startsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Формат ГГГГ-ММ-ДД'),
-    endsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Формат ГГГГ-ММ-ДД'),
+    startsOn: requiredISODateSchema,
+    endsOn: requiredISODateSchema,
   })
   .refine((values) => values.startsOn <= values.endsOn, {
     message: 'Дата начала позже даты окончания',
@@ -182,6 +186,12 @@ function AddPeriodCard({ year }: { year: AcademicYearDto }) {
 
 function YearDetails({ yearId, onClose }: { yearId: string; onClose: () => void }) {
   const detail = useAcademicYear(yearId);
+  const update = useUpdatePeriod();
+  const remove = useDeletePeriod();
+  const [editing, setEditing] = useState<PeriodDto | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editStartsOn, setEditStartsOn] = useState('');
+  const [editEndsOn, setEditEndsOn] = useState('');
 
   if (detail.isLoading) return <p className="text-sm text-slate-500">Загружаем год…</p>;
   if (detail.isError || detail.data === undefined) {
@@ -203,16 +213,93 @@ function YearDetails({ yearId, onClose }: { yearId: string; onClose: () => void 
       {year.periods.length === 0 ? (
         <EmptyState>Периодов пока нет — добавьте первый.</EmptyState>
       ) : (
-        <Table head={['Период', 'Тип', 'Начало', 'Окончание']}>
-          {year.periods.map((period: PeriodDto) => (
-            <tr key={period.id} className="border-b border-slate-100">
-              <td className="px-3 py-2">{period.title}</td>
-              <td className="px-3 py-2 text-slate-600">{kindLabel(period.kind)}</td>
-              <td className="px-3 py-2">{formatDate(period.startsOn)}</td>
-              <td className="px-3 py-2">{formatDate(period.endsOn)}</td>
-            </tr>
-          ))}
-        </Table>
+        <>
+          <Table head={['Период', 'Тип', 'Начало', 'Окончание', '']}>
+            {year.periods.map((period: PeriodDto) => (
+              <tr key={period.id} className="border-b border-slate-100">
+                <td className="px-3 py-2">{period.title}</td>
+                <td className="px-3 py-2 text-slate-600">{kindLabel(period.kind)}</td>
+                <td className="px-3 py-2">{formatDate(period.startsOn)}</td>
+                <td className="px-3 py-2">{formatDate(period.endsOn)}</td>
+                <td className="px-3 py-2">
+                  <span className="flex flex-wrap gap-2">
+                    <Button
+                      tone="ghost"
+                      onClick={() => {
+                        setEditing(period);
+                        setEditTitle(period.title);
+                        setEditStartsOn(period.startsOn);
+                        setEditEndsOn(period.endsOn);
+                      }}
+                    >
+                      Править
+                    </Button>
+                    <Button
+                      tone="ghost"
+                      disabled={remove.isPending}
+                      onClick={() => void remove.mutateAsync(period.id).catch(() => undefined)}
+                    >
+                      Удалить
+                    </Button>
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </Table>
+
+          {remove.isError && <Alert tone="error">{errorMessage(remove.error)}</Alert>}
+
+          {editing !== null && (
+            <form
+              className="mt-4 flex flex-wrap items-end gap-3 rounded-md border border-slate-200 p-4"
+              onSubmit={async (event) => {
+                event.preventDefault();
+                try {
+                  await update.mutateAsync({
+                    id: editing.id,
+                    title: editTitle,
+                    startsOn: editStartsOn,
+                    endsOn: editEndsOn,
+                  });
+                  setEditing(null);
+                } catch {
+                  // Ошибка показывается ниже.
+                }
+              }}
+            >
+              <Field label="Название">
+                <TextInput
+                  required
+                  value={editTitle}
+                  onChange={(event) => setEditTitle(event.target.value)}
+                />
+              </Field>
+              <Field label="Начало">
+                <TextInput
+                  required
+                  type="date"
+                  value={editStartsOn}
+                  onChange={(event) => setEditStartsOn(event.target.value)}
+                />
+              </Field>
+              <Field label="Окончание">
+                <TextInput
+                  required
+                  type="date"
+                  value={editEndsOn}
+                  onChange={(event) => setEditEndsOn(event.target.value)}
+                />
+              </Field>
+              <Button type="submit" disabled={update.isPending}>
+                Сохранить
+              </Button>
+              <Button tone="secondary" onClick={() => setEditing(null)}>
+                Отмена
+              </Button>
+              {update.isError && <Alert tone="error">{errorMessage(update.error)}</Alert>}
+            </form>
+          )}
+        </>
       )}
 
       <div className="mt-4">
@@ -222,15 +309,78 @@ function YearDetails({ yearId, onClose }: { yearId: string; onClose: () => void 
   );
 }
 
+/**
+ * Правка года: название и границы. Активность меняется отдельной кнопкой —
+ * «активный» это состояние года, а не поле формы.
+ */
+function EditYearForm({
+  year,
+  onDone,
+}: {
+  year: AcademicYearDto;
+  onDone: (message: string) => void;
+}) {
+  const update = useUpdateAcademicYear();
+  const form = useForm<z.infer<typeof yearFormSchema>>({
+    resolver: zodResolver(yearFormSchema),
+    defaultValues: {
+      title: year.title,
+      startsOn: year.startsOn,
+      endsOn: year.endsOn,
+      isActive: year.isActive,
+    },
+  });
+
+  return (
+    <form
+      className="mt-4 flex flex-wrap items-end gap-3 rounded-md border border-slate-200 p-4"
+      noValidate
+      onSubmit={form.handleSubmit(async (values) => {
+        try {
+          await update.mutateAsync({
+            id: year.id,
+            title: values.title.trim(),
+            startsOn: values.startsOn,
+            endsOn: values.endsOn,
+          });
+          onDone(`Год «${values.title.trim()}» сохранён.`);
+        } catch {
+          // Ошибка показывается ниже.
+        }
+      })}
+    >
+      <Field label="Название" error={form.formState.errors.title?.message}>
+        <TextInput {...form.register('title')} />
+      </Field>
+      <Field label="Начало" error={form.formState.errors.startsOn?.message}>
+        <TextInput type="date" {...form.register('startsOn')} />
+      </Field>
+      <Field label="Окончание" error={form.formState.errors.endsOn?.message}>
+        <TextInput type="date" {...form.register('endsOn')} />
+      </Field>
+      <Button type="submit" disabled={update.isPending}>
+        Сохранить
+      </Button>
+      <Button tone="secondary" onClick={() => onDone('')}>
+        Отмена
+      </Button>
+      {update.isError && <Alert tone="error">{errorMessage(update.error)}</Alert>}
+    </form>
+  );
+}
+
 export function AcademicsScreen() {
   const years = useAcademicYears();
   const activate = useActivateAcademicYear();
   const [openYearId, setOpenYearId] = useState<string | null>(null);
+  const [editingYear, setEditingYear] = useState<AcademicYearDto | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   return (
     <div className="flex flex-col gap-6">
       <CreateYearCard />
 
+      {notice !== null && <Alert tone="success">{notice}</Alert>}
       {activate.isError && <Alert tone="error">{errorMessage(activate.error)}</Alert>}
 
       <Card
@@ -259,6 +409,9 @@ export function AcademicsScreen() {
                     <Button tone="secondary" onClick={() => setOpenYearId(year.id)}>
                       Периоды
                     </Button>
+                    <Button tone="ghost" onClick={() => setEditingYear(year)}>
+                      Править
+                    </Button>
                     {!year.isActive && (
                       <Button
                         tone="ghost"
@@ -273,6 +426,16 @@ export function AcademicsScreen() {
               </tr>
             ))}
           </Table>
+        )}
+
+        {editingYear !== null && (
+          <EditYearForm
+            year={editingYear}
+            onDone={(message) => {
+              setEditingYear(null);
+              if (message !== '') setNotice(message);
+            }}
+          />
         )}
       </Card>
 

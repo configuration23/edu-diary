@@ -23,6 +23,7 @@ import {
   listSubjectsResponseSchema,
   periodSchema,
   roomSchema,
+  studentAccountRequestSchema,
   studyGroupSchema,
   subjectSchema,
   transferStudentRequestSchema,
@@ -58,17 +59,28 @@ import type {
   StudyGroupRecord,
   SubjectRecord,
 } from './academics.repository';
-import type { AcademicsService, MutationOptions } from './academics.service';
+import type { AcademicsService, MutationOptions, UserLookupPort } from './academics.service';
 
-function toStudentDto(student: StudentRecord): StudentSummaryDto {
+function toStudentDto(student: StudentRecord, username: string | null = null): StudentSummaryDto {
   return {
     id: student.id,
     userId: student.userId,
+    username,
     fullName: student.fullName,
     shortName: student.shortName,
     birthDate: student.birthDate,
     note: student.note,
   };
+}
+
+/** Логины учётных записей для списка учеников: одна выборка на страницу. */
+async function usernamesOf(
+  users: UserLookupPort,
+  students: readonly StudentRecord[],
+): Promise<Map<string, string>> {
+  const ids = students.map((student) => student.userId).filter((id): id is string => id !== null);
+
+  return users.findUsernames(ids);
 }
 
 function toYearDto(year: AcademicYearRecord): AcademicYearDto {
@@ -145,7 +157,11 @@ function toCategoryDto(category: GradeCategoryRecord): GradeCategoryDto {
 }
 
 /** Маршруты учебного процесса: ученики, годы и периоды, группы, справочники. */
-export function registerAcademicsRoutes(app: FastifyInstance, academics: AcademicsService): void {
+export function registerAcademicsRoutes(
+  app: FastifyInstance,
+  academics: AcademicsService,
+  users: UserLookupPort,
+): void {
   /** Актор запроса для аудита: одна строка вместо повторения в каждом маршруте. */
   const mutation = (request: Parameters<typeof actorFromRequest>[0]): MutationOptions => ({
     actor: actorFromRequest(request),
@@ -164,7 +180,19 @@ export function registerAcademicsRoutes(app: FastifyInstance, academics: Academi
         offset: query.offset,
       });
 
-      return listStudentsResponseSchema.parse({ items: items.map(toStudentDto), total });
+      // Логин учётной записи показывается в списке: администратору видно, у кого
+      // вход уже есть, а у кого ученик заведён одной карточкой.
+      const usernames = await usernamesOf(users, items);
+
+      return listStudentsResponseSchema.parse({
+        items: items.map((student) =>
+          toStudentDto(
+            student,
+            student.userId === null ? null : (usernames.get(student.userId) ?? null),
+          ),
+        ),
+        total,
+      });
     },
   );
 
@@ -220,7 +248,21 @@ export function registerAcademicsRoutes(app: FastifyInstance, academics: Academi
       const created = await academics.createStudent(body, mutation(request));
 
       reply.status(201);
-      return toStudentDto(created);
+      return toStudentDto(created, body.account?.username ?? null);
+    },
+  );
+
+  /** Учётная запись ученику, заведённому ранее: учётка создаётся по необходимости. */
+  app.post(
+    '/students/:id/account',
+    { preHandler: requirePermission('students:write', 'all') },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const body = studentAccountRequestSchema.parse(request.body);
+      const updated = await academics.createStudentAccount(id, body, mutation(request));
+
+      reply.status(201);
+      return toStudentDto(updated, body.username);
     },
   );
 
@@ -359,6 +401,18 @@ export function registerAcademicsRoutes(app: FastifyInstance, academics: Academi
     },
   );
 
+  app.delete(
+    '/periods/:id',
+    { preHandler: requirePermission('academics:write', 'all') },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      await academics.deletePeriod(id, mutation(request));
+
+      reply.status(204);
+      return null;
+    },
+  );
+
   // --- Группы и зачисления ---
 
   app.get(
@@ -451,7 +505,12 @@ export function registerAcademicsRoutes(app: FastifyInstance, academics: Academi
     async (request) => {
       const { id } = request.params as { id: string };
       const body = withdrawStudentRequestSchema.parse(request.body);
-      const updated = await academics.withdrawStudent(id, body.leftOn, mutation(request));
+      const updated = await academics.withdrawStudent(
+        id,
+        body.leftOn,
+        body.note,
+        mutation(request),
+      );
 
       return enrollmentSchema.parse(toEnrollmentDto(updated));
     },

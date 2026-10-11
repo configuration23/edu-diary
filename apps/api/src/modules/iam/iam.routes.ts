@@ -2,12 +2,16 @@ import {
   createRoleRequestSchema,
   createUserRequestSchema,
   linkGuardianRequestSchema,
+  listGuardianLinksQuerySchema,
+  listGuardianLinksResponseSchema,
   listPermissionsResponseSchema,
   listRolesResponseSchema,
   listUsersQuerySchema,
   listUsersResponseSchema,
   resetPasswordRequestSchema,
   setUserRolesRequestSchema,
+  suggestUsernameQuerySchema,
+  suggestUsernameResponseSchema,
   updateRoleRequestSchema,
   updateUserRequestSchema,
   type GuardianLinkDto,
@@ -81,6 +85,23 @@ export function registerIamRoutes(
   },
 ): void {
   const { users, roles, guardians } = services;
+
+  /**
+   * Подсказка логина по ФИО: транслитерация и проверка занятости.
+   *
+   * Правило живёт в домене, занятость проверяет сервис одним запросом. Доступно
+   * тому, кто создаёт пользователей: логин нужен и работнику, и ученику.
+   */
+  app.get(
+    '/users/suggest-username',
+    { preHandler: requirePermission('users:write', 'all') },
+    async (request) => {
+      const query = suggestUsernameQuerySchema.parse(request.query);
+      const suggestion = await users.suggestUsername(query.fullName);
+
+      return suggestUsernameResponseSchema.parse(suggestion);
+    },
+  );
 
   app.get('/users', { preHandler: requirePermission('users:read', 'all') }, async (request) => {
     const query = listUsersQuerySchema.parse(request.query);
@@ -196,6 +217,33 @@ export function registerIamRoutes(
     },
   );
 
+  /**
+   * Связи «ученик ↔ представитель»: весь список или по одному ученику.
+   *
+   * Фильтр по ученику нужен формам привязки: чтобы не предлагать того, кто уже
+   * привязан (в том числе под другим отношением).
+   */
+  app.get(
+    '/guardian-links',
+    { preHandler: requirePermission('students:read', 'assigned') },
+    async (request) => {
+      const query = listGuardianLinksQuerySchema.parse(request.query);
+      const links =
+        query.studentId === undefined
+          ? await guardians.listAll(query.limit)
+          : await guardians.listByStudentWithName(query.studentId);
+
+      return listGuardianLinksResponseSchema.parse({
+        items: links.map((link) => ({
+          ...link,
+          // Дата из базы — объект Date; в контракте строка ISO (ADR-016).
+          createdAt: link.createdAt.toISOString(),
+        })),
+        total: links.length,
+      });
+    },
+  );
+
   app.get(
     '/students/:id/guardians',
     { preHandler: requirePermission('students:read', 'assigned') },
@@ -226,10 +274,13 @@ export function registerIamRoutes(
   app.delete(
     '/students/:id/guardians/:linkId',
     { preHandler: requirePermission('students:write', 'all') },
-    async (request) => {
+    async (request, reply) => {
       const { linkId } = request.params as { id: string; linkId: string };
       await guardians.unlink(linkId, { actor: actorFromRequest(request) });
-      return { ok: true };
+
+      // Как у остальных удалений: 204 и пустое тело.
+      reply.status(204);
+      return null;
     },
   );
 }

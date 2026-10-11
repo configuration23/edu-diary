@@ -12,6 +12,7 @@ import { createHealthModule } from './modules/health';
 import { buildIamServices, createIamModule, type SessionRevokerPort } from './modules/iam';
 import { createGuardiansRepository } from './modules/iam/iam.guardians.repository';
 import { createUsersRepository } from './modules/iam/iam.users.repository';
+import type { UsersService } from './modules/iam/iam.users.service';
 import { buildPrivacyService, createPrivacyModule } from './modules/privacy';
 import { buildSecurityService, createSecurityModule } from './modules/security';
 import {
@@ -30,8 +31,9 @@ import {
   createSystemState,
   type SystemState,
 } from './modules/setup';
-import type { Database } from './shared/db/client';
+import type { Database, Executor } from './shared/db/client';
 import type { AppEnv } from './shared/env';
+import { SYSTEM_ACTOR } from './shared/actor';
 import { AppError, registerErrorHandling } from './shared/errors';
 import { createLoggerOptions, resolveRequestId } from './shared/logger';
 import { createPasswordHasher } from './shared/password-hasher';
@@ -85,10 +87,47 @@ export async function buildApp({
   const staffingRepository = createStaffingRepository(db);
   // Порт проверки пользователя (куратор группы, преподаватель): репозиторий iam.
   const usersRepository = createUsersRepository(db);
+  // Учётные записи создаёт сервис iam: политика паролей и роли живут там.
+  // Ленивая ссылка, потому что сервис собирается ниже (кольцо зависимостей).
+  let usersService: UsersService | null = null;
   const userLookup = {
     async findActiveUser(userId: string) {
       const user = await usersRepository.findById(userId);
       return user === null || !user.isActive ? null : { id: user.id, fullName: user.fullName };
+    },
+    async findActiveUserByUsername(username: string) {
+      const user = await usersRepository.findByUsername(username);
+      return user === null ? null : { id: user.id };
+    },
+    async findUsernames(userIds: readonly string[]) {
+      return usersRepository.findUsernamesByIds(userIds);
+    },
+    createUser(
+      input: {
+        username: string;
+        password: string;
+        fullName: string;
+        roles: readonly string[];
+        email?: string;
+        phone?: string;
+      },
+      executor?: Executor,
+    ) {
+      if (usersService === null) {
+        throw new Error('Сервис пользователей ещё не собран — создание учётной записи недоступно');
+      }
+
+      return usersService.create(
+        {
+          username: input.username,
+          password: input.password,
+          fullName: input.fullName,
+          roles: [...input.roles],
+          ...(input.email === undefined ? {} : { email: input.email }),
+          ...(input.phone === undefined ? {} : { phone: input.phone }),
+        },
+        { actor: SYSTEM_ACTOR, executor },
+      );
     },
     async findActiveTeacher(userId: string) {
       const user = await usersRepository.findById(userId);
@@ -132,6 +171,8 @@ export async function buildApp({
   };
 
   const iam = buildIamServices({ db, audit, security, hasher, academics, sessions: sessionsPort });
+  // Ссылка для порта создания учётных записей (в том числе ученикам).
+  usersService = iam.users;
 
   const auth = buildAuthService({ db, users: iam.users, audit, hasher });
   authService = auth;
@@ -192,7 +233,7 @@ export async function buildApp({
   await app.register(createSetupModule({ setup, auth }), { prefix: '/api' });
   await app.register(createAuthModule({ auth }), { prefix: '/api' });
   await app.register(createIamModule({ services: iam }), { prefix: '/api' });
-  await app.register(createAcademicsModule({ academics }), { prefix: '/api' });
+  await app.register(createAcademicsModule({ academics, users: userLookup }), { prefix: '/api' });
   await app.register(createStaffingModule({ staffing }), { prefix: '/api' });
   await app.register(createAuditModule({ audit }), { prefix: '/api' });
   await app.register(createSecurityModule({ security, audit }), { prefix: '/api' });

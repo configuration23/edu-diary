@@ -1,4 +1,4 @@
-import {
+﻿import {
   academicYearSchema,
   academicYearWithPeriodsSchema,
   assignmentSchema,
@@ -14,6 +14,7 @@ import {
   listConsentsResponseSchema,
   listEnrollmentsResponseSchema,
   listGradeCategoriesResponseSchema,
+  listGuardianLinksResponseSchema,
   listGroupsResponseSchema,
   listPermissionsResponseSchema,
   listRolesResponseSchema,
@@ -31,6 +32,7 @@ import {
   studentsWithoutConsentResponseSchema,
   studyGroupSchema,
   subjectSchema,
+  suggestUsernameResponseSchema,
   userSummarySchema,
   type SessionResponseDto,
   type SetupStatusResponseDto,
@@ -199,8 +201,14 @@ function invalidateUsers(client: ReturnType<typeof useQueryClient>): void {
 export function useCreateUser() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (input: unknown) =>
-      apiRequest('/api/users', userSummarySchema, { method: 'POST', body: input }),
+    mutationFn: (input: {
+      username: string;
+      fullName: string;
+      password: string;
+      roles: string[];
+      email?: string;
+      phone?: string;
+    }) => apiRequest('/api/users', userSummarySchema, { method: 'POST', body: input }),
     onSuccess: () => invalidateUsers(client),
   });
 }
@@ -353,9 +361,49 @@ function invalidateStudents(client: ReturnType<typeof useQueryClient>): void {
 export function useCreateStudent() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (input: { fullName: string; userId?: string | null }) =>
-      apiRequest('/api/students', studentSummarySchema, { method: 'POST', body: input }),
+    mutationFn: (input: {
+      fullName: string;
+      birthDate?: string;
+      note?: string;
+      /** Учётная запись создаётся по необходимости, вместе с карточкой ученика. */
+      account?: { username: string; password: string; email?: string; phone?: string } | undefined;
+    }) => apiRequest('/api/students', studentSummarySchema, { method: 'POST', body: input }),
     onSuccess: () => invalidateStudents(client),
+  });
+}
+
+/** Учётная запись ученику, заведённому ранее (карточкой без учётки). */
+export function useCreateStudentAccount() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      studentId: string;
+      username: string;
+      password: string;
+      email?: string;
+      phone?: string;
+    }) =>
+      apiRequest(`/api/students/${input.studentId}/account`, studentSummarySchema, {
+        method: 'POST',
+        body: {
+          username: input.username,
+          password: input.password,
+          ...(input.email === undefined ? {} : { email: input.email }),
+          ...(input.phone === undefined ? {} : { phone: input.phone }),
+        },
+      }),
+    onSuccess: () => invalidateStudents(client),
+  });
+}
+
+/** Свободный логин по ФИО: транслитерация и занятость считаются на сервере. */
+export function useSuggestUsername() {
+  return useMutation({
+    mutationFn: (fullName: string) =>
+      apiRequest(
+        `/api/users/suggest-username?${toQueryString({ fullName })}`,
+        suggestUsernameResponseSchema,
+      ),
   });
 }
 
@@ -370,7 +418,37 @@ export function useLinkGuardian() {
           ...(input.relation === undefined ? {} : { relation: input.relation }),
         },
       }),
-    onSuccess: () => invalidateStudents(client),
+    onSuccess: () => {
+      invalidateStudents(client);
+      // Инвалидируем и общий список, и выборки по конкретному ученику.
+      void client.invalidateQueries({ queryKey: ['guardian-links'] });
+    },
+  });
+}
+
+/** Все связи «ученик ↔ представитель»: список в разделе «Пользователи и роли». */
+export function useGuardianLinks(studentId?: string) {
+  const query = toQueryString({ limit: 200, ...(studentId === undefined ? {} : { studentId }) });
+
+  return useQuery({
+    queryKey: ['guardian-links', studentId ?? 'all'],
+    queryFn: () => apiRequest(`/api/guardian-links${query}`, listGuardianLinksResponseSchema),
+  });
+}
+
+/** Отвязка представителя: ученик и представитель перестают быть связаны. */
+export function useUnlinkGuardian() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { studentId: string; linkId: string }) =>
+      apiSend(`/api/students/${input.studentId}/guardians/${input.linkId}`, {
+        method: 'DELETE',
+      }).then(() => input.linkId),
+    onSuccess: () => {
+      invalidateStudents(client);
+      // Инвалидируем и общий список, и выборки по конкретному ученику.
+      void client.invalidateQueries({ queryKey: ['guardian-links'] });
+    },
   });
 }
 
@@ -444,11 +522,10 @@ export function useCreateAcademicYear() {
 export function useUpdateAcademicYear() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (input: { id: string; title: string }) =>
-      apiRequest(`/api/academic-years/${input.id}`, academicYearSchema, {
-        method: 'PATCH',
-        body: { title: input.title },
-      }),
+    mutationFn: (input: { id: string; title?: string; startsOn?: string; endsOn?: string }) => {
+      const { id, ...body } = input;
+      return apiRequest(`/api/academic-years/${id}`, academicYearSchema, { method: 'PATCH', body });
+    },
     onSuccess: () => invalidateAcademics(client),
   });
 }
@@ -501,6 +578,33 @@ export function useCreateGroup() {
   });
 }
 
+export function useUpdateGroup() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      id: string;
+      name?: string;
+      course?: number | null;
+      specialty?: string | null;
+      startsOn?: string;
+      endsOn?: string;
+    }) => {
+      const { id, ...body } = input;
+      return apiRequest(`/api/groups/${id}`, studyGroupSchema, { method: 'PATCH', body });
+    },
+    onSuccess: () => invalidateAcademics(client),
+  });
+}
+
+/** Удаление разрешено только для пустой группы: иначе сервер отвечает 409. */
+export function useDeleteGroup() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiSend(`/api/groups/${id}`, { method: 'DELETE' }).then(() => id),
+    onSuccess: () => invalidateAcademics(client),
+  });
+}
+
 export function useGroupEnrollments(groupId: string | null) {
   return useQuery({
     queryKey: queryKeys.enrollments(groupId ?? ''),
@@ -513,10 +617,19 @@ export function useGroupEnrollments(groupId: string | null) {
 export function useEnrollStudent() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (input: { groupId: string; studentId: string; joinedOn: string }) =>
+    mutationFn: (input: {
+      groupId: string;
+      studentId: string;
+      joinedOn: string;
+      note?: string | null;
+    }) =>
       apiRequest(`/api/groups/${input.groupId}/enrollments`, enrollStudentResponseSchema, {
         method: 'POST',
-        body: { studentId: input.studentId, joinedOn: input.joinedOn },
+        body: {
+          studentId: input.studentId,
+          joinedOn: input.joinedOn,
+          ...(input.note === undefined || input.note === null ? {} : { note: input.note }),
+        },
       }),
     onSuccess: () => invalidateAcademics(client),
   });
@@ -525,10 +638,13 @@ export function useEnrollStudent() {
 export function useWithdrawStudent() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (input: { enrollmentId: string; leftOn: string }) =>
+    mutationFn: (input: { enrollmentId: string; leftOn: string; note?: string | null }) =>
       apiRequest(`/api/enrollments/${input.enrollmentId}`, enrollmentSchema, {
         method: 'PATCH',
-        body: { leftOn: input.leftOn },
+        body: {
+          leftOn: input.leftOn,
+          ...(input.note === undefined || input.note === null ? {} : { note: input.note }),
+        },
       }),
     onSuccess: () => invalidateAcademics(client),
   });
@@ -602,6 +718,95 @@ export function useCreateGradeCategory() {
   return useMutation({
     mutationFn: (input: { code: string; title: string; weight: number; color?: string | null }) =>
       apiRequest('/api/grade-categories', gradeCategorySchema, { method: 'POST', body: input }),
+    onSuccess: () => invalidateAcademics(client),
+  });
+}
+
+export function useUpdateGradeCategory() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { id: string; title?: string; weight?: number; color?: string | null }) => {
+      const { id, ...body } = input;
+      return apiRequest(`/api/grade-categories/${id}`, gradeCategorySchema, {
+        method: 'PATCH',
+        body,
+      });
+    },
+    onSuccess: () => invalidateAcademics(client),
+  });
+}
+
+export function useDeleteGradeCategory() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiSend(`/api/grade-categories/${id}`, { method: 'DELETE' }).then(() => id),
+    onSuccess: () => invalidateAcademics(client),
+  });
+}
+
+export function useUpdateRoom() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      id: string;
+      name?: string;
+      capacity?: number | null;
+      note?: string | null;
+    }) => {
+      const { id, ...body } = input;
+      return apiRequest(`/api/rooms/${id}`, roomSchema, { method: 'PATCH', body });
+    },
+    onSuccess: () => invalidateAcademics(client),
+  });
+}
+
+export function useDeleteRoom() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiSend(`/api/rooms/${id}`, { method: 'DELETE' }).then(() => id),
+    onSuccess: () => invalidateAcademics(client),
+  });
+}
+
+export function useUpdateSubject() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      id: string;
+      name?: string;
+      shortName?: string | null;
+      kind?: 'mandatory' | 'optional' | 'practice';
+      color?: string | null;
+    }) => {
+      const { id, ...body } = input;
+      return apiRequest(`/api/subjects/${id}`, subjectSchema, { method: 'PATCH', body });
+    },
+    onSuccess: () => invalidateAcademics(client),
+  });
+}
+
+export function useUpdatePeriod() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      id: string;
+      title?: string;
+      kind?: 'term' | 'semester' | 'quarter';
+      startsOn?: string;
+      endsOn?: string;
+    }) => {
+      const { id, ...body } = input;
+      return apiRequest(`/api/periods/${id}`, periodSchema, { method: 'PATCH', body });
+    },
+    onSuccess: () => invalidateAcademics(client),
+  });
+}
+
+export function useDeletePeriod() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiSend(`/api/periods/${id}`, { method: 'DELETE' }).then(() => id),
     onSuccess: () => invalidateAcademics(client),
   });
 }

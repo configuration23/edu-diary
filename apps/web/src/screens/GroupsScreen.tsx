@@ -3,6 +3,9 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
+import { requiredISODateSchema } from '@edu-diary/contracts';
+import type { StudyGroupDto } from '@edu-diary/contracts';
+import { StudentsCard } from './StudentsCard';
 import {
   Alert,
   Badge,
@@ -18,10 +21,12 @@ import { errorMessage } from '../lib/api-client';
 import {
   useAcademicYears,
   useCreateGroup,
+  useDeleteGroup,
   useEnrollStudent,
   useGroupEnrollments,
   useGroups,
   useStudents,
+  useUpdateGroup,
   useWithdrawStudent,
 } from '../lib/queries';
 
@@ -37,8 +42,8 @@ const groupFormSchema = z
     name: z.string().min(1, 'Укажите название').max(60),
     course: z.string().optional(),
     specialty: z.string().max(120).optional(),
-    startsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Формат ГГГГ-ММ-ДД'),
-    endsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Формат ГГГГ-ММ-ДД'),
+    startsOn: requiredISODateSchema,
+    endsOn: requiredISODateSchema,
   })
   .refine((values) => values.startsOn <= values.endsOn, {
     message: 'Дата начала позже даты окончания',
@@ -124,6 +129,7 @@ function EnrollForm({ groupId, groupName }: { groupId: string; groupName: string
   const enroll = useEnrollStudent();
   const [studentId, setStudentId] = useState('');
   const [joinedOn, setJoinedOn] = useState('');
+  const [note, setNote] = useState('');
 
   return (
     <form
@@ -131,9 +137,15 @@ function EnrollForm({ groupId, groupName }: { groupId: string; groupName: string
       onSubmit={async (event) => {
         event.preventDefault();
         try {
-          await enroll.mutateAsync({ groupId, studentId, joinedOn });
+          await enroll.mutateAsync({
+            groupId,
+            studentId,
+            joinedOn,
+            note: note === '' ? null : note,
+          });
           setStudentId('');
           setJoinedOn('');
+          setNote('');
         } catch {
           // Ошибка показывается ниже.
         }
@@ -143,7 +155,15 @@ function EnrollForm({ groupId, groupName }: { groupId: string; groupName: string
         Зачислить в «{groupName}»: дата должна попадать в период существования группы.
       </p>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      {students.data !== undefined && students.data.items.length === 0 && (
+        <Alert tone="warning">
+          Учеников ещё нет — заведите их блоком «Новый ученик» выше на этой странице.
+        </Alert>
+      )}
+
+      {/* Сетка из трёх полей: примечание идёт отдельной строкой, иначе в узкой
+          колонке подпись и поле наезжают друг на друга. */}
+      <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Ученик">
           <select
             required
@@ -167,11 +187,16 @@ function EnrollForm({ groupId, groupName }: { groupId: string; groupName: string
             onChange={(event) => setJoinedOn(event.target.value)}
           />
         </Field>
-        <div className="flex items-end pb-2">
-          <Button type="submit" tone="secondary" disabled={enroll.isPending}>
-            Зачислить
-          </Button>
-        </div>
+      </div>
+
+      <Field label="Примечание" hint="Необязательно: основание, документ">
+        <TextInput value={note} onChange={(event) => setNote(event.target.value)} />
+      </Field>
+
+      <div>
+        <Button type="submit" tone="secondary" disabled={enroll.isPending}>
+          Зачислить
+        </Button>
       </div>
 
       {enroll.isError && <Alert tone="error">{errorMessage(enroll.error)}</Alert>}
@@ -182,79 +207,198 @@ function EnrollForm({ groupId, groupName }: { groupId: string; groupName: string
 function GroupComposition({ groupId, groupName }: { groupId: string; groupName: string }) {
   const enrollments = useGroupEnrollments(groupId);
   const withdraw = useWithdrawStudent();
+  const [withdrawFor, setWithdrawFor] = useState<string | null>(null);
   const [leftOn, setLeftOn] = useState('');
-
-  const active = enrollments.data?.items.find((item) => item.leftOn === null);
+  const [leftNote, setLeftNote] = useState('');
 
   return (
     <Card title={`Состав группы «${groupName}»`} description="Отчисление закрывает запись датой.">
-      {enrollments.isLoading && <p className="text-sm text-slate-500">Загружаем…</p>}
-      {enrollments.isError && <Alert tone="error">{errorMessage(enrollments.error)}</Alert>}
+      {/* Порядок как в работе: сначала зачисляем, потом смотрим список и
+          отчисляем по конкретному ученику. */}
+      <EnrollForm groupId={groupId} groupName={groupName} />
 
-      {enrollments.data !== undefined && enrollments.data.items.length === 0 && (
-        <EmptyState>В группе пока никого нет.</EmptyState>
-      )}
+      <div className="mt-4 border-t border-slate-100 pt-4">
+        {enrollments.isLoading && <p className="text-sm text-slate-500">Загружаем…</p>}
+        {enrollments.isError && <Alert tone="error">{errorMessage(enrollments.error)}</Alert>}
 
-      {enrollments.data !== undefined && enrollments.data.items.length > 0 && (
-        <Table head={['Ученик', 'Зачислен', 'Отчислен', 'Примечание']}>
-          {enrollments.data.items.map((enrollment) => (
-            <tr key={enrollment.id} className="border-b border-slate-100">
-              <td className="px-3 py-2">{enrollment.studentName}</td>
-              <td className="px-3 py-2">{formatDate(enrollment.joinedOn)}</td>
-              <td className="px-3 py-2">
-                {enrollment.leftOn === null ? (
-                  <Badge tone="success">числится</Badge>
-                ) : (
-                  formatDate(enrollment.leftOn)
-                )}
-              </td>
-              <td className="px-3 py-2 text-slate-500">{enrollment.note ?? '—'}</td>
-            </tr>
-          ))}
-        </Table>
-      )}
+        {enrollments.data !== undefined && enrollments.data.items.length === 0 && (
+          <EmptyState>В группе пока никого нет.</EmptyState>
+        )}
 
-      <div className="mt-4 flex flex-wrap items-end gap-3 border-t border-slate-100 pt-4">
-        <Field label="Дата отчисления" hint="Для ученика, который числится сейчас">
-          <TextInput
-            type="date"
-            value={leftOn}
-            onChange={(event) => setLeftOn(event.target.value)}
-          />
-        </Field>
-        <Button
-          tone="secondary"
-          disabled={withdraw.isPending || active === undefined}
-          onClick={() => {
-            if (active === undefined || leftOn === '') return;
-            void withdraw.mutateAsync({ enrollmentId: active.id, leftOn });
-          }}
-        >
-          {active === undefined ? 'Некого отчислять' : `Отчислить: ${active.studentName}`}
-        </Button>
-      </div>
+        {enrollments.data !== undefined && enrollments.data.items.length > 0 && (
+          <Table head={['Ученик', 'Зачислен', 'Состояние', 'Примечание', '']}>
+            {enrollments.data.items.map((enrollment) => (
+              <tr key={enrollment.id} className="border-b border-slate-100">
+                <td className="px-3 py-2">{enrollment.studentName}</td>
+                <td className="px-3 py-2">{formatDate(enrollment.joinedOn)}</td>
+                <td className="px-3 py-2">
+                  {enrollment.leftOn === null ? (
+                    <Badge tone="success">числится</Badge>
+                  ) : (
+                    <span className="text-slate-500">отчислен {formatDate(enrollment.leftOn)}</span>
+                  )}
+                </td>
+                <td className="px-3 py-2 text-slate-500">{enrollment.note ?? '—'}</td>
+                <td className="px-3 py-2">
+                  {enrollment.leftOn === null && (
+                    <Button tone="ghost" onClick={() => setWithdrawFor(enrollment.id)}>
+                      Отчислить
+                    </Button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </Table>
+        )}
 
-      {withdraw.isError && <Alert tone="error">{errorMessage(withdraw.error)}</Alert>}
+        {withdrawFor !== null && (
+          <div className="mt-4 flex flex-wrap items-end gap-3 rounded-md border border-slate-200 p-4">
+            <Field label="Дата отчисления" hint="Закроет зачисление, история останется">
+              <TextInput
+                type="date"
+                value={leftOn}
+                onChange={(event) => setLeftOn(event.target.value)}
+              />
+            </Field>
+            <Field label="Примечание" hint="Необязательно: причина отчисления">
+              <TextInput value={leftNote} onChange={(event) => setLeftNote(event.target.value)} />
+            </Field>
+            <Button
+              tone="secondary"
+              disabled={withdraw.isPending || leftOn === ''}
+              onClick={() => {
+                void withdraw.mutateAsync({
+                  enrollmentId: withdrawFor,
+                  leftOn,
+                  note: leftNote === '' ? null : leftNote,
+                });
+                setWithdrawFor(null);
+                setLeftOn('');
+              }}
+            >
+              Отчислить
+            </Button>
+            <Button tone="secondary" onClick={() => setWithdrawFor(null)}>
+              Отмена
+            </Button>
+          </div>
+        )}
 
-      <div className="mt-4">
-        <EnrollForm groupId={groupId} groupName={groupName} />
+        {withdraw.isError && <Alert tone="error">{errorMessage(withdraw.error)}</Alert>}
       </div>
     </Card>
   );
 }
 
-export function GroupsScreen() {
+/**
+ * Правка группы: название, курс, специальность и границы периода.
+ *
+ * Учебный год не меняется: группа принадлежит году, и перенос означал бы другую
+ * группу — для этого её создают заново.
+ */
+function EditGroupForm({
+  group,
+  onDone,
+}: {
+  group: StudyGroupDto;
+  onDone: (message: string) => void;
+}) {
+  const update = useUpdateGroup();
+  const form = useForm<z.infer<typeof groupFormSchema>>({
+    resolver: zodResolver(groupFormSchema),
+    defaultValues: {
+      name: group.name,
+      course: group.course === null ? '' : String(group.course),
+      specialty: group.specialty ?? '',
+      startsOn: group.startsOn,
+      endsOn: group.endsOn,
+    },
+  });
+
+  return (
+    <form
+      className="mt-4 flex flex-col gap-4 rounded-md border border-slate-200 p-4"
+      noValidate
+      onSubmit={form.handleSubmit(async (values) => {
+        try {
+          await update.mutateAsync({
+            id: group.id,
+            name: values.name.trim(),
+            course:
+              values.course === undefined || values.course === '' ? null : Number(values.course),
+            specialty: values.specialty === '' ? null : (values.specialty ?? null),
+            startsOn: values.startsOn,
+            endsOn: values.endsOn,
+          });
+          onDone(`Группа «${values.name.trim()}» сохранена.`);
+        } catch {
+          // Ошибка показывается ниже.
+        }
+      })}
+    >
+      <div className="grid gap-4 sm:grid-cols-4">
+        <Field label="Название" error={form.formState.errors.name?.message}>
+          <TextInput {...form.register('name')} />
+        </Field>
+        <Field label="Курс" hint="Необязательно" error={form.formState.errors.course?.message}>
+          <TextInput inputMode="numeric" {...form.register('course')} />
+        </Field>
+        <Field label="Начало" error={form.formState.errors.startsOn?.message}>
+          <TextInput type="date" {...form.register('startsOn')} />
+        </Field>
+        <Field label="Окончание" error={form.formState.errors.endsOn?.message}>
+          <TextInput type="date" {...form.register('endsOn')} />
+        </Field>
+      </div>
+
+      <Field label="Специальность" hint="Необязательно">
+        <TextInput {...form.register('specialty')} />
+      </Field>
+
+      {update.isError && <Alert tone="error">{errorMessage(update.error)}</Alert>}
+
+      <div className="flex gap-2">
+        <Button type="submit" disabled={update.isPending}>
+          Сохранить
+        </Button>
+        <Button tone="secondary" onClick={() => onDone('')}>
+          Отмена
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+export function GroupsScreen({ canManageStudents = false }: { canManageStudents?: boolean }) {
   const [search, setSearch] = useState('');
   const groups = useGroups({ search: search === '' ? undefined : search });
   const [openGroup, setOpenGroup] = useState<{ id: string; name: string } | null>(null);
+  const [editingGroup, setEditingGroup] = useState<StudyGroupDto | null>(null);
+  // Два независимых уведомления: сообщение об ученике не должно подменяться
+  // сообщением о группе и наоборот.
+  const [studentNotice, setStudentNotice] = useState<string | null>(null);
+  const [groupNotice, setGroupNotice] = useState<string | null>(null);
+  const removeGroup = useDeleteGroup();
 
   return (
     <div className="flex flex-col gap-6">
+      {/* Ученики идут первыми: группа собирается из них. Раньше этот блок жил в
+          «Пользователях и ролях» и путал — он выглядел частью учётных записей,
+          хотя ученик это запись учебного процесса. */}
+      {canManageStudents && <StudentsCard onNotice={setStudentNotice} />}
+
+      {/* Уведомление об ученике — сразу под блоком учеников: раньше оно стояло
+          ниже, под карточкой группы, и читалось как сообщение о группе. */}
+      {canManageStudents && studentNotice !== null && <Alert tone="success">{studentNotice}</Alert>}
+
       <CreateGroupCard />
+
+      {groupNotice !== null && <Alert tone="success">{groupNotice}</Alert>}
+      {removeGroup.isError && <Alert tone="error">{errorMessage(removeGroup.error)}</Alert>}
 
       <Card
         title="Группы"
-        description="Нажмите «Состав», чтобы зачислить учеников."
+        description="«Состав» — зачисление и отчисление, «Править» — название и период."
         actions={
           <TextInput
             placeholder="Поиск по названию"
@@ -283,16 +427,46 @@ export function GroupsScreen() {
                 </td>
                 <td className="px-3 py-2">{group.studentsCount}</td>
                 <td className="px-3 py-2">
-                  <Button
-                    tone="secondary"
-                    onClick={() => setOpenGroup({ id: group.id, name: group.name })}
-                  >
-                    Состав
-                  </Button>
+                  <span className="flex flex-wrap gap-2">
+                    <Button
+                      tone="secondary"
+                      onClick={() => setOpenGroup({ id: group.id, name: group.name })}
+                    >
+                      Состав
+                    </Button>
+                    <Button tone="ghost" onClick={() => setEditingGroup(group)}>
+                      Править
+                    </Button>
+                    {/* Удалять можно только пустую группу: непустую сервер
+                        отклонит с объяснением, что именно на неё ссылается. */}
+                    <Button
+                      tone="ghost"
+                      disabled={removeGroup.isPending || group.studentsCount > 0}
+                      onClick={() => {
+                        setGroupNotice(null);
+                        void removeGroup
+                          .mutateAsync(group.id)
+                          .then(() => setGroupNotice(`Группа «${group.name}» удалена.`))
+                          .catch(() => setGroupNotice(null));
+                      }}
+                    >
+                      Удалить
+                    </Button>
+                  </span>
                 </td>
               </tr>
             ))}
           </Table>
+        )}
+
+        {editingGroup !== null && (
+          <EditGroupForm
+            group={editingGroup}
+            onDone={(message) => {
+              setEditingGroup(null);
+              if (message !== '') setGroupNotice(message);
+            }}
+          />
         )}
       </Card>
 

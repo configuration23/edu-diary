@@ -1,5 +1,7 @@
+import { Link } from '@tanstack/react-router';
 import { useState } from 'react';
 
+import { requiredISODateSchema } from '@edu-diary/contracts';
 import type { SessionResponseDto } from '@edu-diary/contracts';
 import {
   Alert,
@@ -35,6 +37,9 @@ function CreateAssignmentCard() {
   const subjects = useSubjects();
   const groups = useGroups();
   const create = useCreateAssignment();
+  // Уже существующие назначения: по ним показываем мягкое предупреждение о
+  // возможном наложении — сервер такое больше не запрещает.
+  const existing = useAssignments();
 
   const [teacherUserId, setTeacherUserId] = useState('');
   const [subjectId, setSubjectId] = useState('');
@@ -42,20 +47,54 @@ function CreateAssignmentCard() {
   const [startsOn, setStartsOn] = useState('');
   const [endsOn, setEndsOn] = useState('');
   const [hoursPlanned, setHoursPlanned] = useState('');
+  const [dateError, setDateError] = useState<string | null>(null);
 
   const teacherOptions = (teachers.data?.items ?? []).filter((user) =>
     user.roles.some((role) => role.code === 'teacher'),
   );
 
+  /**
+   * Назначения выбранного преподавателя, которые пересекаются с вводимым
+   * периодом. Не запрет: вести два предмета параллельно можно, но стоит
+   * проверить, не окажутся ли пары в одно время (это ловит расписание).
+   */
+  const overlapping = (existing.data?.items ?? []).filter(
+    (item) =>
+      teacherUserId !== '' &&
+      item.teacherUserId === teacherUserId &&
+      item.endsOn !== null &&
+      (endsOn === '' || item.startsOn <= endsOn) &&
+      (startsOn === '' || item.endsOn >= startsOn),
+  );
+
   return (
     <Card
       title="Новое назначение"
-      description="У преподавателя не бывает двух назначений в один период; предмет в группе ведёт один преподаватель."
+      description="Преподаватель может вести предмет в нескольких группах и несколько предметов в группе; ограничение одно — предмет в группе ведёт один преподаватель."
     >
       <form
         className="flex flex-col gap-4"
         onSubmit={async (event) => {
           event.preventDefault();
+          setDateError(null);
+
+          // Проверка календарных дат: браузер пропускает ручной ввод вроде
+          // «31.02.2026», поэтому проверяем до отправки (та же проверка, что в
+          // остальных формах — `requiredISODateSchema`).
+          for (const value of [startsOn, endsOn]) {
+            if (value === '') continue;
+            const parsed = requiredISODateSchema.safeParse(value);
+            if (!parsed.success) {
+              setDateError(parsed.error.issues[0]?.message ?? 'Некорректная дата');
+              return;
+            }
+          }
+
+          if (endsOn !== '' && startsOn !== '' && startsOn > endsOn) {
+            setDateError('Дата начала позже даты окончания');
+            return;
+          }
+
           try {
             await create.mutateAsync({
               teacherUserId,
@@ -73,6 +112,16 @@ function CreateAssignmentCard() {
           }
         }}
       >
+        {teachers.data !== undefined && teacherOptions.length === 0 && (
+          <Alert tone="warning">
+            Преподавателей ещё нет — создайте пользователя с ролью «Преподаватель» в разделе{' '}
+            <Link to="/users" className="underline">
+              Пользователи и роли
+            </Link>
+            .
+          </Alert>
+        )}
+
         <div className="grid gap-4 sm:grid-cols-3">
           <Field label="Преподаватель">
             <select
@@ -142,6 +191,16 @@ function CreateAssignmentCard() {
             />
           </Field>
         </div>
+
+        {dateError !== null && <Alert tone="error">{dateError}</Alert>}
+
+        {overlapping.length > 0 && (
+          <Alert tone="warning">
+            У этого преподавателя уже есть назначения в этот период:{' '}
+            {overlapping.map((item) => `${item.subjectName} — ${item.groupName}`).join('; ')}. Это
+            допустимо, но проверьте, что пары не окажутся в одно время.
+          </Alert>
+        )}
 
         {create.isError && <Alert tone="error">{errorMessage(create.error)}</Alert>}
 

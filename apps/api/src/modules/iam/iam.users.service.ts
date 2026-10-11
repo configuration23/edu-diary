@@ -1,4 +1,10 @@
-import { isAccessScope, mergePermissions, validatePassword } from '@edu-diary/domain';
+import {
+  isAccessScope,
+  mergePermissions,
+  suggestUsername,
+  usernameCandidates,
+  validatePassword,
+} from '@edu-diary/domain';
 import type { AccessScope } from '@edu-diary/domain';
 
 import type { AuditActor } from '../../shared/actor';
@@ -71,6 +77,8 @@ export interface SessionRevokerPort {
 
 export interface UsersService {
   list(filters: UserListFilters): Promise<{ items: UserWithRoles[]; total: number }>;
+  /** Подсказка свободного логина по ФИО (транслитерация + проверка занятости). */
+  suggestUsername(fullName: string): Promise<{ username: string | null; taken: string[] }>;
   getById(id: string): Promise<UserWithRoles | null>;
   findByUsername(username: string): Promise<UserWithRoles | null>;
   create(input: CreateUserInput, options: MutationOptions): Promise<UserWithRoles>;
@@ -195,6 +203,16 @@ export function createUsersService(dependencies: UsersServiceDependencies): User
 
     findByUsername(username) {
       return users.findByUsername(normalizeUsername(username));
+    },
+
+    async suggestUsername(fullName) {
+      // Занятость проверяем одним запросом по списку кандидатов: базовый логин и
+      // варианты с цифрами. Само правило подбора — в домене.
+      const candidates = usernameCandidates(fullName);
+      if (candidates.length === 0) return { username: null, taken: [] };
+
+      const taken = await users.findTakenUsernames(candidates);
+      return suggestUsername(fullName, taken);
     },
 
     async create(input, options): Promise<UserWithRoles> {

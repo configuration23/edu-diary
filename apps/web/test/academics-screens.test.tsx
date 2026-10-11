@@ -8,6 +8,9 @@ import { AssignmentsScreen } from '../src/screens/AssignmentsScreen';
 import { CatalogsScreen } from '../src/screens/CatalogsScreen';
 import { GroupsScreen } from '../src/screens/GroupsScreen';
 import { SettingsScreen } from '../src/screens/SettingsScreen';
+import { StudentsCard } from '../src/screens/StudentsCard';
+import { UsersScreen } from '../src/screens/UsersScreen';
+import { DashboardScreen } from '../src/screens/DashboardScreen';
 
 /**
  * Смоук-тесты экранов Этапа 2.
@@ -39,6 +42,9 @@ const session: SessionResponseDto = {
     { permission: 'academics:read', scope: 'all' },
     { permission: 'assignments:read', scope: 'all' },
     { permission: 'assignments:write', scope: 'all' },
+    { permission: 'users:read', scope: 'all' },
+    { permission: 'users:write', scope: 'all' },
+    { permission: 'students:write', scope: 'all' },
   ],
 };
 
@@ -51,13 +57,22 @@ describe('экраны Этапа 2 монтируются', () => {
     expect(html).toContain('Сделать активным');
   });
 
-  it('группы: форма создания, поиск и состав', () => {
+  it('группы: ученики первыми, затем группы', () => {
+    const html = renderWithQueries(<GroupsScreen canManageStudents />);
+
+    // Порядок отражает работу: сначала люди, потом группа из них.
+    expect(html.indexOf('Новый ученик')).toBeGreaterThan(-1);
+    expect(html.indexOf('Новый ученик')).toBeLessThan(html.indexOf('Новая группа'));
+    expect(html).toContain('Ученики');
+    expect(html).toContain('Поиск по названию');
+    expect(html).toContain('Загружаем');
+  });
+
+  it('группы: преподавателю блоки учеников не показывают', () => {
     const html = renderWithQueries(<GroupsScreen />);
 
+    expect(html).not.toContain('Новый ученик');
     expect(html).toContain('Новая группа');
-    expect(html).toContain('Поиск по названию');
-    // Пока список не загрузился, показывается состояние загрузки.
-    expect(html).toContain('Загружаем');
   });
 
   it('справочники: предметы, аудитории и категории', () => {
@@ -100,5 +115,52 @@ describe('экраны Этапа 2 монтируются', () => {
     expect(html).toContain('Настройки заведения');
     expect(html).toContain('Короткое название');
     expect(html).toContain('Логотип');
+  });
+
+  it('новый ученик: учётная запись по выбору, без обязательных пустых полей', () => {
+    const html = renderWithQueries(<StudentsCard onNotice={() => {}} />);
+
+    // Карточка ученика — основное действие, учётная запись — по выбору.
+    expect(html).toContain('Новый ученик');
+    expect(html).toContain('Сразу создать учётную запись');
+    expect(html).toContain('Ученики');
+    // Дата рождения и примечание — необязательные.
+    expect(html).toContain('Необязательно');
+  });
+
+  it('роли ученика и родителя в общей форме не предлагаются', () => {
+    // Роли приходят из API (в смоук-тесте данных нет), поэтому проверяем текст
+    // подсказки: она объясняет, где заводить учеников и представителей.
+    const html = renderWithQueries(<UsersScreen session={session} />);
+
+    expect(html).toContain('Роли сотрудника');
+    expect(html).toContain('Новый законный представитель');
+    expect(html).toContain('Группы и ученики');
+  });
+
+  it('обзор: блок версии вместо обещаний этапов', () => {
+    const html = renderWithQueries(
+      <DashboardScreen
+        session={{
+          user: {
+            id: 'u-1',
+            username: 'admin',
+            fullName: 'Админ Системы',
+            email: null,
+            phone: null,
+            isActive: true,
+            mustChangePassword: false,
+            roles: [{ code: 'admin', title: 'Администратор' }],
+          },
+          permissions: [],
+        }}
+      />,
+    );
+
+    expect(html).toContain('О версии');
+    expect(html).toContain('Версия API');
+    expect(html).toContain('Версия интерфейса');
+    expect(html).toContain('Схема БД (миграций)');
+    expect(html).not.toContain('Что дальше');
   });
 });

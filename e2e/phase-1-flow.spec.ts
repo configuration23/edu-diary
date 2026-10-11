@@ -85,13 +85,19 @@ test.describe.serial('Этап 1: настройка, вход, права', () 
     await ensureSession(page, ADMIN.username, ADMIN.password);
     await page.getByRole('link', { name: 'Пользователи и роли' }).click();
 
-    await page.getByLabel('Логин').fill(TEACHER.username);
-    await page.getByLabel('ФИО').fill(TEACHER.fullName);
-    await page.getByLabel('Временный пароль').fill(TEACHER.password);
+    // Поля ищем внутри карточки «Новый пользователь»: ниже на странице есть
+    // блок «Новый ученик» со своими полями, в том числе «ФИО».
+    const userForm = page
+      .locator('section')
+      .filter({ has: page.getByRole('heading', { name: 'Новый пользователь' }) });
+
+    await userForm.getByLabel('Логин').fill(TEACHER.username);
+    await userForm.locator('input[name="fullName"]').fill(TEACHER.fullName);
+    await userForm.getByLabel('Временный пароль').fill(TEACHER.password);
 
     // Роли по умолчанию отмечен преподаватель — проверяем и оставляем.
-    await expect(page.getByLabel('Преподаватель')).toBeChecked();
-    await page.getByRole('button', { name: 'Создать пользователя' }).click();
+    await expect(userForm.getByLabel('Преподаватель')).toBeChecked();
+    await userForm.getByRole('button', { name: 'Создать пользователя' }).click();
 
     await expect(page.getByText('Пользователь создан', { exact: false })).toBeVisible();
     await expect(page.getByRole('cell', { name: TEACHER.username })).toBeVisible();

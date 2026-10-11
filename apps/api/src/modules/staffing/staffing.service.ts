@@ -175,29 +175,10 @@ export function createStaffingService(dependencies: StaffingServiceDependencies)
   ): Promise<void> => {
     const currentId = 'id' in candidate ? candidate.id : undefined;
 
-    const sameTeacher = await staffing.listByTeacher(input.teacherUserId, executor);
-    const teacherConflict = sameTeacher.find(
-      (item) =>
-        item.id !== currentId &&
-        rangesOverlap(input.range, { startsOn: item.startsOn, endsOn: item.endsOn }),
-    );
-
-    if (teacherConflict !== undefined) {
-      throw new AppError(
-        'CONFLICT',
-        `У преподавателя уже есть назначение в этот период: «${teacherConflict.groupName}», «${teacherConflict.subjectName}» (${describeRange(
-          { startsOn: teacherConflict.startsOn, endsOn: teacherConflict.endsOn },
-        )})`,
-        {
-          details: {
-            reason: 'teacher_overlap',
-            conflictId: teacherConflict.id,
-            studyGroupId: teacherConflict.studyGroupId,
-            subjectId: teacherConflict.subjectId,
-          },
-        },
-      );
-    }
+    // Правило «один преподаватель — одно назначение в период» снято: вести один
+    // предмет в двух группах или два предмета в одной группе — обычная работа.
+    // Физическое наложение (две пары в одно время) проверяется расписанием на
+    // Этапе 3, а не назначением.
 
     const sameGroup = await staffing.listByGroup(input.studyGroupId, executor);
     const subjectConflict = sameGroup.find(
