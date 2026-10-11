@@ -1,4 +1,4 @@
-import { describe, expect, it, afterAll, beforeAll } from 'vitest';
+﻿import { describe, expect, it, afterAll, beforeAll } from 'vitest';
 
 import {
   completeSetup,
@@ -406,6 +406,59 @@ describeWithDatabase('группы, зачисления и справочник
     });
     expect(activated.statusCode).toBe(200);
     expect((activated.json() as Json).isActive).toBe(true);
+  });
+
+  it('группу можно править, но год у неё не меняется', async () => {
+    const created = await createGroup(groupPayload('ПКС-30'));
+    expect(created.statusCode).toBe(201);
+    const groupId = (created.json() as Json).id as string;
+
+    const updated = await testApp.app.inject({
+      method: 'PATCH',
+      url: `/api/groups/${groupId}`,
+      headers: auth(),
+      payload: { name: 'ПКС-30 (вечерняя)', course: 3, specialty: 'Сети' },
+    });
+
+    expect(updated.statusCode).toBe(200);
+    const group = updated.json() as Json;
+    expect(group.name).toBe('ПКС-30 (вечерняя)');
+    expect(group.course).toBe(3);
+    expect(group.specialty).toBe('Сети');
+    // Перенос группы в другой год — это уже другая группа, поэтому год прежний.
+    expect(group.academicYearId).toBe(yearId);
+  });
+
+  it('пустая группа удаляется, а занятая — нет', async () => {
+    const empty = await createGroup(groupPayload('ПКС-31'));
+    const emptyId = (empty.json() as Json).id as string;
+
+    const removedEmpty = await testApp.app.inject({
+      method: 'DELETE',
+      url: `/api/groups/${emptyId}`,
+      headers: auth(),
+    });
+    expect(removedEmpty.statusCode).toBe(204);
+
+    // В ПКС-21 уже зачислен ученик: удаление отклоняется с указанием причины.
+    const occupied = await testApp.app.inject({
+      method: 'GET',
+      url: '/api/groups?search=ПКС-21',
+      headers: auth(),
+    });
+    const occupiedId = (occupied.json() as { items: Array<{ id: string }> }).items[0]?.id ?? '';
+
+    const removedOccupied = await testApp.app.inject({
+      method: 'DELETE',
+      url: `/api/groups/${occupiedId}`,
+      headers: auth(),
+    });
+
+    expect(removedOccupied.statusCode).toBe(409);
+    expect(
+      (removedOccupied.json() as { error: { details?: { usedBy?: string[] } } }).error.details
+        ?.usedBy,
+    ).toContain('enrollments');
   });
 
   it('изменения справочников видны в журнале аудита', async () => {

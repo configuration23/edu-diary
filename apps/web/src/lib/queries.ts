@@ -531,6 +531,33 @@ export function useCreateGroup() {
   });
 }
 
+export function useUpdateGroup() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      id: string;
+      name?: string;
+      course?: number | null;
+      specialty?: string | null;
+      startsOn?: string;
+      endsOn?: string;
+    }) => {
+      const { id, ...body } = input;
+      return apiRequest(`/api/groups/${id}`, studyGroupSchema, { method: 'PATCH', body });
+    },
+    onSuccess: () => invalidateAcademics(client),
+  });
+}
+
+/** Удаление разрешено только для пустой группы: иначе сервер отвечает 409. */
+export function useDeleteGroup() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiSend(`/api/groups/${id}`, { method: 'DELETE' }).then(() => id),
+    onSuccess: () => invalidateAcademics(client),
+  });
+}
+
 export function useGroupEnrollments(groupId: string | null) {
   return useQuery({
     queryKey: queryKeys.enrollments(groupId ?? ''),
