@@ -399,7 +399,28 @@ export function registerScheduleRoutes(
         }
       }
 
-      await schedule.deleteLesson(id, { actor: actorFromRequest(request) });
+      // Отмена — это исключение на дату, а не удаление строки: урок остаётся с
+      // пометкой `cancelled`, поэтому повторная генерация за тот же период не
+      // создаст занятие заново (ADR-006, ADR-009). Причина по умолчанию —
+      // «отменено вручную», её можно заменить своим объяснением.
+      const current = await schedule.getLesson(id);
+      const entryId = current.scheduleEntryId;
+      const actor = actorFromRequest(request);
+
+      if (entryId === null) {
+        await schedule.deleteLesson(id, { actor });
+      } else {
+        await schedule.createException(
+          {
+            scheduleEntryId: entryId,
+            exceptionDate: current.lessonDate,
+            action: 'cancel',
+            payload: {},
+            reason: 'Отменено вручную',
+          },
+          { actor },
+        );
+      }
 
       reply.status(204);
       return null;

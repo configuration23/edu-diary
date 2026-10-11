@@ -668,6 +668,24 @@ describeWithDatabase('расписание и уроки', () => {
       headers: auth(),
     });
     expect((after.json() as Json).status).toBe('cancelled');
+
+    // Отменённый урок остаётся строкой с пометкой, а не исчезает: иначе
+    // повторная генерация создала бы занятие на эту дату заново (ADR-006).
+    const regenerate = await testApp.app.inject({
+      method: 'POST',
+      url: '/api/lessons/generate',
+      headers: auth(),
+      payload: { studyGroupId: groupId, from: nextWeekday(2), to: shiftDays(28) },
+    });
+    expect(regenerate.statusCode).toBe(200);
+
+    const stillThere = await testApp.app.inject({
+      method: 'GET',
+      url: `/api/lessons/${target?.id as string}`,
+      headers: auth(),
+    });
+    expect(stillThere.statusCode).toBe(200);
+    expect((stillThere.json() as Json).status).toBe('cancelled');
   });
 
   it('замена на урок: видно и заменяющего, и того, кого заменяют', async () => {

@@ -334,7 +334,7 @@ export function LessonsScreen({ session }: { session: SessionResponseDto }) {
                                 void remove.mutateAsync(lesson.id).catch(() => undefined)
                               }
                             >
-                              Отменить урок
+                              Отменить занятие
                             </Button>
                           )}
                         </span>
