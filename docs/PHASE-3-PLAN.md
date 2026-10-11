@@ -39,18 +39,24 @@
 
 ## 3. Внутренние шаги
 
-| Шаг | Что делается | Где |
-|---|---|---|
-| 1 | Доменные правила: пары (номер 1–8), время, день недели, пересечение интервалов действия, попадание даты в период назначения | `packages/domain/src/schedule.ts` + тесты |
-| 2 | Контракты: шаблон, исключение, урок, замена, запросы расписания | `packages/contracts/src/schedule.ts` |
-| 3 | Схема БД: `schedule_entry`, `schedule_exception`, `substitution`, `lesson` + миграция | `apps/api/src/modules/schedule/*`, `apps/api/drizzle/0005_*` |
-| 4 | API: шаблон (CRUD), исключения, генерация уроков, уроки (список, правка, отмена), замены | `modules/schedule/*` |
-| 5 | Права: `schedule:read@assigned`, `schedule:write@all`, `lessons:read@assigned`, `lessons:write@assigned`, `substitutions:write@all` + синхронизация каталога | `iam.catalog.ts`, ADR-032 |
-| 6 | Генерация уроков: идемпотентность, границы (период, диапазон шаблона, статус), поведение при изменении шаблона | `schedule.service.ts` + интеграционные тесты |
-| 7 | Замены: на урок и на диапазон, статус урока, «кто вёл» в выдаче, отчёты нагрузки | `schedule.service.ts` |
-| 8 | Интерфейс: «Расписание» (сетка группы), исключения, генерация на период, просмотр для преподавателя и ученика, «новый преподаватель»-заглушка, подсказки при пустых справочниках | `apps/web/src/screens/ScheduleScreen.tsx`, `LessonsScreen.tsx` |
-| 9 | Тесты: API (правила, приватность ролей, идемпотентность), смоук-тесты экранов, сквозной сценарий | `apps/api/test/schedule.test.ts`, `e2e/phase-3-schedule.spec.ts` |
-| 10 | Документация: `ARCHITECTURE.md` §10, README, `PHASE-3-PLAN.md`, ADR; демо-данные в сидере | `docs/`, `tools/dev/seed-demo.mjs` |
+| Шаг | Что делается | Где | Состояние |
+|---|---|---|---|
+| 1 | Доменные правила: пары (номер 1–8), время, день недели, пересечение интервалов действия | `packages/domain/src/schedule.ts` + тесты | готов |
+| 2 | Контракты: шаблон, исключение, урок, замена, запросы расписания | `packages/contracts/src/schedule.ts` | готов |
+| 3 | Схема БД: `schedule_entry`, `schedule_exception`, `lesson`, `substitution` + миграция `0005_schedule.sql` | `apps/api/src/modules/schedule/schedule.schema.ts` | готов |
+| 4 | API: шаблон (CRUD), исключения, генерация уроков, уроки (список, правка, отмена), замены | `modules/schedule/*` | следующий |
+| 5 | Права: `schedule:read@assigned`, `schedule:write@all`, `lessons:read`, `lessons:write`, `substitutions:write` + синхронизация каталога | `iam.catalog.ts`, ADR-032 | готов |
+| 6 | Генерация уроков: идемпотентность, границы, поведение при изменении шаблона | `schedule.service.ts` + интеграционные тесты | не начат |
+| 7 | Замены: на урок и на диапазон, статус урока, «кто вёл» в выдаче | `schedule.service.ts` | не начат |
+| 8 | Интерфейс: «Расписание», исключения, генерация, просмотр для преподавателя и ученика | `apps/web/src/screens/ScheduleScreen.tsx`, `LessonsScreen.tsx` | не начат |
+| 9 | Тесты: API (правила, приватность ролей, идемпотентность), смоук-тесты, сквозной сценарий | `apps/api/test/schedule.test.ts`, `e2e/phase-3-schedule.spec.ts` | не начат |
+| 10 | Документация, сидер с расписанием | `docs/`, `tools/dev/seed-demo.mjs` | не начат |
+
+**Замечание по шагу 3.** В миграции `0005` есть две тонкости, которые стоит помнить при работе с
+данными: `lesson_group_slot_key` — **частичный** уникальный индекс (`where status <> 'cancelled'`),
+поэтому отменённый урок освобождает пару; `schedule_entry_group_slot_key` запрещает два шаблона
+одной группы на одну пару одного дня недели. Время пары хранится как `time`, поэтому при чтении
+приходит строкой `HH:MM:SS` — в DTO её нужно приводить к `HH:MM`.
 
 ## 4. Определение готовности (из `ROADMAP.md`)
 
