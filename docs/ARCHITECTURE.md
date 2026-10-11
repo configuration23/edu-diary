@@ -302,61 +302,85 @@ interface StorageAdapter {
 
 ---
 
-## 10. API: контракт (первые эндпоинты)
+## 10. API: контракт
 
 Все ответы — JSON, ошибки — единый формат `{ error: { code, message, details? } }`. Схемы в `packages/contracts`, из них генерируются типы для клиента.
 
-| Метод | Путь | Назначение |
-|---|---|---|
-| GET | `/api/setup/status` | состояние первичной настройки |
-| POST | `/api/setup/complete` | завершить настройку |
-| POST | `/api/auth/login` | вход, ставит cookie-сессию |
-| POST | `/api/auth/logout` | выход, отзыв сессии |
-| GET | `/api/auth/me` | текущий пользователь, роли, права |
-| POST | `/api/auth/change-password` | смена своего пароля |
-| GET | `/api/users` | список пользователей (право `users:read`) |
-| POST | `/api/users` | создать пользователя |
-| GET | `/api/users/suggest-username?fullName=` | логин по ФИО с проверкой занятости |
-| PATCH | `/api/users/:id` | изменить, деактивировать |
-| POST | `/api/users/:id/roles` | назначить роли |
-| GET/POST | `/api/roles`, `/api/roles/:id/permissions` | роли и их права |
-| GET/POST | `/api/students`, `/api/students/:id` | ученики (карточка; учётная запись — по необходимости) |
-| POST | `/api/students/:id/account` | создать ученику учётную запись |
-| GET/POST | `/api/students/:id/guardians` | привязать законного представителя |
-| DELETE | `/api/students/:id/guardians/:linkId` | отвязать представителя |
-| GET | `/api/guardian-links` | все связи «ученик ↔ представитель» |
-| GET | `/api/academic-years`, `/api/academic-years/:id` | годы и их периоды |
-| POST | `/api/academic-years/:id/activate` | сделать год активным (активный всегда один) |
-| GET/POST/PATCH/DELETE | `/api/periods`, `/api/periods/:id` | периоды внутри года |
-| GET/POST | `/api/groups`, `/api/groups/:id/enrollments` | группы и зачисления |
-| GET | `/api/groups/:id/students` | состав группы |
-| POST | `/api/students/:id/transfer` | перевод в другую группу |
-| GET/POST | `/api/subjects`, `/api/rooms`, `/api/grade-categories` | справочники |
-| GET/POST | `/api/assignments` | назначения «учитель–предмет–группа» |
-| POST | `/api/assignments/:id/substitutions` | замена преподавателя |
-| GET | `/api/schedule?groupId=&from=&to=` | расписание с учётом исключений |
-| POST | `/api/schedule/entries`, `/api/schedule/exceptions` | изменения расписания |
-| POST | `/api/lessons/generate` | сгенерировать уроки из расписания на период |
-| GET | `/api/lessons?groupId=&date=` | уроки дня |
-| PATCH | `/api/lessons/:id` | тема, статус, замена, аудитория |
-| PUT | `/api/lessons/:id/attendance` | отметки посещаемости за урок |
-| POST | `/api/lessons/:id/grades` | поставить оценку/плюс/точку |
-| PATCH/DELETE | `/api/grades/:id` | правка и мягкое удаление (с причиной) |
-| GET/POST | `/api/homework` | задания |
-| POST | `/api/homework/:id/submissions` | сдача решения |
-| PATCH | `/api/submissions/:id` | проверка, отзыв, оценка |
-| POST | `/api/attachments` | загрузка файла или ссылки |
-| GET | `/api/attachments/:id/content` | выдача файла с проверкой прав |
-| GET | `/api/analytics/average?...` | средний балл |
-| GET | `/api/analytics/attendance?...` | посещаемость |
-| GET | `/api/analytics/export.csv?...` | выгрузка |
-| GET | `/api/audit?entityKind=&entityId=&actorId=` | журнал изменений и доступа |
-| GET | `/api/security/events?severity=` | события безопасности и инциденты |
-| POST | `/api/security/events/:id/ack` | отметить событие разобранным |
-| GET/POST | `/api/consents` | согласия: список, регистрация, отзыв |
-| GET/PUT | `/api/privacy-policy` | редакции политики обработки ПДн |
-| POST | `/api/retention/purge` | регламентное уничтожение/обезличивание (только админ, с отчётом) |
-| GET/PUT | `/api/settings` | настройки и брендинг |
+Колонка «Состояние»: **есть** — маршрут реализован и покрыт тестами; **план** — контракт задуман, маршрут появится на своём этапе (`ROADMAP.md`). Таблица описывает целевую картину, поэтому плановые строки остаются здесь заранее — но помечены, чтобы не искать в коде то, чего ещё нет.
+
+### 10.1 Уже работает
+
+| Метод | Путь | Назначение | Состояние |
+|---|---|---|---|
+| GET | `/api/health` | процесс, БД, состояние миграций | есть |
+| GET/POST | `/api/setup/status`, `/api/setup/complete` | состояние и завершение первичной настройки | есть |
+| POST | `/api/auth/login`, `/api/auth/logout` | вход и выход (cookie-сессия) | есть |
+| GET | `/api/auth/me` | текущий пользователь, роли, права | есть |
+| POST | `/api/auth/change-password` | смена своего пароля | есть |
+| GET/POST | `/api/users` | пользователи (сотрудники и представители) | есть |
+| GET | `/api/users/suggest-username?fullName=` | логин по ФИО с проверкой занятости | есть |
+| PATCH | `/api/users/:id` | изменить, деактивировать | есть |
+| POST | `/api/users/:id/roles` | назначить роли | есть |
+| POST | `/api/users/:id/reset-password` | сбросить пароль (временный) | есть |
+| GET/POST | `/api/roles`, `/api/roles/:id/permissions` | роли и их права; `PATCH /api/roles/:id` | есть |
+| GET | `/api/permissions` | каталог прав | есть |
+| GET/POST | `/api/students` | ученики: карточка; учётная запись — по необходимости | есть |
+| GET/PATCH | `/api/students/:id` | карточка ученика, правка | есть |
+| GET | `/api/students/export.csv` | выгрузка списка (попадает в аудит доступа) | есть |
+| POST | `/api/students/:id/account` | создать ученику учётную запись | есть |
+| POST | `/api/students/:id/transfer` | перевод в другую группу | есть |
+| GET/POST | `/api/students/:id/guardians` | привязка законного представителя | есть |
+| DELETE | `/api/students/:id/guardians/:linkId` | отвязка представителя | есть |
+| GET | `/api/guardian-links?studentId=` | связи «ученик ↔ представитель» | есть |
+| GET/POST | `/api/academic-years` | учебные годы (активный всегда один) | есть |
+| GET/PATCH/DELETE | `/api/academic-years/:id` | год: чтение, правка, удаление (пустого) | есть |
+| POST | `/api/academic-years/:id/activate` | сделать год активным | есть |
+| GET/POST | `/api/periods` | периоды внутри года | есть |
+| PATCH/DELETE | `/api/periods/:id` | правка и удаление периода | есть |
+| GET/POST | `/api/groups` | группы года | есть |
+| GET/PATCH/DELETE | `/api/groups/:id` | группа: чтение, правка, удаление (пустой) | есть |
+| GET | `/api/groups/:id/students` | состав группы | есть |
+| POST | `/api/groups/:id/enrollments` | зачисление ученика | есть |
+| PATCH | `/api/enrollments/:id` | отчисление (закрытие датой и примечание) | есть |
+| GET/POST | `/api/subjects`, `/api/rooms`, `/api/grade-categories` | справочники | есть |
+| PATCH/DELETE | `/api/subjects/:id`, `/api/rooms/:id`, `/api/grade-categories/:id` | правка и удаление свободного справочника | есть |
+| GET/POST | `/api/assignments` | назначения «преподаватель–предмет–группа» | есть |
+| GET | `/api/assignments/mine` | свои назначения (преподаватель) | есть |
+| GET/PATCH/DELETE | `/api/assignments/:id` | чтение, правка, удаление неначавшегося | есть |
+| POST | `/api/assignments/:id/close` | закрыть назначение датой | есть |
+| POST | `/api/assignments/close-for-teacher` | закрыть все действующие у преподавателя | есть |
+| GET/PUT | `/api/settings/branding` | брендинг заведения | есть |
+| GET | `/api/audit?entityKind=&entityId=&actorId=` | журнал изменений и доступа | есть |
+| GET | `/api/security/events?severity=` | события безопасности | есть |
+| POST | `/api/security/events/:id/ack` | отметить событие разобранным | есть |
+| GET/POST | `/api/consents` | согласия: список и регистрация | есть |
+| GET | `/api/consents/missing` | ученики без действующего согласия | есть |
+| POST | `/api/consents/:id/revoke` | отзыв согласия с причиной | есть |
+| GET/PUT | `/api/privacy-policy` | редакции политики обработки ПДн | есть |
+
+### 10.2 План (Этапы 3–6)
+
+| Метод | Путь | Назначение | Этап |
+|---|---|---|---|
+| POST | `/api/assignments/:id/substitutions` | замена преподавателя | 3 |
+| GET | `/api/schedule?groupId=&from=&to=` | расписание с учётом исключений | 3 |
+| POST | `/api/schedule/entries`, `/api/schedule/exceptions` | изменения расписания | 3 |
+| POST | `/api/lessons/generate` | сгенерировать уроки из расписания на период | 3 |
+| GET | `/api/lessons?groupId=&date=` | уроки дня | 3 |
+| PATCH | `/api/lessons/:id` | тема, статус, замена, аудитория | 3 |
+| PUT | `/api/lessons/:id/attendance` | отметки посещаемости за урок | 4 |
+| POST | `/api/lessons/:id/grades` | поставить оценку/плюс/точку | 4 |
+| PATCH/DELETE | `/api/grades/:id` | правка и мягкое удаление (с причиной) | 4 |
+| GET | `/api/analytics/average?...` | средний балл (с весами) | 4 |
+| GET | `/api/analytics/attendance?...` | посещаемость | 4 |
+| GET | `/api/analytics/export.csv?...` | выгрузка | 4 |
+| GET/POST | `/api/homework` | задания | 5 |
+| POST | `/api/homework/:id/submissions` | сдача решения | 5 |
+| PATCH | `/api/submissions/:id` | проверка, отзыв, оценка | 5 |
+| POST | `/api/attachments` | загрузка файла или ссылки | 5 |
+| GET | `/api/attachments/:id/content` | выдача файла с проверкой прав | 5 |
+| POST | `/api/retention/purge` | регламентное уничтожение/обезличивание | 6 |
+| GET | `/api/ready` | готовность к работе (помимо `/api/health`) | 6 |
 
 ---
 
