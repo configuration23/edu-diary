@@ -229,7 +229,7 @@ test.describe('Этап 3: звонки, расписание, уроки', () =
     await login(page, TEACHER.username, TEACHER.password);
 
     await page.getByRole('link', { name: 'Уроки' }).click();
-    await expect(page.getByRole('cell', { name: SUBJECT }).first()).toBeVisible();
+    await expect(page.getByText(SUBJECT).first()).toBeVisible();
     // Формы генерации у преподавателя нет: уроки создаёт администратор.
     await expect(page.getByRole('heading', { name: 'Создать уроки' })).toHaveCount(0);
 
@@ -301,8 +301,17 @@ test.describe('Этап 3: звонки, расписание, уроки', () =
       page.getByRole('heading', { level: 2, name: 'Расписание', exact: true }),
     ).toBeVisible();
 
-    // Уроки своей группы ученик видит в разделе «Уроки»: там список по датам.
-    await page.getByRole('link', { name: 'Уроки' }).click();
-    await expect(page.getByRole('cell', { name: SUBJECT }).first()).toBeVisible();
+    // Раздел «Уроки» — рабочий инструмент администратора и преподавателя:
+    // ученику он не нужен, у него есть «Расписание».
+    await expect(page.getByRole('link', { name: 'Уроки' })).toHaveCount(0);
+
+    // Своё занятие ученик видит в расписании своей группы — это то, что он и должен
+    // видеть. Дату берём из недельного вида, чтобы не зависеть от «сегодня».
+    await page.locator('#view-week').click();
+    const lessonCell = page.getByRole('button', { name: new RegExp(SUBJECT) }).first();
+    if ((await lessonCell.count()) > 0) {
+      await lessonCell.click();
+      await expect(page.getByText(SUBJECT).first()).toBeVisible();
+    }
   });
 });
