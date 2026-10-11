@@ -52,6 +52,8 @@ export interface UserLookupPort {
   findActiveUser(userId: string): Promise<{ id: string; fullName: string } | null>;
   /** Пользователь с ролью преподавателя: только он может вести занятие. */
   findActiveTeacher(userId: string): Promise<{ id: string; fullName: string } | null>;
+  /** Все активные преподаватели: подбор заменяющего. */
+  listActiveTeachers(): Promise<{ id: string; fullName: string }[]>;
   /** Имена для выдачи: в уроке видно и фактического преподавателя, и заменённого. */
   findUsers(userIds: readonly string[]): Promise<Map<string, string>>;
 }
@@ -202,6 +204,13 @@ export interface ScheduleService {
     assignmentId?: string | undefined;
     substituteUserId?: string | undefined;
   }): Promise<SubstitutionRecord[]>;
+
+  /**
+   * Кандидаты на замену для урока: активные преподаватели со статусом на слот.
+   * Сначала свободные — администратор выбирает заменяющего за пару секунд.
+   */
+  listSubstituteCandidates(lessonId: string): Promise<SubstituteCandidate[]>;
+
   createSubstitution(
     input: {
       lessonId?: string | undefined;
@@ -214,6 +223,16 @@ export interface ScheduleService {
     options: MutationOptions,
   ): Promise<SubstitutionRecord>;
   deleteSubstitution(id: string, options: MutationOptions): Promise<void>;
+}
+
+/** Кандидат на замену: преподаватель и его занятость на слоте урока. */
+export interface SubstituteCandidate {
+  userId: string;
+  fullName: string;
+  status: 'free' | 'busy' | 'assigned';
+  busyGroupName: string | null;
+  busySubjectName: string | null;
+  busyPairNumber: number | null;
 }
 
 export interface ScheduleServiceDependencies {
@@ -1029,6 +1048,63 @@ export function createScheduleService(dependencies: ScheduleServiceDependencies)
 
     listSubstitutions(filter) {
       return schedule.listSubstitutions(filter);
+    },
+
+    async listSubstituteCandidates(lessonId) {
+      const lesson = await requireLesson(lessonId);
+      const teachers = await users.listActiveTeachers();
+
+      /**
+       * Занятость считаем по урокам этого дня: у преподавателя может быть пара в
+       * любой группе. Один запрос на дату вместо запроса на каждого кандидата.
+       */
+      const busyBy = new Map<string, LessonRecord>();
+      for (const teacher of teachers) {
+        const lessons = await schedule.listLessonsForTeacherOnDate(teacher.id, lesson.lessonDate);
+        const busy = lessons.find(
+          (item) => item.pairNumber === lesson.pairNumber && item.status !== 'cancelled',
+        );
+
+        if (busy !== undefined) busyBy.set(teacher.id, busy);
+      }
+
+      const candidates: SubstituteCandidate[] = teachers.map((teacher) => {
+        const busy = busyBy.get(teacher.id);
+
+        if (busy === undefined) {
+          return {
+            userId: teacher.id,
+            fullName: teacher.fullName,
+            status: 'free',
+            busyGroupName: null,
+            busySubjectName: null,
+            busyPairNumber: null,
+          };
+        }
+
+        // Занят этим же уроком — значит уже назначен заменяющим или ведёт сам.
+        const assigned = busy.id === lesson.id || teacher.id === lesson.teacherUserId;
+
+        return {
+          userId: teacher.id,
+          fullName: teacher.fullName,
+          status: assigned ? 'assigned' : 'busy',
+          busyGroupName: assigned ? null : busy.groupName,
+          busySubjectName: assigned ? null : busy.subjectName,
+          busyPairNumber: assigned ? null : busy.pairNumber,
+        };
+      });
+
+      const order: Record<SubstituteCandidate['status'], number> = {
+        free: 0,
+        assigned: 1,
+        busy: 2,
+      };
+
+      return candidates.sort(
+        (left, right) =>
+          order[left.status] - order[right.status] || left.fullName.localeCompare(right.fullName),
+      );
     },
 
     async createSubstitution(input, options) {

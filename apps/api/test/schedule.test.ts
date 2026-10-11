@@ -985,4 +985,62 @@ describeWithDatabase('расписание и уроки', () => {
       (conflict.json() as { error: { details?: { reason?: string } } }).error.details?.reason,
     ).toBe('substitute_overlap');
   });
+
+  it('кандидаты на замену показывают занятость преподавателя', async () => {
+    // Администратору нужен подбор заменяющего: кто свободен, кто занят и где,
+    // кто уже ведёт этот урок.
+    const lessons = await testApp.app.inject({
+      method: 'GET',
+      url: `/api/lessons?studyGroupId=${groupId}&from=${nextWeekday(2)}&to=${shiftDays(28)}&status=planned`,
+      headers: auth(),
+    });
+    const target = (lessons.json() as { items: Json[] }).items[0];
+    expect(target).toBeDefined();
+
+    const response = await testApp.app.inject({
+      method: 'GET',
+      url: `/api/lessons/${target?.id as string}/substitute-candidates`,
+      headers: auth(),
+    });
+
+    expect(response.statusCode).toBe(200);
+    const items = (response.json() as { items: Json[] }).items;
+    expect(items.length).toBeGreaterThan(0);
+
+    // Первым идёт свободный: администратору нужен готовый ответ.
+    expect(items[0]?.status).toBe('free');
+
+    // Тот, кто ведёт урок, помечен как уже назначенный, а не как свободный.
+    const current = items.find((item) => item.userId === target?.teacherUserId);
+    expect(current?.status).toBe('assigned');
+
+    // Занятый на этой паре приходит со статусом «busy» и подсказкой, где он занят.
+    const busy = items.find((item) => item.status === 'busy');
+    if (busy !== undefined) {
+      expect(busy.busyGroupName).not.toBeNull();
+      expect(busy.busyPairNumber).not.toBeNull();
+    }
+
+    // Преподавателю подбор недоступен: замены оформляет администратор.
+    const forbidden = await testApp.app.inject({
+      method: 'GET',
+      url: `/api/lessons/${target?.id as string}/substitute-candidates`,
+      headers: teacherAuth(),
+    });
+    expect(forbidden.statusCode).toBe(403);
+  });
+
+  it('в уроке видно запись замены, а не только двух преподавателей', async () => {
+    const lessons = await testApp.app.inject({
+      method: 'GET',
+      url: `/api/lessons?studyGroupId=${groupId}&from=${shiftDays(-30)}&to=${shiftDays(60)}`,
+      headers: auth(),
+    });
+    const replaced = (lessons.json() as { items: Json[] }).items.find(
+      (item) => item.status === 'replaced',
+    );
+    expect(replaced).toBeDefined();
+    // Карточка урока ссылается на запись замены: по ней видно причину.
+    expect(replaced?.substitutionId).not.toBeNull();
+  });
 });

@@ -13,6 +13,7 @@ import {
   listScheduleExceptionsResponseSchema,
   listScheduleQuerySchema,
   listScheduleResponseSchema,
+  listSubstituteCandidatesResponseSchema,
   listSubstitutionsResponseSchema,
   scheduleEntrySchema,
   scheduleExceptionSchema,
@@ -60,7 +61,11 @@ function toEntryDto(entry: ScheduleEntryRecord): ScheduleEntryDto {
   };
 }
 
-function toLessonDto(lesson: LessonRecord, teacherNames: Map<string, string>): LessonDto {
+function toLessonDto(
+  lesson: LessonRecord,
+  teacherNames: Map<string, string>,
+  substitutionByLesson: Map<string, string> = new Map(),
+): LessonDto {
   return {
     id: lesson.id,
     scheduleEntryId: lesson.scheduleEntryId,
@@ -85,6 +90,7 @@ function toLessonDto(lesson: LessonRecord, teacherNames: Map<string, string>): L
     topic: lesson.topic,
     lessonType: lesson.lessonType,
     status: lesson.status as LessonDto['status'],
+    substitutionId: substitutionByLesson.get(lesson.id) ?? null,
     isManual: lesson.isManual,
     createdAt: lesson.createdAt.toISOString(),
   };
@@ -342,12 +348,35 @@ export function registerScheduleRoutes(
     });
 
     const names = await teacherNames(items);
+    const substitutions = await substitutionsByLesson(items);
 
     return listLessonsResponseSchema.parse({
-      items: items.map((lesson) => toLessonDto(lesson, names)),
+      items: items.map((lesson) => toLessonDto(lesson, names, substitutions)),
       total,
     });
   });
+
+  /**
+   * Замены для переданных уроков: `lessonId → substitutionId`.
+   *
+   * Урок хранит только признак замены, а её запись (с причиной) лежит отдельно.
+   * Список замен небольшой: активные замены ограничены периодом расписания.
+   */
+  const substitutionsByLesson = async (lessons: LessonRecord[]): Promise<Map<string, string>> => {
+    const ids = new Set(lessons.map((lesson) => lesson.id));
+    if (ids.size === 0) return new Map();
+
+    const substitutions = await schedule.listSubstitutions({});
+    const map = new Map<string, string>();
+
+    for (const substitution of substitutions) {
+      if (substitution.lessonId !== null && ids.has(substitution.lessonId)) {
+        map.set(substitution.lessonId, substitution.id);
+      }
+    }
+
+    return map;
+  };
 
   app.get(
     '/lessons/:id',
@@ -356,8 +385,26 @@ export function registerScheduleRoutes(
       const { id } = request.params as { id: string };
       const lesson = await schedule.getLesson(id);
       const names = await teacherNames([lesson]);
+      const substitutions = await substitutionsByLesson([lesson]);
 
-      return lessonSchema.parse(toLessonDto(lesson, names));
+      return lessonSchema.parse(toLessonDto(lesson, names, substitutions));
+    },
+  );
+
+  /**
+   * Кандидаты на замену для урока: активные преподаватели со статусом на слот.
+   *
+   * Право то же, что у оформления замены: подбор нужен администратору, а не
+   * каждому, кто видит урок.
+   */
+  app.get(
+    '/lessons/:id/substitute-candidates',
+    { preHandler: requirePermission('substitutions:write', 'all') },
+    async (request) => {
+      const { id } = request.params as { id: string };
+      const items = await schedule.listSubstituteCandidates(id);
+
+      return listSubstituteCandidatesResponseSchema.parse({ items });
     },
   );
 

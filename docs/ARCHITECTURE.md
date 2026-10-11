@@ -367,6 +367,7 @@ interface StorageAdapter {
 | POST | `/api/lessons/generate` | сгенерировать уроки из шаблона на период (идемпотентно) | есть |
 | GET | `/api/lessons?studyGroupId=&teacherUserId=&studentId=&from=&to=&status=` | уроки с учётом прав роли | есть |
 | GET/PATCH/DELETE | `/api/lessons/:id` | урок: чтение, тема/перенос/статус, отмена | есть |
+| GET | `/api/lessons/:id/substitute-candidates` | кандидаты на замену со статусом занятости | есть |
 | GET/POST | `/api/substitutions` | замены преподавателя (на урок или диапазон, с причиной) | есть |
 | DELETE | `/api/substitutions/:id` | снять замену | есть |
 

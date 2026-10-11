@@ -214,6 +214,14 @@ export async function buildApp({
   const scheduleUsers: ScheduleUserPort = {
     findActiveUser: (userId) => userLookup.findActiveUser(userId),
     findActiveTeacher: (userId) => userLookup.findActiveTeacher(userId),
+    async listActiveTeachers() {
+      // Преподаватели для подбора заменяющего: берём активные учётные записи с
+      // ролью преподавателя через тот же список пользователей, что и в фильтрах.
+      const users = await usersRepository.list({ isActive: true, limit: 500, offset: 0 });
+      return users.items
+        .filter((user) => user.roles.some((role) => role.code === 'teacher'))
+        .map((user) => ({ id: user.id, fullName: user.fullName }));
+    },
     async findUsers(userIds) {
       const users = await usersRepository.findUsernamesByIds([...userIds]);
       void users;

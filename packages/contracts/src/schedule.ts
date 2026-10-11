@@ -221,6 +221,8 @@ export const lessonSchema = z.object({
   topic: z.string().nullable(),
   lessonType: z.string().nullable(),
   status: lessonStatusSchema,
+  /** Признак замены на уроке: по нему карточка находит причину и запись замены. */
+  substitutionId: uuidSchema.nullable(),
   /** Правку внесли вручную: повторная генерация такую запись не перезаписывает. */
   isManual: z.boolean(),
   createdAt: isoDateTimeSchema,
@@ -327,3 +329,27 @@ export const createSubstitutionRequestSchema = z
     path: ['startsOn'],
   });
 export type CreateSubstitutionRequestDto = z.infer<typeof createSubstitutionRequestSchema>;
+
+/**
+ * Кандидат на замену: преподаватель и его занятость на конкретном слоте.
+ *
+ * `free` — свободен, `busy` — уже ведёт занятие в это время (тогда заполнены
+ * группа, предмет и пара), `assigned` — уже ведёт этот урок по базовой сетке.
+ */
+export const substituteCandidateSchema = z.object({
+  userId: uuidSchema,
+  fullName: z.string(),
+  status: z.enum(['free', 'busy', 'assigned']),
+  /** Занятие, которое мешает: заполняется для `busy`. */
+  busyGroupName: z.string().nullable(),
+  busySubjectName: z.string().nullable(),
+  busyPairNumber: pairNumberSchema.nullable(),
+});
+export type SubstituteCandidateDto = z.infer<typeof substituteCandidateSchema>;
+
+export const listSubstituteCandidatesResponseSchema = z.object({
+  items: z.array(substituteCandidateSchema),
+});
+export type ListSubstituteCandidatesResponseDto = z.infer<
+  typeof listSubstituteCandidatesResponseSchema
+>;
