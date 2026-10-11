@@ -892,14 +892,38 @@ export function createScheduleService(dependencies: ScheduleServiceDependencies)
             const teacherUserId = substituted?.substituteUserId ?? entry.teacherUserId;
             const status = exception?.action === 'cancel' ? 'cancelled' : 'planned';
 
-            const existing = await schedule.findLessonForSlot(
-              entry.studyGroupId,
-              date,
-              entry.pairNumber,
-              tx,
-            );
+            // Ищем урок на паре, включая отменённые: отменённый исключением урок
+            // нужно вернуть в план, когда исключение сняли, а не создавать второй
+            // урок на той же паре.
+            const sameDay = await schedule.listLessonsForGroup(entry.studyGroupId, date, date, tx);
+            const existing = sameDay.find((item) => item.pairNumber === entry.pairNumber) ?? null;
 
             if (existing !== null) {
+              // Урок отменён исключением на дату: пока исключение действует,
+              // статус не пересчитываем — иначе отмена терялась бы при каждом
+              // повторном запуске генерации (ADR-006, ADR-009).
+              if (exception?.action === 'cancel' && existing.status === 'cancelled') {
+                continue;
+              }
+
+              // Исключение сняли — урок возвращается в план. Пустая тема отличает
+              // отмену исключением от ручной отмены: её ставит администратор уже
+              // с темой занятия.
+              if (existing.status === 'cancelled' && existing.topic === null) {
+                await schedule.updateLesson(
+                  existing.id,
+                  {
+                    status,
+                    teacherUserId,
+                    plannedTeacherUserId: substituted === null ? null : entry.teacherUserId,
+                    isManual: false,
+                  },
+                  tx,
+                );
+                result.updated += 1;
+                continue;
+              }
+
               if (existing.isManual) {
                 result.skippedManual += 1;
                 continue;
@@ -1147,6 +1171,11 @@ export function createScheduleService(dependencies: ScheduleServiceDependencies)
    *
    * Генерация может пройти до появления исключения — тогда урок нужно привести в
    * соответствие: отменить, перенести или подменить преподавателя.
+   *
+   * Правки помечаются ручными (`isManual`): так повторная генерация не вернёт
+   * статус «по плану» и не перезапишет перенос. Обратная сторона — снятое
+   * исключение само урок не восстановит: восстановление делает генерация, если
+   * исключения на дату уже нет (см. `generateLessons`).
    */
   async function applyExceptionToLesson(
     exception: ScheduleExceptionRecord,

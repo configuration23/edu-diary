@@ -686,6 +686,40 @@ describeWithDatabase('расписание и уроки', () => {
     });
     expect(stillThere.statusCode).toBe(200);
     expect((stillThere.json() as Json).status).toBe('cancelled');
+
+    // Снятие исключения возвращает урок в план: иначе отменённое занятие
+    // оставалось бы отменённым навсегда.
+    const exceptions = await testApp.app.inject({
+      method: 'GET',
+      url: '/api/schedule/exceptions',
+      headers: auth(),
+    });
+    const exception = (exceptions.json() as { items: Json[] }).items.find(
+      (item) => item.exceptionDate === target?.lessonDate && item.action === 'cancel',
+    );
+    expect(exception).toBeDefined();
+
+    const removed = await testApp.app.inject({
+      method: 'DELETE',
+      url: `/api/schedule/exceptions/${exception?.id as string}`,
+      headers: auth(),
+    });
+    expect(removed.statusCode).toBe(204);
+
+    const restored = await testApp.app.inject({
+      method: 'POST',
+      url: '/api/lessons/generate',
+      headers: auth(),
+      payload: { studyGroupId: groupId, from: nextWeekday(2), to: shiftDays(28) },
+    });
+    expect(restored.statusCode).toBe(200);
+
+    const backToPlan = await testApp.app.inject({
+      method: 'GET',
+      url: `/api/lessons/${target?.id as string}`,
+      headers: auth(),
+    });
+    expect((backToPlan.json() as Json).status).toBe('planned');
   });
 
   it('замена на урок: видно и заменяющего, и того, кого заменяют', async () => {
