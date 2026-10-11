@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
+import { requiredISODateSchema } from '@edu-diary/contracts';
 import {
   Alert,
   Badge,
@@ -37,8 +38,8 @@ const groupFormSchema = z
     name: z.string().min(1, 'Укажите название').max(60),
     course: z.string().optional(),
     specialty: z.string().max(120).optional(),
-    startsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Формат ГГГГ-ММ-ДД'),
-    endsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Формат ГГГГ-ММ-ДД'),
+    startsOn: requiredISODateSchema,
+    endsOn: requiredISODateSchema,
   })
   .refine((values) => values.startsOn <= values.endsOn, {
     message: 'Дата начала позже даты окончания',

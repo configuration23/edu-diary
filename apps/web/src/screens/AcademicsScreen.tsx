@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
 import type { AcademicYearDto, PeriodDto } from '@edu-diary/contracts';
+import { requiredISODateSchema } from '@edu-diary/contracts';
 import {
   Alert,
   Badge,
@@ -35,8 +36,8 @@ import {
 const yearFormSchema = z
   .object({
     title: z.string().min(1, 'Укажите название').max(60),
-    startsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Формат ГГГГ-ММ-ДД'),
-    endsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Формат ГГГГ-ММ-ДД'),
+    startsOn: requiredISODateSchema,
+    endsOn: requiredISODateSchema,
     isActive: z.boolean(),
   })
   .refine((values) => values.startsOn <= values.endsOn, {
@@ -48,8 +49,8 @@ const periodFormSchema = z
   .object({
     title: z.string().min(1, 'Укажите название').max(60),
     kind: z.enum(['term', 'semester', 'quarter']),
-    startsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Формат ГГГГ-ММ-ДД'),
-    endsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Формат ГГГГ-ММ-ДД'),
+    startsOn: requiredISODateSchema,
+    endsOn: requiredISODateSchema,
   })
   .refine((values) => values.startsOn <= values.endsOn, {
     message: 'Дата начала позже даты окончания',

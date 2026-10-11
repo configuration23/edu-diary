@@ -1,5 +1,6 @@
 import { useState } from 'react';
 
+import { requiredISODateSchema } from '@edu-diary/contracts';
 import type { SessionResponseDto } from '@edu-diary/contracts';
 import {
   Alert,
@@ -42,6 +43,7 @@ function CreateAssignmentCard() {
   const [startsOn, setStartsOn] = useState('');
   const [endsOn, setEndsOn] = useState('');
   const [hoursPlanned, setHoursPlanned] = useState('');
+  const [dateError, setDateError] = useState<string | null>(null);
 
   const teacherOptions = (teachers.data?.items ?? []).filter((user) =>
     user.roles.some((role) => role.code === 'teacher'),
@@ -56,6 +58,25 @@ function CreateAssignmentCard() {
         className="flex flex-col gap-4"
         onSubmit={async (event) => {
           event.preventDefault();
+          setDateError(null);
+
+          // Проверка календарных дат: браузер пропускает ручной ввод вроде
+          // «31.02.2026», поэтому проверяем до отправки (та же проверка, что в
+          // остальных формах — `requiredISODateSchema`).
+          for (const value of [startsOn, endsOn]) {
+            if (value === '') continue;
+            const parsed = requiredISODateSchema.safeParse(value);
+            if (!parsed.success) {
+              setDateError(parsed.error.issues[0]?.message ?? 'Некорректная дата');
+              return;
+            }
+          }
+
+          if (endsOn !== '' && startsOn !== '' && startsOn > endsOn) {
+            setDateError('Дата начала позже даты окончания');
+            return;
+          }
+
           try {
             await create.mutateAsync({
               teacherUserId,
@@ -142,6 +163,8 @@ function CreateAssignmentCard() {
             />
           </Field>
         </div>
+
+        {dateError !== null && <Alert tone="error">{dateError}</Alert>}
 
         {create.isError && <Alert tone="error">{errorMessage(create.error)}</Alert>}
 
