@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useAcademicContext } from '../components/AcademicContext';
 import { useAppearanceSettings } from '../components/AppearanceContext';
 import { Alert, Badge, Button, Card, EmptyState, Field, Table } from '../components/ui';
-import { SubjectDot, lessonMarker } from '../lib/appearance';
+import { SubjectDot, lessonMarker, subjectColor } from '../lib/appearance';
 import { errorMessage } from '../lib/api-client';
 import { useLessons, useScheduleGroups } from '../lib/queries';
 
@@ -94,15 +94,25 @@ function LessonCard({
 }) {
   const status = STATUS[lesson.status] ?? { label: lesson.status, tone: 'neutral' as const };
 
+  /**
+   * Заливка карточки — цвет предмета, а не статуса.
+   *
+   * Событие (замена, отмена) показывается значком, перенос не обозначаем вовсе:
+   * раньше янтарная заливка говорила «замена», но тот же цвет не значил предмет,
+   * из-за чего схема читалась как случайная. Отменённое занятие остаётся серым:
+   * оно не идёт в зачёт загрузки.
+   */
+  const color = subjectColor(lesson.subjectId, lesson.subjectColor);
+  const filled = colorsEnabled && lesson.status !== 'cancelled';
+
   return (
     <div
       className={`relative rounded-md border p-3 ${
         lesson.status === 'cancelled'
           ? 'border-slate-200 bg-slate-50 text-slate-400'
-          : lesson.status === 'replaced'
-            ? 'border-amber-300 bg-amber-50'
-            : 'border-slate-200 bg-white'
+          : 'border-slate-200'
       }`}
+      style={filled ? { backgroundColor: `${color}22`, borderColor: color } : undefined}
     >
       {/* Значок события в углу: не мешает основной информации о занятии. */}
       {marker !== null && (
@@ -121,7 +131,9 @@ function LessonCard({
       </div>
 
       <div className={`mt-1 font-medium ${lesson.status === 'cancelled' ? 'line-through' : ''}`}>
-        <SubjectDot subjectId={lesson.subjectId} enabled={colorsEnabled} />
+        {colorsEnabled ? (
+          <SubjectDot subjectId={lesson.subjectId} color={lesson.subjectColor} />
+        ) : null}
         {lesson.subjectName}
       </div>
 
@@ -392,17 +404,31 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
                               <span
                                 key={lesson.id}
                                 className={`rounded px-1 text-xs ${
-                                  lesson.status === 'replaced'
-                                    ? 'bg-amber-100 text-amber-900'
+                                  lesson.status === 'cancelled'
+                                    ? 'text-slate-400'
                                     : 'text-slate-700'
                                 }`}
+                                style={
+                                  appearance.colorsEnabled && lesson.status !== 'cancelled'
+                                    ? {
+                                        backgroundColor: `${subjectColor(lesson.subjectId, lesson.subjectColor)}22`,
+                                      }
+                                    : undefined
+                                }
                               >
+                                <SubjectDot
+                                  subjectId={lesson.subjectId}
+                                  color={lesson.subjectColor}
+                                  enabled={
+                                    appearance.colorsEnabled && lesson.status !== 'cancelled'
+                                  }
+                                />
                                 {lesson.subjectName}
                                 {/* Событие видно и в сетке недели: значок вместо слова. */}
                                 {lessonMarker(lesson, appearance) !== null && (
                                   <span className="ml-1">{lessonMarker(lesson, appearance)}</span>
                                 )}
-                                <span className="block text-slate-500">
+                                <span className="block pl-3.5 text-slate-500">
                                   {lesson.groupName} · {lesson.roomName ?? '—'}
                                 </span>
                               </span>
