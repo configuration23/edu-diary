@@ -269,6 +269,16 @@ export const generateLessonsRequestSchema = z
     studyGroupId: uuidSchema.optional(),
     from: isoDateSchema,
     to: isoDateSchema,
+    /**
+     * Стереть уроки периода и создать заново по шаблону.
+     *
+     * По умолчанию выключено: обычная генерация бережёт ручные правки. Включённое
+     * пересоздание удаляет **все** уроки группы за период (в том числе разовые и
+     * отменённые) вместе с оформленными на них заменами — поэтому операция
+     * подтверждается отдельно, а количество попадающих под удаление показывается
+     * заранее.
+     */
+    recreate: z.boolean().optional(),
   })
   .refine((value) => value.from <= value.to, {
     message: 'Дата начала позже даты окончания',
@@ -281,10 +291,27 @@ export const generateLessonsResponseSchema = z.object({
   updated: z.number().int().nonnegative(),
   skippedManual: z.number().int().nonnegative(),
   cancelled: z.number().int().nonnegative(),
+  /** Сколько уроков удалено при пересоздании (0 при обычной генерации). */
+  deleted: z.number().int().nonnegative(),
+  /** Сколько замен снято вместе с удалёнными уроками. */
+  deletedSubstitutions: z.number().int().nonnegative(),
   from: isoDateSchema,
   to: isoDateSchema,
 });
 export type GenerateLessonsResponseDto = z.infer<typeof generateLessonsResponseSchema>;
+
+/**
+ * Предварительный расчёт пересоздания: что именно попадёт под удаление.
+ *
+ * Считается до нажатия, чтобы предупреждение показывало реальные числа, а не
+ * общую фразу «все уроки периода».
+ */
+export const lessonGenerationPreviewSchema = z.object({
+  lessons: z.number().int().nonnegative(),
+  manualLessons: z.number().int().nonnegative(),
+  substitutions: z.number().int().nonnegative(),
+});
+export type LessonGenerationPreviewDto = z.infer<typeof lessonGenerationPreviewSchema>;
 
 /** Замена преподавателя: на один урок либо на диапазон дат (ADR-009). */
 export const substitutionSchema = z.object({

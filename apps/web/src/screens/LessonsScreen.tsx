@@ -11,6 +11,7 @@ import { errorMessage } from '../lib/api-client';
 import {
   useDeleteLesson,
   useGenerateLessons,
+  useGenerationPreview,
   useLessons,
   useRestoreLesson,
   useScheduleGroups,
@@ -242,9 +243,18 @@ function PeriodForm({
   canGenerate: boolean;
 }) {
   const generate = useGenerateLessons();
+  const previewGenerate = useGenerationPreview();
   const [from, setFrom] = useState(todayIso());
   const [to, setTo] = useState(shiftIso(todayIso(), 7));
   const [result, setResult] = useState<string | null>(null);
+  /** Пересоздание: стереть уроки периода и создать заново по шаблону. */
+  const [recreate, setRecreate] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
+  const [counts, setCounts] = useState<{
+    lessons: number;
+    manualLessons: number;
+    substitutions: number;
+  } | null>(null);
 
   return (
     <div className="flex flex-col gap-3">
@@ -266,46 +276,119 @@ function PeriodForm({
 
       {canGenerate && (
         <form
-          className="flex flex-col gap-2 sm:flex-row sm:items-end"
+          className="flex flex-col gap-3"
           onSubmit={async (event) => {
             event.preventDefault();
             if (groupId === null) return;
+
+            /*
+              Пересоздание — опасная операция, поэтому она в два шага: включаем
+              чекбокс, видим числа и предупреждение, затем отдельно подтверждаем.
+              Обычная генерация (без чекбокса) работает одним нажатием.
+            */
+            if (recreate && !confirmed) {
+              const preview = await previewGenerate
+                .mutateAsync({ studyGroupId: groupId, from, to })
+                .catch(() => null);
+              if (preview === null) return;
+              setCounts(preview);
+              setConfirmed(true);
+              return;
+            }
+
             setResult(null);
+            setConfirmed(false);
             try {
-              const response = await generate.mutateAsync({ studyGroupId: groupId, from, to });
+              const response = await generate.mutateAsync({
+                studyGroupId: groupId,
+                from,
+                to,
+                ...(recreate ? { recreate: true } : {}),
+              });
               setResult(
-                `Создано за ${from} — ${to}: уроков ${response.created}, обновлено ${response.updated}, ` +
-                  `пропущено правок вручную ${response.skippedManual}. Смотрите сетку ниже.`,
+                recreate
+                  ? `Пересоздано за ${from} — ${to}: удалено уроков ${response.deleted} ` +
+                      `(снято замен ${response.deletedSubstitutions}), создано ${response.created}. ` +
+                      'Смотрите сетку ниже.'
+                  : `Создано за ${from} — ${to}: уроков ${response.created}, обновлено ${response.updated}, ` +
+                      `пропущено правок вручную ${response.skippedManual}. Смотрите сетку ниже.`,
               );
+              setCounts(null);
             } catch {
               // Ошибка показывается ниже.
             }
           }}
         >
-          <Field label="С даты">
-            <TextInput
-              required
-              type="date"
-              value={from}
-              onChange={(event) => setFrom(event.target.value)}
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+            <Field label="С даты">
+              <TextInput
+                required
+                type="date"
+                value={from}
+                onChange={(event) => {
+                  setFrom(event.target.value);
+                  setConfirmed(false);
+                  setCounts(null);
+                }}
+              />
+            </Field>
+            <Field label="По дату">
+              <TextInput
+                required
+                type="date"
+                value={to}
+                onChange={(event) => {
+                  setTo(event.target.value);
+                  setConfirmed(false);
+                  setCounts(null);
+                }}
+              />
+            </Field>
+            <Button type="submit" disabled={generate.isPending || groupId === null}>
+              {recreate && !confirmed ? 'Показать, что будет удалено' : 'Создать уроки за период'}
+            </Button>
+          </div>
+
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              name="recreate"
+              checked={recreate}
+              onChange={(event) => {
+                setRecreate(event.target.checked);
+                setConfirmed(false);
+                setCounts(null);
+                setResult(null);
+              }}
             />
-          </Field>
-          <Field label="По дату">
-            <TextInput
-              required
-              type="date"
-              value={to}
-              onChange={(event) => setTo(event.target.value)}
-            />
-          </Field>
-          <Button type="submit" disabled={generate.isPending || groupId === null}>
-            Создать уроки за период
-          </Button>
+            Пересоздать уроки за период
+          </label>
+
+          {recreate && (
+            <Alert tone="warning">
+              Все уроки за указанный период будут созданы заново
+              {counts === null
+                ? ', включая созданные вручную. Нажмите «Показать, что будет удалено», чтобы увидеть числа.'
+                : `: будет удалено уроков ${counts.lessons}, из них созданных вручную ${counts.manualLessons}; снято замен ${counts.substitutions}.`}
+            </Alert>
+          )}
+
+          {recreate && confirmed && (
+            <div className="flex flex-wrap items-center gap-3">
+              <Button type="submit" tone="danger" disabled={generate.isPending}>
+                Подтверждаю: пересоздать
+              </Button>
+              <span className="text-sm text-slate-600">
+                Действие попадёт в аудит: кто, когда и за какой период пересоздал уроки.
+              </span>
+            </div>
+          )}
         </form>
       )}
 
       {result !== null && <Alert tone="success">{result}</Alert>}
       {generate.isError && <Alert tone="error">{errorMessage(generate.error)}</Alert>}
+      {previewGenerate.isError && <Alert tone="error">{errorMessage(previewGenerate.error)}</Alert>}
     </div>
   );
 }

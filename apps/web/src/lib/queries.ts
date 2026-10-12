@@ -2,6 +2,7 @@ import {
   academicYearSchema,
   bellScheduleSchema,
   generateLessonsResponseSchema,
+  lessonGenerationPreviewSchema,
   lessonSchema,
   listLessonsResponseSchema,
   listScheduleExceptionsResponseSchema,
@@ -1009,12 +1010,34 @@ export function useLessons(
 export function useGenerateLessons() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (input: { studyGroupId: string; from: string; to: string }) =>
+    mutationFn: (input: {
+      studyGroupId: string;
+      from: string;
+      to: string;
+      /** Стереть уроки периода и создать заново по шаблону. */
+      recreate?: boolean;
+    }) =>
       apiRequest('/api/lessons/generate', generateLessonsResponseSchema, {
         method: 'POST',
         body: input,
       }),
     onSuccess: () => invalidateSchedule(client),
+  });
+}
+
+/**
+ * Предварительный расчёт пересоздания: сколько уроков и замен попадёт под удаление.
+ *
+ * Запрашивается, когда администратор включает чекбокс «Пересоздать», чтобы
+ * предупреждение содержало реальные числа.
+ */
+export function useGenerationPreview() {
+  return useMutation({
+    mutationFn: (input: { studyGroupId: string; from: string; to: string }) =>
+      apiRequest('/api/lessons/generation-preview', lessonGenerationPreviewSchema, {
+        method: 'POST',
+        body: input,
+      }),
   });
 }
 

@@ -277,6 +277,26 @@ export interface ScheduleRepository {
     to: string,
     executor?: Executor,
   ): Promise<LessonRecord[]>;
+  /**
+   * Удалить уроки группы за период: пересоздание расписания из шаблона.
+   *
+   * Замены, оформленные на удаляемые уроки, снимаются каскадом (внешний ключ
+   * `substitution.lesson_id` объявлен с `on delete cascade`), поэтому количество
+   * снятых замен надо посчитать заранее.
+   */
+  deleteLessonsForGroup(
+    studyGroupId: string,
+    from: string,
+    to: string,
+    executor?: Executor,
+  ): Promise<number>;
+  /** Идентификаторы замен, оформленных на уроки группы за период. */
+  listSubstitutionIdsForGroup(
+    studyGroupId: string,
+    from: string,
+    to: string,
+    executor?: Executor,
+  ): Promise<string[]>;
   insertLesson(
     input: {
       scheduleEntryId: string | null;
@@ -681,6 +701,37 @@ export function createScheduleRepository(db: Database): ScheduleRepository {
         .orderBy(asc(lesson.lessonDate), asc(lesson.pairNumber));
 
       return rows.map(toLessonRecord);
+    },
+
+    async deleteLessonsForGroup(studyGroupId, from, to, executor: Executor = db.orm) {
+      const removed = await executor
+        .delete(lesson)
+        .where(
+          and(
+            eq(lesson.studyGroupId, studyGroupId),
+            gte(lesson.lessonDate, from),
+            lte(lesson.lessonDate, to),
+          ),
+        )
+        .returning({ id: lesson.id });
+
+      return removed.length;
+    },
+
+    async listSubstitutionIdsForGroup(studyGroupId, from, to, executor: Executor = db.orm) {
+      const rows = await executor
+        .select({ id: substitution.id })
+        .from(substitution)
+        .innerJoin(lesson, eq(lesson.id, substitution.lessonId))
+        .where(
+          and(
+            eq(lesson.studyGroupId, studyGroupId),
+            gte(lesson.lessonDate, from),
+            lte(lesson.lessonDate, to),
+          ),
+        );
+
+      return rows.map((row) => row.id);
     },
 
     async insertLesson(input, executor: Executor = db.orm) {

@@ -188,16 +188,34 @@ export interface ScheduleService {
   ): Promise<LessonRecord>;
   deleteLesson(id: string, options: MutationOptions): Promise<void>;
   generateLessons(
-    input: { studyGroupId?: string | undefined; from: string; to: string },
+    input: {
+      studyGroupId?: string | undefined;
+      from: string;
+      to: string;
+      /** Стереть уроки периода и создать заново по шаблону. */
+      recreate?: boolean | undefined;
+    },
     options: MutationOptions,
   ): Promise<{
     created: number;
     updated: number;
     skippedManual: number;
     cancelled: number;
+    deleted: number;
+    deletedSubstitutions: number;
     from: string;
     to: string;
   }>;
+
+  /**
+   * Что попадёт под удаление при пересоздании: показывается до нажатия, чтобы
+   * предупреждение содержало реальные числа.
+   */
+  previewLessonGeneration(input: {
+    studyGroupId?: string | undefined;
+    from: string;
+    to: string;
+  }): Promise<{ lessons: number; manualLessons: number; substitutions: number }>;
 
   listSubstitutions(filter: {
     lessonId?: string | undefined;
@@ -248,6 +266,30 @@ export interface ScheduleServiceDependencies {
 export function createScheduleService(dependencies: ScheduleServiceDependencies): ScheduleService {
   const { db, schedule, audit, catalog, users } = dependencies;
   const today = dependencies.today ?? (() => new Date().toISOString().slice(0, 10));
+
+  /**
+   * Что удалит пересоздание: уроки группы за период, из них с ручными правками, и
+   * сколько замен на них оформлено.
+   *
+   * Числа нужны, чтобы предупреждение показывало реальный масштаб до нажатия:
+   * замена снимается каскадом вместе с уроком, и после удаления их уже не счесть.
+   */
+  const readGenerationPreview = async (
+    studyGroupId: string,
+    from: string,
+    to: string,
+  ): Promise<{ lessons: number; manualLessons: number; substitutions: number }> => {
+    const [lessons, substitutionIds] = await Promise.all([
+      schedule.listLessonsForGroup(studyGroupId, from, to),
+      schedule.listSubstitutionIdsForGroup(studyGroupId, from, to),
+    ]);
+
+    return {
+      lessons: lessons.length,
+      manualLessons: lessons.filter((item) => item.isManual).length,
+      substitutions: substitutionIds.length,
+    };
+  };
 
   const requireAssignment = async (id: string): Promise<AssignmentLookup> => {
     const assignment = await catalog.findAssignment(id);
@@ -930,13 +972,52 @@ export function createScheduleService(dependencies: ScheduleServiceDependencies)
         if (group === null) throw new AppError('NOT_FOUND', 'Группа не найдена');
       }
 
+      /**
+       * Пересоздание стирает всё за период, поэтому группа обязательна: без неё
+       * одним нажатием можно обнулить расписание всего заведения.
+       */
+      if (input.recreate === true && input.studyGroupId === undefined) {
+        throw new AppError('VALIDATION_FAILED', 'Для пересоздания нужно выбрать группу', {
+          details: { reason: 'group_required' },
+        });
+      }
+
       const entries = await schedule.listEntries(
         input.studyGroupId === undefined ? {} : { studyGroupId: input.studyGroupId },
       );
 
-      const result = { created: 0, updated: 0, skippedManual: 0, cancelled: 0 };
+      /**
+       * Пересоздание: считаем, что удаляем, **до** транзакции и запоминаем число
+       * снятых замен. Удаление уроков каскадом снимает оформленные на них замены,
+       * поэтому после удаления узнать их количество уже нельзя.
+       */
+      const recreate =
+        input.recreate === true && input.studyGroupId !== undefined
+          ? {
+              groupId: input.studyGroupId,
+              preview: await readGenerationPreview(input.studyGroupId, input.from, input.to),
+            }
+          : null;
+
+      const result = {
+        created: 0,
+        updated: 0,
+        skippedManual: 0,
+        cancelled: 0,
+        deleted: 0,
+        deletedSubstitutions: recreate?.preview.substitutions ?? 0,
+      };
 
       return withTransaction(db, options.executor, async (tx) => {
+        if (recreate !== null) {
+          result.deleted = await schedule.deleteLessonsForGroup(
+            recreate.groupId,
+            input.from,
+            input.to,
+            tx,
+          );
+        }
+
         for (const entry of entries) {
           // Даты, когда занятие действительно должно состояться: день недели
           // совпадает, дата внутри периода действия шаблона и внутри диапазона.
@@ -1033,6 +1114,7 @@ export function createScheduleService(dependencies: ScheduleServiceDependencies)
             entityId: null,
             after: {
               ...result,
+              recreate: input.recreate === true,
               from: input.from,
               to: input.to,
               groupId: input.studyGroupId ?? null,
@@ -1044,6 +1126,16 @@ export function createScheduleService(dependencies: ScheduleServiceDependencies)
 
         return { ...result, from: input.from, to: input.to };
       });
+    },
+
+    async previewLessonGeneration(input) {
+      if (input.studyGroupId === undefined) {
+        throw new AppError('VALIDATION_FAILED', 'Для пересоздания нужно выбрать группу', {
+          details: { reason: 'group_required' },
+        });
+      }
+
+      return readGenerationPreview(input.studyGroupId, input.from, input.to);
     },
 
     listSubstitutions(filter) {

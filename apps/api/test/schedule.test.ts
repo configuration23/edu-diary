@@ -1101,4 +1101,161 @@ describeWithDatabase('расписание и уроки', () => {
     );
     expect(dayLesson?.teacherUserId).toBe(originalUserId);
   });
+
+  it('пересоздание стирает уроки периода, включая ручные, и снимает замены', async () => {
+    const from = nextWeekday(2);
+    const to = shiftDays(28);
+
+    // Готовим состояние: уроки из шаблона, один с ручной правкой и одна замена.
+    await testApp.app.inject({
+      method: 'POST',
+      url: '/api/lessons/generate',
+      headers: auth(),
+      payload: { studyGroupId: groupId, from, to },
+    });
+
+    const listed = await testApp.app.inject({
+      method: 'GET',
+      url: `/api/lessons?studyGroupId=${groupId}&from=${from}&to=${to}`,
+      headers: auth(),
+    });
+    const before = (listed.json() as { items: Json[] }).items;
+    expect(before.length).toBeGreaterThanOrEqual(3);
+
+    const manualLesson = before[0];
+    await testApp.app.inject({
+      method: 'PATCH',
+      url: `/api/lessons/${manualLesson?.id as string}`,
+      headers: auth(),
+      payload: { topic: 'Ручная правка' },
+    });
+
+    const substitute = await createUserAndLogin(testApp.app, adminCookie, {
+      username: 'prepod-peresozdanie',
+      fullName: 'Преподаватель Пересоздания',
+      password: 'kolledzh-peresozdanie-2025',
+      roles: ['teacher'],
+    });
+    const substituteUserId = substitute.id;
+    await testApp.app.inject({
+      method: 'POST',
+      url: '/api/substitutions',
+      headers: auth(),
+      payload: {
+        lessonId: before[1]?.id as string,
+        substituteUserId,
+        reason: 'Больничный',
+      },
+    });
+
+    // Предварительный расчёт: числа должны совпадать с тем, что удалится.
+    const preview = await testApp.app.inject({
+      method: 'POST',
+      url: '/api/lessons/generation-preview',
+      headers: auth(),
+      payload: { studyGroupId: groupId, from, to },
+    });
+    expect(preview.statusCode).toBe(200);
+    const counts = preview.json() as Json;
+    expect(counts.lessons).toBe(before.length);
+    // Ручные правки могли остаться от соседних тестов: важно, что превью их
+    // видит, а не точное число.
+    expect(counts.manualLessons).toBeGreaterThanOrEqual(1);
+    expect(counts.substitutions).toBe(1);
+
+    // Пересоздание без подтверждения группой отклоняется: иначе одним нажатием
+    // можно обнулить расписание всего заведения.
+    const withoutGroup = await testApp.app.inject({
+      method: 'POST',
+      url: '/api/lessons/generate',
+      headers: auth(),
+      payload: { from, to, recreate: true },
+    });
+    expect(withoutGroup.statusCode).toBe(400);
+
+    const recreated = await testApp.app.inject({
+      method: 'POST',
+      url: '/api/lessons/generate',
+      headers: auth(),
+      payload: { studyGroupId: groupId, from, to, recreate: true },
+    });
+    expect(recreated.statusCode).toBe(200);
+    const result = recreated.json() as Json;
+
+    // Всё удалено и создано заново: ручная правка и замена не сохраняются — об
+    // этом и предупреждает интерфейс.
+    expect(result.deleted).toBe(before.length);
+    expect(result.deletedSubstitutions).toBe(1);
+    expect(result.created).toBeGreaterThanOrEqual(3);
+
+    const after = await testApp.app.inject({
+      method: 'GET',
+      url: `/api/lessons?studyGroupId=${groupId}&from=${from}&to=${to}`,
+      headers: auth(),
+    });
+    const afterItems = (after.json() as { items: Json[] }).items;
+    expect(afterItems.length).toBe(result.created as number);
+    expect(afterItems.every((lesson) => lesson.isManual === false)).toBe(true);
+    expect(afterItems.every((lesson) => lesson.topic === null)).toBe(true);
+    expect(afterItems.every((lesson) => lesson.status === 'planned')).toBe(true);
+
+    // Замена снята вместе с уроком: в журнале её больше нет.
+    const journal = await testApp.app.inject({
+      method: 'GET',
+      url: '/api/substitutions',
+      headers: auth(),
+    });
+    expect((journal.json() as { items: Json[] }).items).toHaveLength(0);
+
+    // Факт пересоздания в аудите: видно, что и за какой период стёрли.
+    const audit = await testApp.app.inject({
+      method: 'GET',
+      url: '/api/audit?entityKind=lesson_generation&limit=5',
+      headers: auth(),
+    });
+    const records = (audit.json() as { items: Json[] }).items;
+    const recreateRecord = records.find(
+      (record) => (record.after as Json | undefined)?.recreate === true,
+    );
+    expect(recreateRecord).toBeDefined();
+    expect((recreateRecord?.after as Json).deleted).toBe(before.length);
+  });
+
+  it('обычная генерация ручные правки не трогает', async () => {
+    const from = nextWeekday(2);
+    const to = shiftDays(28);
+
+    const listed = await testApp.app.inject({
+      method: 'GET',
+      url: `/api/lessons?studyGroupId=${groupId}&from=${from}&to=${to}`,
+      headers: auth(),
+    });
+    const lesson = (listed.json() as { items: Json[] }).items[0];
+
+    await testApp.app.inject({
+      method: 'PATCH',
+      url: `/api/lessons/${lesson?.id as string}`,
+      headers: auth(),
+      payload: { topic: 'Сохранённая правка' },
+    });
+
+    const generated = await testApp.app.inject({
+      method: 'POST',
+      url: '/api/lessons/generate',
+      headers: auth(),
+      payload: { studyGroupId: groupId, from, to },
+    });
+
+    const result = generated.json() as Json;
+    expect(result.deleted).toBe(0);
+    expect(result.deletedSubstitutions).toBe(0);
+    expect(result.skippedManual).toBe(1);
+
+    const after = await testApp.app.inject({
+      method: 'GET',
+      url: `/api/lessons/${lesson?.id as string}`,
+      headers: auth(),
+    });
+    expect((after.json() as Json).topic).toBe('Сохранённая правка');
+  });
 });

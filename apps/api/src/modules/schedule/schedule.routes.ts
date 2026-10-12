@@ -487,6 +487,20 @@ export function registerScheduleRoutes(
     },
   );
 
+  /**
+   * Что удалит пересоздание: показывается до нажатия, чтобы предупреждение
+   * содержало реальные числа, а не общую фразу.
+   */
+  app.post(
+    '/lessons/generation-preview',
+    { preHandler: requirePermission('schedule:write', 'all') },
+    async (request) => {
+      const body = generateLessonsRequestSchema.parse(request.body);
+
+      return schedule.previewLessonGeneration(body);
+    },
+  );
+
   app.get(
     '/substitutions',
     { preHandler: requirePermission('lessons:read', 'own') },
