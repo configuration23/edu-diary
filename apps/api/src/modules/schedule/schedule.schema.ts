@@ -14,7 +14,7 @@ import {
 } from 'drizzle-orm/pg-core';
 
 import { uuidv7 } from '../../shared/ids';
-import { room, studyGroup, subject } from '../academics';
+import { period, room, studyGroup, subject } from '../academics';
 import { teachingAssignment } from '../staffing';
 
 /**
@@ -161,6 +161,8 @@ export const lesson = pgTable(
     timeEnd: time('time_end').notNull(),
     topic: text('topic'),
     lessonType: text('lesson_type'),
+    /** Учебный период, в который попал урок: границы для правил и аналитики (ADR-009). */
+    periodId: uuid('period_id').references(() => period.id, { onDelete: 'set null' }),
     /** planned | done | cancelled | replaced */
     status: text('status').notNull().default('planned'),
     /** Правку внесли вручную: повторная генерация такую запись не перезаписывает. */

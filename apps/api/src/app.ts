@@ -13,6 +13,11 @@ import { buildIamServices, createIamModule, type SessionRevokerPort } from './mo
 import { createGuardiansRepository } from './modules/iam/iam.guardians.repository';
 import { createUsersRepository } from './modules/iam/iam.users.repository';
 import type { UsersService } from './modules/iam/iam.users.service';
+import {
+  buildJournalService,
+  createJournalModule,
+  createJournalRepository,
+} from './modules/journal';
 import { buildPrivacyService, createPrivacyModule } from './modules/privacy';
 import {
   buildScheduleService,
@@ -265,6 +270,60 @@ export async function buildApp({
     users: scheduleUsers,
   });
 
+  /**
+   * Журнал (оценки и посещаемость). Порт расписания отдаёт урок и состав
+   * смотрящего: модуль журнала не знает ни о таблице уроков, ни о зачислениях.
+   */
+  const journal = buildJournalService({
+    db,
+    audit,
+    journal: createJournalRepository(db),
+    schedule: {
+      async findLesson(id) {
+        const lesson = await schedule.getLesson(id);
+        if (lesson === null) return null;
+
+        const [group, subject] = await Promise.all([
+          academicsRepository.findGroup(lesson.studyGroupId),
+          academicsRepository.findSubject(lesson.subjectId),
+        ]);
+        const teacher = await userLookup.findActiveUser(lesson.teacherUserId);
+
+        return {
+          id: lesson.id,
+          lessonDate: lesson.lessonDate,
+          pairNumber: lesson.pairNumber,
+          timeStart: lesson.timeStart,
+          timeEnd: lesson.timeEnd,
+          studyGroupId: lesson.studyGroupId,
+          groupName: group?.name ?? lesson.groupName,
+          subjectId: lesson.subjectId,
+          subjectName: subject?.name ?? lesson.subjectName,
+          teacherUserId: lesson.teacherUserId,
+          teacherName: teacher?.fullName ?? '',
+          topic: lesson.topic,
+          status: lesson.status,
+        };
+      },
+      async groupsOfViewer(userId) {
+        const own = await academicsRepository.findStudentByUserId(userId);
+        const studentIds = new Set<string>();
+        if (own !== null) studentIds.add(own.id);
+        for (const id of await guardiansRepository.studentIdsOfGuardian(userId)) {
+          studentIds.add(id);
+        }
+
+        const groups = await academicsRepository.listGroupsForStudents([...studentIds]);
+        return groups.map((group) => group.id);
+      },
+      async studentIdOfUser(userId) {
+        const student = await academicsRepository.findStudentByUserId(userId);
+        return student?.id ?? null;
+      },
+      studentIdsOfGuardian: (userId) => guardiansRepository.studentIdsOfGuardian(userId),
+    },
+  });
+
   let authService: SessionRevokerPort | null = null;
   const sessionsPort: SessionRevokerPort = {
     revokeUserSessions(userId, options, executor) {
@@ -346,6 +405,30 @@ export async function buildApp({
       prefix: '/api',
     },
   );
+  await app.register(
+    createJournalModule({
+      db,
+      audit,
+      journal,
+      async isOwnStudent(viewerUserId, studentId) {
+        const own = await academicsRepository.findStudentByUserId(viewerUserId);
+        if (own?.id === studentId) return true;
+        const children = await guardiansRepository.studentIdsOfGuardian(viewerUserId);
+        return children.includes(studentId);
+      },
+      async studentsOfViewer(viewerUserId) {
+        const own = await academicsRepository.findStudentByUserId(viewerUserId);
+        const studentIds = new Set<string>();
+        if (own !== null) studentIds.add(own.id);
+        for (const id of await guardiansRepository.studentIdsOfGuardian(viewerUserId)) {
+          studentIds.add(id);
+        }
+        return [...studentIds];
+      },
+    }),
+    { prefix: '/api' },
+  );
+
   await app.register(createAuditModule({ audit }), { prefix: '/api' });
   await app.register(createSecurityModule({ security, audit }), { prefix: '/api' });
   await app.register(createPrivacyModule({ privacy }), { prefix: '/api' });

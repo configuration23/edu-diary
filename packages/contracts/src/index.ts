@@ -11,3 +11,4 @@ export * from './setup';
 export * from './students';
 export * from './users';
 export * from './appearance';
+export * from './journal';

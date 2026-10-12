@@ -50,6 +50,20 @@
       "when": 1791733002367,
       "tag": "0006_bell_schedule",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791829103441,
+      "tag": "0007_journal",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791830520582,
+      "tag": "0008_lesson_period",
+      "breakpoints": true
     }
   ]
 }
