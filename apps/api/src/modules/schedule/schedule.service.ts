@@ -60,6 +60,17 @@ export interface UserLookupPort {
 
 export interface CatalogLookupPort {
   findAssignment(id: string): Promise<AssignmentLookup | null>;
+  /**
+   * Действующее назначение «преподаватель ↔ предмет ↔ группа» на дату.
+   *
+   * Нужно уроку, поставленному вручную: занятие всегда опирается на назначение —
+   * предмет в группе кто-то ведёт, — поэтому урок без назначения создавать нельзя.
+   */
+  findAssignmentForGroupSubject(
+    studyGroupId: string,
+    subjectId: string,
+    date: string,
+  ): Promise<AssignmentLookup | null>;
   findRoom(id: string): Promise<{ id: string; name: string } | null>;
   findGroup(id: string): Promise<{ id: string; name: string } | null>;
   /**
@@ -187,6 +198,25 @@ export interface ScheduleService {
     options: MutationOptions,
   ): Promise<LessonRecord>;
   deleteLesson(id: string, options: MutationOptions): Promise<void>;
+  /**
+   * Урок вручную: внеплановое занятие или оперативная правка расписания на неделю.
+   *
+   * Создаётся без привязки к занятию шаблона — генерация такие уроки не трогает.
+   */
+  createLesson(
+    input: {
+      studyGroupId: string;
+      subjectId: string;
+      teacherUserId: string;
+      roomId?: string | null | undefined;
+      lessonDate: string;
+      pairNumber: number;
+      timeStart?: string | undefined;
+      timeEnd?: string | undefined;
+      topic?: string | null | undefined;
+    },
+    options: MutationOptions,
+  ): Promise<LessonRecord>;
   generateLessons(
     input: {
       studyGroupId?: string | undefined;
@@ -959,6 +989,124 @@ export function createScheduleService(dependencies: ScheduleServiceDependencies)
           options.actor,
           tx,
         );
+      });
+    },
+
+    /**
+     * Урок вручную: внеплановое занятие или оперативная правка недели.
+     *
+     * Привязки к занятию шаблона нет (`scheduleEntryId = null`): генерация такой
+     * урок не создаёт и не удаляет, а пересоздание за период затирает его вместе с
+     * остальными — об этом предупреждает интерфейс.
+     *
+     * Опора — назначение: предмет в группе кто-то ведёт, иначе занятие не имеет
+     * смысла. Преподавателя можно указать любого активного (например, заменяющего
+     * на один урок), назначение при этом остаётся прежним.
+     */
+    async createLesson(input, options) {
+      const group = await catalog.findGroup(input.studyGroupId);
+      if (group === null) throw new AppError('NOT_FOUND', 'Группа не найдена');
+
+      const teacher = await users.findActiveTeacher(input.teacherUserId);
+      if (teacher === null) {
+        throw new AppError('VALIDATION_FAILED', 'Преподаватель не найден или не активен');
+      }
+
+      /**
+       * Урок опирается на назначение: предмет в группе кто-то ведёт по учебному
+       * плану. Заодно из назначения берём название предмета — отдельная проверка
+       * «предмет существует» была бы лишним запросом.
+       */
+      const assignment = await catalog.findAssignmentForGroupSubject(
+        input.studyGroupId,
+        input.subjectId,
+        input.lessonDate,
+      );
+
+      if (assignment === null) {
+        throw new AppError(
+          'VALIDATION_FAILED',
+          'На эту дату у группы нет назначения по предмету — сначала оформите назначение',
+          { details: { reason: 'assignment_not_found' } },
+        );
+      }
+
+      // Время берём из звонков, если в форме его не задали: сетка заведения —
+      // источник истины для «который час идёт пара».
+      let { timeStart, timeEnd } = input;
+      if (timeStart === undefined || timeEnd === undefined) {
+        const bells = await schedule.listBells();
+        const bell = bells.find((item) => item.pairNumber === input.pairNumber);
+
+        if (bell === undefined) {
+          throw new AppError(
+            'VALIDATION_FAILED',
+            `Для ${input.pairNumber}-й пары не заданы звонки — укажите время вручную или заполните справочник «Звонки»`,
+            { details: { pairNumber: input.pairNumber } },
+          );
+        }
+
+        timeStart = bell.timeStart;
+        timeEnd = bell.timeEnd;
+      }
+
+      assertTimesValid(timeStart, timeEnd);
+
+      // Пара должна быть свободна: второе занятие у группы на ту же пару —
+      // не расписание, а дубль.
+      const sameDay = await schedule.listLessonsForGroup(
+        input.studyGroupId,
+        input.lessonDate,
+        input.lessonDate,
+      );
+      const busy = sameDay.find(
+        (item) => item.pairNumber === input.pairNumber && item.status !== 'cancelled',
+      );
+
+      if (busy !== undefined) {
+        throw new AppError('CONFLICT', 'На эту пару у группы уже есть занятие', {
+          details: { reason: 'group_overlap', lessonId: busy.id },
+        });
+      }
+
+      return withTransaction(db, options.executor, async (tx) => {
+        const created = await schedule.insertLesson(
+          {
+            scheduleEntryId: null,
+            assignmentId: assignment.id,
+            studyGroupId: input.studyGroupId,
+            subjectId: input.subjectId,
+            teacherUserId: input.teacherUserId,
+            roomId: input.roomId ?? null,
+            lessonDate: input.lessonDate,
+            pairNumber: input.pairNumber,
+            timeStart,
+            timeEnd,
+            status: 'planned',
+            isManual: true,
+          },
+          tx,
+        );
+
+        await audit.record(
+          {
+            action: 'create',
+            entityKind: 'lesson',
+            entityId: created.id,
+            after: {
+              studyGroupId: created.studyGroupId,
+              subjectId: created.subjectId,
+              teacherUserId: created.teacherUserId,
+              lessonDate: created.lessonDate,
+              pairNumber: created.pairNumber,
+              source: 'manual',
+            },
+          },
+          options.actor,
+          tx,
+        );
+
+        return created;
       });
     },
 

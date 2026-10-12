@@ -1387,4 +1387,111 @@ describeWithDatabase('расписание и уроки', () => {
     const kept = afterItems.find((lesson) => lesson.id === sparedLesson?.id);
     expect(kept?.topic).toBe('Оставить как есть');
   });
+
+  it('урок вручную: создаётся вне шаблона, генерация его не трогает, пересоздание затирает', async () => {
+    const from = nextWeekday(2);
+    const to = shiftDays(28);
+
+    // Чистое состояние: только уроки из шаблона.
+    await testApp.app.inject({
+      method: 'POST',
+      url: '/api/lessons/generate',
+      headers: auth(),
+      payload: { studyGroupId: groupId, from, to, recreate: true },
+    });
+
+    const assignments = await testApp.app.inject({
+      method: 'GET',
+      url: `/api/assignments?studyGroupId=${groupId}`,
+      headers: auth(),
+    });
+    const assignment = (assignments.json() as { items: Json[] }).items[0];
+    expect(assignment).toBeDefined();
+
+    const subjectId = assignment?.subjectId as string;
+    const teacherUserId = assignment?.teacherUserId as string;
+
+    // Время задаём явно: справочник звонков в этом наборе тестов очищается
+    // отдельной проверкой, и зависеть от него здесь не стоит.
+    const freePair = 3;
+    const lessonDate = nextWeekday(3);
+
+    const created = await testApp.app.inject({
+      method: 'POST',
+      url: '/api/lessons',
+      headers: auth(),
+      payload: {
+        studyGroupId: groupId,
+        subjectId,
+        teacherUserId,
+        lessonDate,
+        pairNumber: freePair,
+        timeStart: '11:30',
+        timeEnd: '13:00',
+      },
+    });
+    expect(created.statusCode, JSON.stringify(created.json())).toBe(201);
+
+    const manualLesson = created.json() as Json;
+    expect(manualLesson.scheduleEntryId).toBeNull();
+    expect(manualLesson.isManual).toBe(true);
+    expect(manualLesson.status).toBe('planned');
+    expect(manualLesson.lessonDate).toBe(lessonDate);
+    expect(manualLesson.pairNumber).toBe(freePair);
+    // Время взято из запроса.
+    expect(manualLesson.timeStart).toBe('11:30');
+    expect(manualLesson.timeEnd).toBe('13:00');
+
+    // Вторая группа занятий на ту же пару не ставится.
+    const duplicate = await testApp.app.inject({
+      method: 'POST',
+      url: '/api/lessons',
+      headers: auth(),
+      payload: {
+        studyGroupId: groupId,
+        subjectId,
+        teacherUserId,
+        lessonDate,
+        pairNumber: freePair,
+        timeStart: '11:30',
+        timeEnd: '13:00',
+      },
+    });
+    expect(duplicate.statusCode).toBe(409);
+
+    // Обычная генерация разовый урок не трогает: он без привязки к шаблону.
+    const generated = await testApp.app.inject({
+      method: 'POST',
+      url: '/api/lessons/generate',
+      headers: auth(),
+      payload: { studyGroupId: groupId, from, to },
+    });
+    const result = generated.json() as Json;
+    expect(result.deleted).toBe(0);
+
+    const survived = await testApp.app.inject({
+      method: 'GET',
+      url: `/api/lessons/${manualLesson.id as string}`,
+      headers: auth(),
+    });
+    expect(survived.statusCode).toBe(200);
+    expect((survived.json() as Json).isManual).toBe(true);
+
+    // Пересоздание затирает всё за период, включая разовый урок: об этом и
+    // предупреждает интерфейс.
+    const recreated = await testApp.app.inject({
+      method: 'POST',
+      url: '/api/lessons/generate',
+      headers: auth(),
+      payload: { studyGroupId: groupId, from, to, recreate: true },
+    });
+    expect(recreated.statusCode).toBe(200);
+
+    const gone = await testApp.app.inject({
+      method: 'GET',
+      url: `/api/lessons/${manualLesson.id as string}`,
+      headers: auth(),
+    });
+    expect(gone.statusCode).toBe(404);
+  });
 });

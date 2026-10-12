@@ -1041,6 +1041,30 @@ export function useGenerationPreview() {
   });
 }
 
+/**
+ * Урок вручную: внеплановое занятие или правка расписания на неделю.
+ *
+ * Такой урок не связан с шаблоном, поэтому генерация его не создаёт и не удаляет;
+ * пересоздание за период его затрёт (об этом предупреждает форма генерации).
+ */
+export function useCreateLesson() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      studyGroupId: string;
+      subjectId: string;
+      teacherUserId: string;
+      roomId?: string | null;
+      lessonDate: string;
+      pairNumber: number;
+      timeStart?: string;
+      timeEnd?: string;
+      topic?: string | null;
+    }) => apiRequest('/api/lessons', lessonSchema, { method: 'POST', body: input }),
+    onSuccess: () => invalidateSchedule(client),
+  });
+}
+
 export function useUpdateLesson() {
   const client = useQueryClient();
   return useMutation({

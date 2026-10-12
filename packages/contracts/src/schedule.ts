@@ -263,6 +263,29 @@ export const updateLessonRequestSchema = z
   .refine((value) => Object.keys(value).length > 0, { message: 'Нет полей для изменения' });
 export type UpdateLessonRequestDto = z.infer<typeof updateLessonRequestSchema>;
 
+/**
+ * Урок, поставленный в расписание вручную.
+ *
+ * Такой урок не связан с занятием шаблона (`scheduleEntryId = null`): генерация его
+ * не создаёт и не удаляет, а пересоздание за период — затирает вместе с остальными.
+ * Нужен для внеплановых занятий и оперативной правки расписания на неделю.
+ *
+ * Время необязательно: если его не указали, берём из справочника «Звонки», как и
+ * при заполнении шаблона.
+ */
+export const createLessonRequestSchema = z.object({
+  studyGroupId: uuidSchema,
+  subjectId: uuidSchema,
+  teacherUserId: uuidSchema,
+  roomId: uuidSchema.nullable().optional(),
+  lessonDate: isoDateSchema,
+  pairNumber: pairNumberSchema,
+  timeStart: timeOfDaySchema.optional(),
+  timeEnd: timeOfDaySchema.optional(),
+  topic: z.string().max(200).nullable().optional(),
+});
+export type CreateLessonRequestDto = z.infer<typeof createLessonRequestSchema>;
+
 /** Генерация уроков из шаблона на период. */
 export const generateLessonsRequestSchema = z
   .object({

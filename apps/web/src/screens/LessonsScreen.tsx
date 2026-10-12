@@ -9,13 +9,17 @@ import { Alert, Badge, Button, Card, EmptyState, Field, TextInput } from '../com
 import { SubjectDot, lessonMarker, subjectColor } from '../lib/appearance';
 import { errorMessage } from '../lib/api-client';
 import {
+  useCreateLesson,
   useDeleteLesson,
   useGenerateLessons,
   useGenerationPreview,
   useLessons,
   useRestoreLesson,
+  useRooms,
   useScheduleGroups,
+  useSubjects,
   useSubstitutions,
+  useTeachers,
   useUpdateLesson,
 } from '../lib/queries';
 
@@ -72,6 +76,142 @@ function mondayOf(iso: string): string {
 function dayIndex(iso: string): number {
   const date = new Date(`${iso}T00:00:00`);
   return date.getDay() === 0 ? 6 : date.getDay() - 1;
+}
+
+/** Форма нового урока: ставим занятие в конкретную клетку сетки. */
+function ManualLessonForm({
+  studyGroupId,
+  lessonDate,
+  pairNumber,
+  onDone,
+}: {
+  studyGroupId: string;
+  lessonDate: string;
+  pairNumber: number;
+  onDone: () => void;
+}) {
+  const subjects = useSubjects();
+  const teachers = useTeachers();
+  const rooms = useRooms();
+  const create = useCreateLesson();
+
+  const [subjectId, setSubjectId] = useState('');
+  const [teacherUserId, setTeacherUserId] = useState('');
+  const [roomId, setRoomId] = useState('');
+  const [timeStart, setTimeStart] = useState('');
+  const [timeEnd, setTimeEnd] = useState('');
+
+  return (
+    <form
+      className="flex flex-col gap-2"
+      onSubmit={async (event) => {
+        event.preventDefault();
+        try {
+          await create.mutateAsync({
+            studyGroupId,
+            subjectId,
+            teacherUserId,
+            ...(roomId === '' ? {} : { roomId }),
+            lessonDate,
+            pairNumber,
+            // Время необязательно: если не указали, сервер возьмёт его из звонков.
+            ...(timeStart === '' ? {} : { timeStart }),
+            ...(timeEnd === '' ? {} : { timeEnd }),
+          });
+          onDone();
+        } catch {
+          // Ошибка показывается ниже.
+        }
+      }}
+    >
+      <div className="text-sm text-slate-600">
+        Новый урок: {lessonDate}, {pairNumber}-я пара
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        <Field label="Предмет">
+          <select
+            required
+            name="subjectId"
+            className={selectClass}
+            value={subjectId}
+            onChange={(event) => setSubjectId(event.target.value)}
+          >
+            <option value="">— выберите предмет —</option>
+            {(subjects.data?.items ?? []).map((subject) => (
+              <option key={subject.id} value={subject.id}>
+                {subject.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        <Field label="Преподаватель">
+          <select
+            required
+            name="teacherUserId"
+            className={selectClass}
+            value={teacherUserId}
+            onChange={(event) => setTeacherUserId(event.target.value)}
+          >
+            <option value="">— выберите преподавателя —</option>
+            {(teachers.data?.items ?? []).map((teacher) => (
+              <option key={teacher.id} value={teacher.id}>
+                {teacher.fullName}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        <Field label="Аудитория" hint="Необязательно">
+          <select
+            name="roomId"
+            className={selectClass}
+            value={roomId}
+            onChange={(event) => setRoomId(event.target.value)}
+          >
+            <option value="">— не указана —</option>
+            {(rooms.data?.items ?? []).map((room) => (
+              <option key={room.id} value={room.id}>
+                {room.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        <div className="grid grid-cols-2 gap-2">
+          <Field label="Начало" hint="Из звонков">
+            <TextInput
+              type="time"
+              value={timeStart}
+              onChange={(event) => setTimeStart(event.target.value)}
+            />
+          </Field>
+          <Field label="Конец">
+            <TextInput
+              type="time"
+              value={timeEnd}
+              onChange={(event) => setTimeEnd(event.target.value)}
+            />
+          </Field>
+        </div>
+      </div>
+
+      {create.isError && <Alert tone="error">{errorMessage(create.error)}</Alert>}
+
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="submit"
+          disabled={create.isPending || subjectId === '' || teacherUserId === ''}
+        >
+          Поставить урок
+        </Button>
+        <Button tone="ghost" type="button" onClick={onDone}>
+          Отмена
+        </Button>
+      </div>
+    </form>
+  );
 }
 
 /** Действия и подробности одного урока: заменяет правку прямо в ячейке. */
@@ -412,6 +552,9 @@ export function LessonsScreen({ session }: { session: SessionResponseDto }) {
   const [anchor, setAnchor] = useState(todayIso());
   const [showCancelled, setShowCancelled] = useState(false);
   const [selectedLessonId, setSelectedLessonId] = useState<string | null>(null);
+  /** Режим правки: пустые клетки сетки открывают форму нового урока. */
+  const [editing, setEditing] = useState(false);
+  const [newSlot, setNewSlot] = useState<{ date: string; pairNumber: number } | null>(null);
 
   const appearance = useAppearanceSettings();
 
@@ -552,6 +695,23 @@ export function LessonsScreen({ session }: { session: SessionResponseDto }) {
             </span>
           </Field>
 
+          {canGenerate && (
+            <Field label="Правка расписания" hint="Уроки ставятся без шаблона">
+              <Button
+                tone={editing ? 'primary' : 'secondary'}
+                type="button"
+                id="edit-week"
+                disabled={selectedGroupId === null}
+                onClick={() => {
+                  setEditing((current) => !current);
+                  setNewSlot(null);
+                }}
+              >
+                {editing ? 'Выйти из правки' : 'Править неделю'}
+              </Button>
+            </Field>
+          )}
+
           <Field label="Отсчёт">
             <span className="flex items-center gap-2">
               <Button
@@ -598,6 +758,15 @@ export function LessonsScreen({ session }: { session: SessionResponseDto }) {
           </label>
         </div>
 
+        {editing && (
+          <div className="mt-3">
+            <Alert tone="info">
+              Режим правки: нажмите на свободную клетку сетки, чтобы поставить урок. Такой урок не
+              связан с шаблоном — генерация его не тронет, но «Пересоздать за период» затрёт.
+            </Alert>
+          </div>
+        )}
+
         {lessons.isError && <Alert tone="error">{errorMessage(lessons.error)}</Alert>}
 
         {selectedLesson !== null && (
@@ -612,12 +781,23 @@ export function LessonsScreen({ session }: { session: SessionResponseDto }) {
           </div>
         )}
 
+        {newSlot !== null && selectedGroupId !== null && (
+          <div className="mt-4 rounded-md border border-sky-200 bg-sky-50 p-4">
+            <ManualLessonForm
+              studyGroupId={selectedGroupId}
+              lessonDate={newSlot.date}
+              pairNumber={newSlot.pairNumber}
+              onDone={() => setNewSlot(null)}
+            />
+          </div>
+        )}
+
         {items.length === 0 && !lessons.isLoading && (
           <div className="mt-4">
             <EmptyState>
               {selectedGroupId === null
                 ? 'Выберите группу: сетка строится по одной группе.'
-                : 'За этот период уроков нет. Их можно создать выше.'}
+                : 'За этот период уроков нет. Их можно создать выше или поставить вручную в режиме правки.'}
             </EmptyState>
           </div>
         )}
@@ -652,11 +832,31 @@ export function LessonsScreen({ session }: { session: SessionResponseDto }) {
                           const cell = visible.filter(
                             (lesson) => lesson.lessonDate === iso && lesson.pairNumber === pair,
                           );
+                          const isNewSlot =
+                            newSlot !== null && newSlot.date === iso && newSlot.pairNumber === pair;
 
                           return (
                             <td key={iso} className="px-0.5 py-1 align-top">
                               {cell.length === 0 ? (
-                                <span className="text-[11px] text-slate-300">·</span>
+                                editing && canGenerate && selectedGroupId !== null ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedLessonId(null);
+                                      setNewSlot({ date: iso, pairNumber: pair });
+                                    }}
+                                    title="Поставить урок"
+                                    className={`w-full rounded border border-dashed px-1 py-0.5 text-left text-[11px] ${
+                                      isNewSlot
+                                        ? 'border-sky-500 bg-sky-100 text-sky-800'
+                                        : 'border-slate-300 text-slate-400 hover:border-sky-400 hover:text-sky-700'
+                                    }`}
+                                  >
+                                    + урок
+                                  </button>
+                                ) : (
+                                  <span className="text-[11px] text-slate-300">·</span>
+                                )
                               ) : (
                                 <span className="flex flex-col gap-0.5">
                                   {cell.slice(0, 2).map((lesson) => tile(lesson))}

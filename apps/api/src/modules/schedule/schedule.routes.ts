@@ -1,5 +1,6 @@
 import {
   bellScheduleSchema,
+  createLessonRequestSchema,
   createScheduleEntryRequestSchema,
   createScheduleExceptionRequestSchema,
   createSubstitutionRequestSchema,
@@ -321,6 +322,24 @@ export function registerScheduleRoutes(
 
       reply.status(204);
       return null;
+    },
+  );
+
+  /**
+   * Урок вручную: внеплановое занятие или оперативная правка недели.
+   *
+   * Такой урок не связан с шаблоном, поэтому генерация его не создаёт и не удаляет.
+   */
+  app.post(
+    '/lessons',
+    { preHandler: requirePermission('schedule:write', 'all') },
+    async (request, reply) => {
+      const body = createLessonRequestSchema.parse(request.body);
+      const created = await schedule.createLesson(body, { actor: actorFromRequest(request) });
+      const names = await teacherNames([created]);
+
+      reply.status(201);
+      return toLessonDto(created, names, new Map());
     },
   );
 

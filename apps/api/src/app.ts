@@ -188,6 +188,30 @@ export async function buildApp({
         groupName: assignment.groupName,
       };
     },
+    async findAssignmentForGroupSubject(studyGroupId, subjectId, date) {
+      // Действующее назначение на дату: у одного предмета в группе оно одно
+      // (ADR-030), поэтому берём первое подходящее по периоду действия.
+      const assignments = await staffingRepository.listByGroup(studyGroupId);
+      const found = assignments.find(
+        (assignment) =>
+          assignment.subjectId === subjectId &&
+          assignment.startsOn <= date &&
+          (assignment.endsOn === null || assignment.endsOn >= date),
+      );
+
+      if (found === undefined) return null;
+
+      return {
+        id: found.id,
+        teacherUserId: found.teacherUserId,
+        subjectId: found.subjectId,
+        studyGroupId: found.studyGroupId,
+        startsOn: found.startsOn,
+        endsOn: found.endsOn,
+        subjectName: found.subjectName,
+        groupName: found.groupName,
+      };
+    },
     async findRoom(id) {
       const room = await academicsRepository.findRoom(id);
       return room === null ? null : { id: room.id, name: room.name };
