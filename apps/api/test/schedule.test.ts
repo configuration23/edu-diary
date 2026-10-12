@@ -1258,4 +1258,133 @@ describeWithDatabase('расписание и уроки', () => {
     });
     expect((after.json() as Json).topic).toBe('Сохранённая правка');
   });
+
+  it('перенос пары в шаблоне переезжает в уроках, а не раздваивается', async () => {
+    const from = nextWeekday(2);
+    const to = shiftDays(28);
+
+    // Чистое состояние: создаём уроки по шаблону.
+    await testApp.app.inject({
+      method: 'POST',
+      url: '/api/lessons/generate',
+      headers: auth(),
+      payload: { studyGroupId: groupId, from, to, recreate: true },
+    });
+
+    const entries = await testApp.app.inject({
+      method: 'GET',
+      url: `/api/schedule?studyGroupId=${groupId}`,
+      headers: auth(),
+    });
+    const entry = (entries.json() as { items: Json[] }).items[0];
+    expect(entry).toBeDefined();
+
+    const before = await testApp.app.inject({
+      method: 'GET',
+      url: `/api/lessons?studyGroupId=${groupId}&from=${from}&to=${to}`,
+      headers: auth(),
+    });
+    const beforeItems = (before.json() as { items: Json[] }).items;
+    const countBefore = beforeItems.length;
+    const oldPair = entry?.pairNumber as number;
+    const newPair = oldPair === 8 ? 7 : oldPair + 1;
+    const movedLesson = beforeItems.find((lesson) => lesson.pairNumber === oldPair);
+    expect(movedLesson).toBeDefined();
+
+    // Переносим пару в шаблоне: время берём из справочника звонков, чтобы пара
+    // осталась валидной.
+    const moved = await testApp.app.inject({
+      method: 'PATCH',
+      url: `/api/schedule/${entry?.id as string}`,
+      headers: auth(),
+      payload: { pairNumber: newPair },
+    });
+    expect(moved.statusCode).toBe(200);
+
+    const generated = await testApp.app.inject({
+      method: 'POST',
+      url: '/api/lessons/generate',
+      headers: auth(),
+      payload: { studyGroupId: groupId, from, to },
+    });
+    expect(generated.statusCode).toBe(200);
+
+    const after = await testApp.app.inject({
+      method: 'GET',
+      url: `/api/lessons?studyGroupId=${groupId}&from=${from}&to=${to}`,
+      headers: auth(),
+    });
+    const afterItems = (after.json() as { items: Json[] }).items;
+
+    // Количество не выросло: урок переехал, а не создался второй.
+    expect(afterItems.length).toBe(countBefore);
+    expect(afterItems.some((lesson) => lesson.pairNumber === oldPair)).toBe(false);
+    expect(
+      afterItems.filter((lesson) => lesson.pairNumber === newPair).length,
+    ).toBeGreaterThanOrEqual(1);
+    // Тот же урок, а не новый: идентификатор сохранился.
+    expect(afterItems.some((lesson) => lesson.id === movedLesson?.id)).toBe(true);
+  });
+
+  it('удаление занятия шаблона убирает созданные им уроки, но не ручные правки', async () => {
+    const from = nextWeekday(2);
+    const to = shiftDays(28);
+
+    const entries = await testApp.app.inject({
+      method: 'GET',
+      url: `/api/schedule?studyGroupId=${groupId}`,
+      headers: auth(),
+    });
+    const items = (entries.json() as { items: Json[] }).items;
+    expect(items.length).toBeGreaterThanOrEqual(2);
+
+    const doomed = items[0];
+    const spared = items[1];
+
+    const listed = await testApp.app.inject({
+      method: 'GET',
+      url: `/api/lessons?studyGroupId=${groupId}&from=${from}&to=${to}`,
+      headers: auth(),
+    });
+    const beforeItems = (listed.json() as { items: Json[] }).items;
+    const doomedLessons = beforeItems.filter((lesson) => lesson.scheduleEntryId === doomed?.id);
+    const sparedLesson = beforeItems.find((lesson) => lesson.scheduleEntryId === spared?.id);
+    expect(doomedLessons.length).toBeGreaterThan(0);
+
+    // У одного урока «спасаемого» занятия ставим ручную правку: он должен остаться.
+    await testApp.app.inject({
+      method: 'PATCH',
+      url: `/api/lessons/${sparedLesson?.id as string}`,
+      headers: auth(),
+      payload: { topic: 'Оставить как есть' },
+    });
+
+    const removed = await testApp.app.inject({
+      method: 'DELETE',
+      url: `/api/schedule/${doomed?.id as string}`,
+      headers: auth(),
+    });
+    expect(removed.statusCode).toBe(204);
+
+    await testApp.app.inject({
+      method: 'POST',
+      url: '/api/lessons/generate',
+      headers: auth(),
+      payload: { studyGroupId: groupId, from, to },
+    });
+
+    const after = await testApp.app.inject({
+      method: 'GET',
+      url: `/api/lessons?studyGroupId=${groupId}&from=${from}&to=${to}`,
+      headers: auth(),
+    });
+    const afterItems = (after.json() as { items: Json[] }).items;
+
+    // Уроки удалённого занятия ушли (кроме тех, что админ правил руками).
+    const leftovers = afterItems.filter((lesson) => lesson.scheduleEntryId === doomed?.id);
+    expect(leftovers.every((lesson) => lesson.isManual === true)).toBe(true);
+    // Ручная правка на месте.
+    const kept = afterItems.find((lesson) => lesson.id === sparedLesson?.id);
+    expect(kept?.topic).toBe('Оставить как есть');
+  });
 });

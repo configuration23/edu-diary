@@ -328,6 +328,8 @@ export interface ScheduleRepository {
       teacherUserId?: string;
       plannedTeacherUserId?: string | null;
       isManual?: boolean;
+      /** Привязка к занятию шаблона: нужна синхронизации уроков. */
+      scheduleEntryId?: string | null;
     },
     executor?: Executor,
   ): Promise<LessonRecord | null>;

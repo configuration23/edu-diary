@@ -1008,6 +1008,9 @@ export function createScheduleService(dependencies: ScheduleServiceDependencies)
         deletedSubstitutions: recreate?.preview.substitutions ?? 0,
       };
 
+      /** Группы, которых коснулась генерация: по ним и убираем лишние уроки. */
+      const generatedGroups = new Set(entries.map((entry) => entry.studyGroupId));
+
       return withTransaction(db, options.executor, async (tx) => {
         if (recreate !== null) {
           result.deleted = await schedule.deleteLessonsForGroup(
@@ -1032,11 +1035,31 @@ export function createScheduleService(dependencies: ScheduleServiceDependencies)
             const teacherUserId = substituted?.substituteUserId ?? entry.teacherUserId;
             const status = exception?.action === 'cancel' ? 'cancelled' : 'planned';
 
-            // Ищем урок на паре, включая отменённые: отменённый исключением урок
-            // нужно вернуть в план, когда исключение сняли, а не создавать второй
-            // урок на той же паре.
             const sameDay = await schedule.listLessonsForGroup(entry.studyGroupId, date, date, tx);
-            const existing = sameDay.find((item) => item.pairNumber === entry.pairNumber) ?? null;
+
+            /**
+             * Урок ищем по **привязке к занятию шаблона**, а не по номеру пары.
+             *
+             * Иначе перенос пары в шаблоне (с 1-й на 3-ю) давал раздвоение: урок
+             * создавался на новой паре, а на старой оставался висеть, и убрать его
+             * можно было только руками. Привязка по паре остаётся запасным путём —
+             * для уроков, созданных до появления привязки.
+             */
+            const byEntry = sameDay.find((item) => item.scheduleEntryId === entry.id) ?? null;
+            const existing =
+              byEntry ??
+              sameDay.find(
+                (item) => item.pairNumber === entry.pairNumber && item.scheduleEntryId === null,
+              ) ??
+              null;
+
+            /** Поля, которые могли измениться в шаблоне: их и синхронизируем. */
+            const geometry = {
+              pairNumber: entry.pairNumber,
+              timeStart: entry.timeStart,
+              timeEnd: entry.timeEnd,
+              roomId: entry.roomId,
+            };
 
             if (existing !== null) {
               // Урок отменён исключением на дату: пока исключение действует,
@@ -1053,6 +1076,8 @@ export function createScheduleService(dependencies: ScheduleServiceDependencies)
                 await schedule.updateLesson(
                   existing.id,
                   {
+                    ...geometry,
+                    scheduleEntryId: entry.id,
                     status,
                     teacherUserId,
                     plannedTeacherUserId: substituted === null ? null : entry.teacherUserId,
@@ -1064,15 +1089,35 @@ export function createScheduleService(dependencies: ScheduleServiceDependencies)
                 continue;
               }
 
+              /**
+               * Ручную правку не перезаписываем (её берегут от генерации), но
+               * перенос пары в шаблоне применяем: иначе урок останется на старой
+               * паре, где его уже нет по расписанию.
+               */
               if (existing.isManual) {
+                if (existing.pairNumber !== entry.pairNumber) {
+                  await schedule.updateLesson(existing.id, geometry, tx);
+                  result.updated += 1;
+                }
                 result.skippedManual += 1;
                 continue;
               }
 
-              if (existing.status !== status || existing.teacherUserId !== teacherUserId) {
+              const needsUpdate =
+                existing.status !== status ||
+                existing.teacherUserId !== teacherUserId ||
+                existing.pairNumber !== entry.pairNumber ||
+                existing.timeStart !== entry.timeStart ||
+                existing.timeEnd !== entry.timeEnd ||
+                existing.roomId !== entry.roomId ||
+                existing.scheduleEntryId !== entry.id;
+
+              if (needsUpdate) {
                 await schedule.updateLesson(
                   existing.id,
                   {
+                    ...geometry,
+                    scheduleEntryId: entry.id,
                     status,
                     teacherUserId,
                     plannedTeacherUserId: substituted === null ? null : entry.teacherUserId,
@@ -1104,6 +1149,33 @@ export function createScheduleService(dependencies: ScheduleServiceDependencies)
 
             if (status === 'cancelled') result.cancelled += 1;
             else result.created += 1;
+          }
+        }
+
+        /**
+         * Уборка уроков, оставшихся от прежнего шаблона.
+         *
+         * Занятие могли удалить, перенести на другой день или убрать у него пару —
+         * тогда созданные им уроки больше не должны существовать. Ручные правки и
+         * разовые уроки (без привязки) не трогаем: их ставит администратор, и
+         * генерации о них ничего не известно.
+         */
+        for (const groupId of generatedGroups) {
+          const remaining = await schedule.listLessonsForGroup(groupId, input.from, input.to, tx);
+
+          for (const item of remaining) {
+            if (item.isManual || item.scheduleEntryId === null) continue;
+
+            const entry = entries.find((candidate) => candidate.id === item.scheduleEntryId);
+            const stillExpected =
+              entry !== undefined &&
+              datesForEntry(entry, input.from, input.to).includes(item.lessonDate) &&
+              entry.pairNumber === item.pairNumber;
+
+            if (stillExpected) continue;
+
+            await schedule.deleteLesson(item.id, tx);
+            result.deleted += 1;
           }
         }
 
