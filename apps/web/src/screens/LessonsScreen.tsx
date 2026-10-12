@@ -695,23 +695,6 @@ export function LessonsScreen({ session }: { session: SessionResponseDto }) {
             </span>
           </Field>
 
-          {canGenerate && (
-            <Field label="Правка расписания" hint="Уроки ставятся без шаблона">
-              <Button
-                tone={editing ? 'primary' : 'secondary'}
-                type="button"
-                id="edit-week"
-                disabled={selectedGroupId === null}
-                onClick={() => {
-                  setEditing((current) => !current);
-                  setNewSlot(null);
-                }}
-              >
-                {editing ? 'Выйти из правки' : 'Править неделю'}
-              </Button>
-            </Field>
-          )}
-
           <Field label="Отсчёт">
             <span className="flex items-center gap-2">
               <Button
@@ -742,7 +725,46 @@ export function LessonsScreen({ session }: { session: SessionResponseDto }) {
               </Button>
             </span>
           </Field>
+
+          {/*
+            Правка расписания — справа в строке: это самое «тяжёлое» действие на
+            экране, и рядом с ним подсказка, что без выбранной группы оно не
+            работает (выключенная кнопка курсор не меняет, поэтому объясняем
+            текстом, а не только состоянием).
+          */}
+          {canGenerate && (
+            <Field label="Правка расписания" hint="Уроки ставятся без шаблона" className="ml-auto">
+              <span
+                className="flex items-center gap-2"
+                title={
+                  selectedGroupId === null
+                    ? 'Сначала выберите группу в блоке выше — уроки правятся по одной группе'
+                    : undefined
+                }
+              >
+                <Button
+                  tone={editing ? 'primary' : 'secondary'}
+                  type="button"
+                  id="edit-week"
+                  disabled={selectedGroupId === null}
+                  onClick={() => {
+                    setEditing((current) => !current);
+                    setNewSlot(null);
+                  }}
+                >
+                  {editing ? 'Выйти из правки' : 'Править неделю'}
+                </Button>
+              </span>
+            </Field>
+          )}
         </div>
+
+        {canGenerate && selectedGroupId === null && (
+          <p className="mt-2 text-sm text-slate-600">
+            Чтобы включить правку расписания, сначала выберите группу: занятия ставятся по одной
+            группе.
+          </p>
+        )}
 
         <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-slate-600">
           <span>

@@ -102,17 +102,20 @@ export function Field({
   label,
   hint,
   error,
+  className,
   children,
 }: {
   label: string;
   hint?: string;
   error?: string;
+  /** Дополнительные классы обёртки: например `ml-auto`, чтобы увести поле вправо. */
+  className?: string;
   children: ReactNode;
 }) {
   // Подсказка и ошибка вынесены за пределы <label>: иначе они попадают в
   // доступное имя поля, и обращение к нему по названию становится неточным.
   return (
-    <div className="block">
+    <div className={className === undefined ? 'block' : `block ${className}`}>
       <label className="block">
         <span className="mb-1 block text-sm font-medium text-slate-700">{label}</span>
         {children}
