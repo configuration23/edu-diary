@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 import type { GradeCategoryDto, RoomDto, SubjectDto } from '@edu-diary/contracts';
 import { Alert, Badge, Button, Card, EmptyState, Field, Table, TextInput } from '../components/ui';
+import { SUBJECT_COLOR_PALETTE, SubjectDot, subjectColor } from '../lib/appearance';
 import { errorMessage } from '../lib/api-client';
 import {
   useBells,
@@ -45,13 +46,31 @@ function SubjectsCard() {
   const update = useUpdateSubject();
   const remove = useDeleteSubject();
 
+  /**
+   * Цвет нового предмета: первый свободный из палитры.
+   *
+   * Случайный выбор мог бы дать два почти одинаковых цвета подряд, поэтому идём по
+   * кругу оттенков и пропускаем занятые. Администратор может выбрать цвет вручную;
+   * пустое поле означает «подобрать автоматически».
+   */
+  const usedColors = new Set(
+    (subjects.data?.items ?? [])
+      .map((item) => item.color)
+      .filter((value): value is string => value !== null),
+  );
+  const nextSubjectColor =
+    SUBJECT_COLOR_PALETTE.find((candidate) => !usedColors.has(candidate)) ??
+    SUBJECT_COLOR_PALETTE[0]!;
+
   const [name, setName] = useState('');
   const [shortName, setShortName] = useState('');
   const [kind, setKind] = useState<'mandatory' | 'optional' | 'practice'>('mandatory');
+  const [color, setColor] = useState('');
   const [editing, setEditing] = useState<SubjectDto | null>(null);
   const [editName, setEditName] = useState('');
   const [editShortName, setEditShortName] = useState('');
   const [editKind, setEditKind] = useState<'mandatory' | 'optional' | 'practice'>('mandatory');
+  const [editColor, setEditColor] = useState('');
 
   return (
     <Card title="Предметы" description="По предмету ставятся оценки и строятся назначения.">
@@ -64,9 +83,11 @@ function SubjectsCard() {
               name,
               shortName: shortName === '' ? null : shortName,
               kind,
+              color: color === '' ? null : color,
             });
             setName('');
             setShortName('');
+            setColor('');
           } catch {
             // Ошибка показывается ниже.
           }
@@ -94,6 +115,18 @@ function SubjectsCard() {
               ))}
             </select>
           </Field>
+          <Field label="Цвет" hint="Пусто — подберём автоматически">
+            <span className="flex items-center gap-2">
+              <input
+                type="color"
+                name="color"
+                className="h-9 w-12 rounded border border-slate-300"
+                value={color === '' ? nextSubjectColor : color}
+                onChange={(event) => setColor(event.target.value)}
+              />
+              {color === '' && <span className="text-xs text-slate-500">по кругу оттенков</span>}
+            </span>
+          </Field>
           <div className="flex items-end pb-2">
             <Button type="submit" disabled={create.isPending}>
               Добавить предмет
@@ -118,7 +151,10 @@ function SubjectsCard() {
           <Table head={['Предмет', 'Коротко', 'Вид', '']}>
             {subjects.data.items.map((subject) => (
               <tr key={subject.id} className="border-b border-slate-100">
-                <td className="px-3 py-2 font-medium">{subject.name}</td>
+                <td className="px-3 py-2 font-medium">
+                  <SubjectDot subjectId={subject.id} color={subject.color} />
+                  {subject.name}
+                </td>
                 <td className="px-3 py-2 text-slate-600">{subject.shortName ?? '—'}</td>
                 <td className="px-3 py-2">
                   <Badge>{subjectKindLabel(subject.kind)}</Badge>
@@ -131,6 +167,7 @@ function SubjectsCard() {
                         setEditing(subject);
                         setEditName(subject.name);
                         setEditShortName(subject.shortName ?? '');
+                        setEditColor(subject.color ?? '');
                         setEditKind(subject.kind as 'mandatory' | 'optional' | 'practice');
                       }}
                     >
@@ -161,6 +198,7 @@ function SubjectsCard() {
                   name: editName,
                   shortName: editShortName === '' ? null : editShortName,
                   kind: editKind,
+                  color: editColor === '' ? null : editColor,
                 });
                 setEditing(null);
               } catch {
@@ -195,6 +233,20 @@ function SubjectsCard() {
                   </option>
                 ))}
               </select>
+            </Field>
+            <Field label="Цвет" hint="Заливка плиток и маркер в строках">
+              <span className="flex items-center gap-2">
+                <input
+                  type="color"
+                  name="editColor"
+                  className="h-9 w-12 rounded border border-slate-300"
+                  value={editColor === '' ? subjectColor(editing.id) : editColor}
+                  onChange={(event) => setEditColor(event.target.value)}
+                />
+                <Button tone="ghost" type="button" onClick={() => setEditColor('')}>
+                  Автоматически
+                </Button>
+              </span>
             </Field>
             <Button type="submit" disabled={update.isPending}>
               Сохранить

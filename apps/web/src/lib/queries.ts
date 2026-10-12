@@ -31,6 +31,7 @@ import {
   listRoomsResponseSchema,
   listSecurityEventsResponseSchema,
   listStudentsResponseSchema,
+  appearanceSchema,
   listSubjectsResponseSchema,
   listSubstituteCandidatesResponseSchema,
   listSubstitutionsResponseSchema,
@@ -1135,6 +1136,35 @@ export function useRestoreLesson() {
       return lesson.id;
     },
     onSuccess: () => invalidateSchedule(client),
+  });
+}
+
+/**
+ * Оформление уроков: значки событий и цвета предметов.
+ *
+ * Настройка общая для заведения, но читают её все: интерфейс рисует значки по
+ * ней. Пока значение не загрузилось, используется DEFAULT_APPEARANCE из
+ * контрактов — интерфейс не должен ждать ради оформления.
+ */
+export function useAppearance() {
+  return useQuery({
+    queryKey: ['appearance'],
+    queryFn: () => apiRequest('/api/settings/appearance', appearanceSchema),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useUpdateAppearance() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      markersEnabled?: boolean;
+      markers?: { replaced?: string; cancelled?: string };
+      colorsEnabled?: boolean;
+    }) => apiRequest('/api/settings/appearance', appearanceSchema, { method: 'PUT', body: input }),
+    onSuccess: (data) => {
+      client.setQueryData(['appearance'], data);
+    },
   });
 }
 

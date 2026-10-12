@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 
 import { AppLayout } from './components/AppLayout';
 import { AcademicContextProvider, useAcademicContext } from './components/AcademicContext';
+import { AppearanceProvider } from './components/AppearanceContext';
 import { Alert } from './components/ui';
 import { errorMessage } from './lib/api-client';
 import { useSession, useSetupStatus } from './lib/queries';
@@ -65,9 +66,11 @@ function RootComponent() {
   // Контекст учебного процесса нужен шапке (переключатель года и группы) и
   // разделам: собирается один раз на всё приложение.
   return (
-    <AcademicContextProvider session={session.data}>
-      <AppLayout session={session.data} branding={setup.data.branding} />
-    </AcademicContextProvider>
+    <AppearanceProvider>
+      <AcademicContextProvider session={session.data}>
+        <AppLayout session={session.data} branding={setup.data.branding} />
+      </AcademicContextProvider>
+    </AppearanceProvider>
   );
 }
 

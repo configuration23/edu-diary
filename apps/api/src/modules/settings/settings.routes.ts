@@ -1,4 +1,9 @@
-import { brandingSchema, updateBrandingRequestSchema } from '@edu-diary/contracts';
+import {
+  appearanceSchema,
+  brandingSchema,
+  updateAppearanceRequestSchema,
+  updateBrandingRequestSchema,
+} from '@edu-diary/contracts';
 import type { FastifyInstance } from 'fastify';
 
 import { actorFromRequest } from '../../shared/actor';
@@ -55,6 +60,44 @@ export function registerSettingsRoutes(
       });
 
       return brandingSchema.parse(branding);
+    },
+  );
+
+  /**
+   * Оформление уроков: значки событий и цвета предметов.
+   *
+   * Читают все, кто видит уроки, — интерфейс рисует значки по этой настройке.
+   * Меняет только администратор (`settings:write`), как и договорено.
+   */
+  app.get('/settings/appearance', { preHandler: requirePermission('lessons:read') }, async () => {
+    return appearanceSchema.parse(await settings.readAppearance());
+  });
+
+  app.put(
+    '/settings/appearance',
+    { preHandler: requirePermission('settings:write', 'all') },
+    async (request) => {
+      const input = updateAppearanceRequestSchema.parse(request.body);
+
+      const appearance = await withTransaction(db, undefined, async (tx) => {
+        const change = await settings.updateAppearance(input, request.auth?.userId ?? null, tx);
+
+        await audit.record(
+          {
+            action: 'update',
+            entityKind: 'appearance',
+            entityId: null,
+            before: change.before,
+            after: change.changed,
+          },
+          actorFromRequest(request),
+          tx,
+        );
+
+        return change.appearance;
+      });
+
+      return appearanceSchema.parse(appearance);
     },
   );
 }

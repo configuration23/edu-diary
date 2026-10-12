@@ -10,3 +10,4 @@ export * from './security';
 export * from './setup';
 export * from './students';
 export * from './users';
+export * from './appearance';

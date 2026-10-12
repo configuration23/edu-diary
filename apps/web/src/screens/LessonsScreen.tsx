@@ -4,7 +4,9 @@ import { useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 
 import { useAcademicContext } from '../components/AcademicContext';
+import { useAppearanceSettings } from '../components/AppearanceContext';
 import { Alert, Badge, Button, Card, EmptyState, Field, TextInput } from '../components/ui';
+import { SubjectDot, lessonMarker, subjectColor } from '../lib/appearance';
 import { errorMessage } from '../lib/api-client';
 import {
   useDeleteLesson,
@@ -29,16 +31,6 @@ import {
 const PAIRS = [1, 2, 3, 4, 5, 6, 7, 8];
 const DAYS_SHORT = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 
-/** Палитра плиток: цвет закрепляется за предметом, а не за позицией в списке. */
-const PALETTE = [
-  'bg-sky-100 text-sky-900 border-sky-200',
-  'bg-emerald-100 text-emerald-900 border-emerald-200',
-  'bg-amber-100 text-amber-900 border-amber-200',
-  'bg-violet-100 text-violet-900 border-violet-200',
-  'bg-rose-100 text-rose-900 border-rose-200',
-  'bg-teal-100 text-teal-900 border-teal-200',
-];
-
 const STATUS: Record<
   string,
   { label: string; tone: 'neutral' | 'success' | 'warning' | 'danger' }
@@ -47,11 +39,6 @@ const STATUS: Record<
   done: { label: 'Проведён', tone: 'success' },
   cancelled: { label: 'Отменён', tone: 'danger' },
   replaced: { label: 'Замена', tone: 'warning' },
-};
-
-const STATUS_TILE: Record<string, string> = {
-  cancelled: 'bg-slate-100 text-slate-400 border-slate-200 line-through',
-  replaced: 'bg-amber-100 text-amber-900 border-amber-300',
 };
 
 const selectClass = 'w-full rounded-md border border-slate-300 px-3 py-2 text-sm';
@@ -86,13 +73,6 @@ function dayIndex(iso: string): number {
   return date.getDay() === 0 ? 6 : date.getDay() - 1;
 }
 
-/** Устойчивый цвет плитки: один предмет — один цвет. */
-function colorOf(subjectId: string): string {
-  let hash = 0;
-  for (const char of subjectId) hash = (hash + char.charCodeAt(0)) % PALETTE.length;
-  return PALETTE[hash] ?? PALETTE[0]!;
-}
-
 /** Действия и подробности одного урока: заменяет правку прямо в ячейке. */
 function LessonDetails({
   lesson,
@@ -107,6 +87,7 @@ function LessonDetails({
   canEditTopic: boolean;
   canManage: boolean;
 }) {
+  const appearance = useAppearanceSettings();
   const update = useUpdateLesson();
   const remove = useDeleteLesson();
   const restore = useRestoreLesson();
@@ -131,6 +112,12 @@ function LessonDetails({
       </div>
 
       <div className="text-sm text-slate-700">
+        {/* Маркер цвета рядом с названием: в строках заливка была бы тяжёлой. */}
+        <SubjectDot
+          subjectId={lesson.subjectId}
+          color={lesson.subjectColor}
+          enabled={appearance.colorsEnabled}
+        />
         {lesson.subjectName} · {lesson.groupName}
       </div>
       <div className="text-sm text-slate-600">
@@ -343,6 +330,8 @@ export function LessonsScreen({ session }: { session: SessionResponseDto }) {
   const [showCancelled, setShowCancelled] = useState(false);
   const [selectedLessonId, setSelectedLessonId] = useState<string | null>(null);
 
+  const appearance = useAppearanceSettings();
+
   /** Окно запроса: неделя — 7 дней с понедельника, месяц — календарный месяц. */
   const rangeStart = period === 'week' ? mondayOf(anchor) : `${anchor.slice(0, 7)}-01`;
   const rangeEnd =
@@ -384,22 +373,44 @@ export function LessonsScreen({ session }: { session: SessionResponseDto }) {
 
   const cancelledCount = items.filter((lesson) => lesson.status === 'cancelled').length;
 
-  const tile = (lesson: LessonDto) => (
-    <button
-      key={lesson.id}
-      type="button"
-      onClick={() => setSelectedLessonId(lesson.id)}
-      title={`${lesson.subjectName} · ${lesson.teacherName} · ${lesson.roomName ?? 'без аудитории'}`}
-      className={`w-full rounded border px-1 py-0.5 text-left text-[11px] leading-tight ${
-        STATUS_TILE[lesson.status] ?? colorOf(lesson.subjectId)
-      }`}
-    >
-      <span className="font-medium">
-        {subjectCode(lesson.subjectName, lesson.subjectShortName)}
-      </span>
-      {selectedGroupId === null && <span className="block truncate">{lesson.groupName}</span>}
-    </button>
-  );
+  /**
+   * Плитка урока: состав одинаковый всегда — первая строка «код предмета и
+   * аудитория», вторая «название группы». Название группы обрезается: полное
+   * видно в подсказке и в панели деталей.
+   *
+   * Цвет плитки показывает предмет, значок события — в углу.
+   */
+  const tile = (lesson: LessonDto) => {
+    const marker = lessonMarker(lesson, appearance);
+    const cancelled = lesson.status === 'cancelled';
+    const color = subjectColor(lesson.subjectId, lesson.subjectColor);
+    const filled = appearance.colorsEnabled && !cancelled;
+
+    return (
+      <button
+        key={lesson.id}
+        type="button"
+        onClick={() => setSelectedLessonId(lesson.id)}
+        title={`${lesson.subjectName} · ${lesson.groupName} · ${lesson.teacherName} · ${lesson.roomName ?? 'без аудитории'}`}
+        className={`relative w-full rounded border px-1 py-0.5 text-left text-[11px] leading-tight transition ${
+          cancelled ? 'border-slate-200 bg-slate-100 text-slate-400' : 'border-slate-200'
+        } hover:shadow-sm`}
+        style={filled ? { backgroundColor: `${color}22`, borderColor: color } : undefined}
+      >
+        {marker !== null && (
+          <span className="absolute top-0 right-0.5 text-[13px] leading-none">{marker}</span>
+        )}
+
+        <span className="flex items-baseline gap-1 pr-4">
+          <span className="truncate font-medium">
+            {subjectCode(lesson.subjectName, lesson.subjectShortName)}
+          </span>
+          <span className="ml-auto shrink-0 text-slate-500">{lesson.roomName ?? '—'}</span>
+        </span>
+        <span className="block truncate text-slate-600">{lesson.groupName}</span>
+      </button>
+    );
+  };
 
   return (
     <div className="flex flex-col gap-6">

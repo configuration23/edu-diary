@@ -208,6 +208,8 @@ export const lessonSchema = z.object({
   subjectName: z.string(),
   /** Короткое имя предмета из справочника: код для плиток расписания. */
   subjectShortName: z.string().nullable(),
+  /** Закреплённый цвет предмета (`#RRGGBB`): заливка плитки и маркер в строках. */
+  subjectColor: z.string().nullable(),
   /** Кто ведёт урок: при замене — заменяющий. */
   teacherUserId: uuidSchema,
   teacherName: z.string(),

@@ -2,7 +2,9 @@ import type { LessonDto, SessionResponseDto } from '@edu-diary/contracts';
 import { useState } from 'react';
 
 import { useAcademicContext } from '../components/AcademicContext';
+import { useAppearanceSettings } from '../components/AppearanceContext';
 import { Alert, Badge, Button, Card, EmptyState, Field, Table } from '../components/ui';
+import { SubjectDot, lessonMarker } from '../lib/appearance';
 import { errorMessage } from '../lib/api-client';
 import { useLessons, useScheduleGroups } from '../lib/queries';
 
@@ -79,12 +81,22 @@ const STATUS: Record<
 };
 
 /** Карточка занятия: всё, что нужно знать перед парой. */
-function LessonCard({ lesson, showGroup }: { lesson: LessonDto; showGroup: boolean }) {
+function LessonCard({
+  lesson,
+  showGroup,
+  marker,
+  colorsEnabled,
+}: {
+  lesson: LessonDto;
+  showGroup: boolean;
+  marker: string | null;
+  colorsEnabled: boolean;
+}) {
   const status = STATUS[lesson.status] ?? { label: lesson.status, tone: 'neutral' as const };
 
   return (
     <div
-      className={`rounded-md border p-3 ${
+      className={`relative rounded-md border p-3 ${
         lesson.status === 'cancelled'
           ? 'border-slate-200 bg-slate-50 text-slate-400'
           : lesson.status === 'replaced'
@@ -92,6 +104,13 @@ function LessonCard({ lesson, showGroup }: { lesson: LessonDto; showGroup: boole
             : 'border-slate-200 bg-white'
       }`}
     >
+      {/* Значок события в углу: не мешает основной информации о занятии. */}
+      {marker !== null && (
+        <span className="absolute top-1 right-2 text-base leading-none" title="Событие занятия">
+          {marker}
+        </span>
+      )}
+
       <div className="flex flex-wrap items-center gap-2">
         <span className="font-medium text-slate-900">{lesson.pairNumber}-я пара</span>
         <span className="text-sm text-slate-500">
@@ -102,6 +121,7 @@ function LessonCard({ lesson, showGroup }: { lesson: LessonDto; showGroup: boole
       </div>
 
       <div className={`mt-1 font-medium ${lesson.status === 'cancelled' ? 'line-through' : ''}`}>
+        <SubjectDot subjectId={lesson.subjectId} enabled={colorsEnabled} />
         {lesson.subjectName}
       </div>
 
@@ -151,6 +171,8 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
    * стрелки и поле даты.
    */
   const [anchor, setAnchor] = useState(todayIso());
+
+  const appearance = useAppearanceSettings();
 
   const weekStart = mondayOf(anchor);
   const weekDays = Array.from({ length: 6 }, (_, index) => shiftIso(weekStart, index));
@@ -324,6 +346,8 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
                     key={lesson.id}
                     lesson={lesson}
                     showGroup={selectedGroupId === null}
+                    marker={lessonMarker(lesson, appearance)}
+                    colorsEnabled={appearance.colorsEnabled}
                   />
                 ))}
               </div>
@@ -374,9 +398,9 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
                                 }`}
                               >
                                 {lesson.subjectName}
-                                {/* Замена и её причина видны прямо в сетке недели. */}
-                                {lesson.status === 'replaced' && (
-                                  <span className="ml-1 font-medium">замена</span>
+                                {/* Событие видно и в сетке недели: значок вместо слова. */}
+                                {lessonMarker(lesson, appearance) !== null && (
+                                  <span className="ml-1">{lessonMarker(lesson, appearance)}</span>
                                 )}
                                 <span className="block text-slate-500">
                                   {lesson.groupName} · {lesson.roomName ?? '—'}

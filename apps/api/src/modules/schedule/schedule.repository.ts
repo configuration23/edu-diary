@@ -79,6 +79,8 @@ export interface LessonRecord {
   subjectName: string;
   /** Короткое имя предмета из справочника: код для плиток расписания. */
   subjectShortName: string | null;
+  /** Закреплённый цвет предмета (`#RRGGBB`), если задан в справочнике. */
+  subjectColor: string | null;
   teacherUserId: string;
   plannedTeacherUserId: string | null;
   roomId: string | null;
@@ -149,6 +151,8 @@ const LESSON_SELECTION = {
   // Короткое имя предмета: интерфейс берёт код плитки из справочника, а не режет
   // название сам.
   subjectShortName: subject.shortName,
+  // Закреплённый цвет предмета: заливка плитки и маркер в строках.
+  subjectColor: subject.color,
   teacherUserId: lesson.teacherUserId,
   plannedTeacherUserId: lesson.plannedTeacherUserId,
   roomId: lesson.roomId,
