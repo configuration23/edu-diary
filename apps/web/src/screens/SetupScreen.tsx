@@ -7,7 +7,7 @@ import { z } from 'zod';
 
 import { errorMessage } from '../lib/api-client';
 import { useCompleteSetup } from '../lib/queries';
-import { Alert, Button, Card, Field, TextInput, formatDate } from '../components/ui';
+import { Alert, Button, Card, Field, FilePicker, TextInput, formatDate } from '../components/ui';
 import type { SetupStatusResponseDto } from '@edu-diary/contracts';
 
 /** Шаги мастера: заведение → учебный год и период → администратор. */
@@ -257,11 +257,10 @@ export function SetupScreen({ status }: { status: SetupStatusResponseDto }) {
                 hint="PNG, JPEG или SVG до 256 КБ (необязательно)"
                 error={logoError ?? undefined}
               >
-                <input
-                  type="file"
+                <FilePicker
                   accept="image/png,image/jpeg,image/svg+xml"
-                  className="text-sm"
-                  onChange={(event) => onLogoSelected(event.target.files?.[0])}
+                  name="logo"
+                  onSelect={onLogoSelected}
                 />
               </Field>
             </>

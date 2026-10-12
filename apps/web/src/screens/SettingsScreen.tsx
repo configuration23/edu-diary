@@ -1,7 +1,7 @@
 import { MARKER_SYMBOLS, type MarkerEvent } from '@edu-diary/contracts';
 import { useEffect, useState } from 'react';
 
-import { Alert, Button, Card, Field, TextInput } from '../components/ui';
+import { Alert, Button, Card, Field, FilePicker, TextInput } from '../components/ui';
 import { errorMessage } from '../lib/api-client';
 import { useAppearance, useBranding, useUpdateAppearance, useUpdateBranding } from '../lib/queries';
 
@@ -210,12 +210,10 @@ export function SettingsScreen() {
               <TextInput value={signature} onChange={(event) => setSignature(event.target.value)} />
             </Field>
             <Field label="Логотип" hint="PNG, JPEG или SVG до 256 КБ">
-              <input
-                type="file"
+              <FilePicker
                 accept="image/png,image/jpeg,image/svg+xml"
-                className="w-full text-sm"
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
+                name="logo"
+                onSelect={(file) => {
                   if (file !== undefined) readLogo(file);
                 }}
               />

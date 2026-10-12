@@ -735,17 +735,6 @@ export function createScheduleRepository(db: Database): ScheduleRepository {
 
       const found = rows.find((row) => row.pairNumber === pairNumber && row.status !== 'cancelled');
 
-      // Контрольный запрос базовым соединением: отличает «нет данных» от
-      // «исполнитель вернул не то».
-      const direct = await db.orm
-        .select({ pair: lesson.pairNumber, status: lesson.status, id: lesson.id })
-        .from(lesson)
-        .where(and(eq(lesson.studyGroupId, studyGroupId), eq(lesson.lessonDate, lessonDate)));
-
-      process.stdout.write(
-        `РЕПОЗИТОРИЙ pair=${pairNumber}(${typeof pairNumber}) через исполнитель=${rows.length} пары=${JSON.stringify(rows.map((row) => [row.pairNumber, typeof row.pairNumber]))} напрямую=${JSON.stringify(direct.map((row) => [row.pair, row.status]))}\n`,
-      );
-
       return found === undefined ? null : toLessonRecord(found);
     },
 

@@ -1,6 +1,50 @@
 import type { ReactNode } from 'react';
+import { useRef, useState } from 'react';
 
 /** Небольшой набор примитивов интерфейса (ARCHITECTURE.md §2): без тяжёлого UI-кита. */
+
+/**
+ * Выбор файла с видимой кнопкой.
+ *
+ * Системный `<input type="file">` выглядит как подпись и не подсвечивается при
+ * наведении, поэтому было неочевидно, что на него можно нажать. Здесь кнопка своя,
+ * а поле ввода скрыто; выбранный файл показываем рядом.
+ */
+export function FilePicker({
+  accept,
+  name,
+  buttonLabel = 'Выбрать файл',
+  onSelect,
+}: {
+  accept: string;
+  name?: string;
+  buttonLabel?: string;
+  onSelect: (file: File | undefined) => void;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
+
+  return (
+    <span className="flex flex-wrap items-center gap-3">
+      <input
+        ref={input}
+        type="file"
+        name={name}
+        accept={accept}
+        className="hidden"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          setFileName(file?.name ?? null);
+          onSelect(file);
+        }}
+      />
+      <Button tone="secondary" type="button" onClick={() => input.current?.click()}>
+        {buttonLabel}
+      </Button>
+      <span className="text-sm text-slate-500">{fileName ?? 'файл не выбран'}</span>
+    </span>
+  );
+}
 
 export function Card({
   title,
