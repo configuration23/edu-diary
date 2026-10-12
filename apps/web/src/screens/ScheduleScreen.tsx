@@ -58,6 +58,11 @@ function dayIndex(iso: string): number {
   return date.getDay() === 0 ? 6 : date.getDay() - 1;
 }
 
+/** Понедельник недели, в которую попадает дата: лента дней всегда одна и та же. */
+function mondayOf(iso: string): string {
+  return shiftIso(iso, -dayIndex(iso));
+}
+
 function formatDay(iso: string): string {
   const date = new Date(`${iso}T00:00:00`);
   return `${date.getDate()} ${DAYS_SHORT[dayIndex(iso)]}`;
@@ -139,14 +144,24 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
 
   const [date, setDate] = useState(todayIso());
   const [view, setView] = useState<'day' | 'week'>('day');
-
   /**
-   * Окно запроса: три недели вокруг выбранной даты. Одним запросом закрываются
-   * оба вида, поэтому переключение «день/неделя» не ходит на сервер повторно.
-   * Неделя начинается с выбранного дня: «сегодня» должно быть видно сразу, без
-   * прокрутки назад до понедельника.
+   * Неделя, которую показываем: отдельно от выбранного дня.
+   *
+   * Так клик по дню только выделяет его, а лента дней не «уезжает»; листают неделю
+   * стрелки и поле даты.
    */
-  const weekStart = date;
+  const [anchor, setAnchor] = useState(todayIso());
+
+  const weekStart = mondayOf(anchor);
+  const weekDays = Array.from({ length: 6 }, (_, index) => shiftIso(weekStart, index));
+
+  /** Сдвиг недели: выбранный день недели сохраняем, чтобы контекст не терялся. */
+  const shiftWeek = (weeks: number): void => {
+    const next = shiftIso(weekStart, weeks * 7);
+    setAnchor(next);
+    setDate(shiftIso(next, dayIndex(date)));
+  };
+
   const lessons = useLessons({
     ...(selectedGroupId === null ? {} : { studyGroupId: selectedGroupId }),
     from: shiftIso(weekStart, -7),
@@ -175,7 +190,6 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
       lesson.status !== 'cancelled' && lesson.timeStart <= nowTime && nowTime <= lesson.timeEnd,
   );
 
-  const weekDays = Array.from({ length: 6 }, (_, index) => shiftIso(weekStart, index));
   const emptyPairs = PAIRS.filter(
     (pair) =>
       !dayLessons.some((lesson) => lesson.pairNumber === pair && lesson.status !== 'cancelled'),
@@ -227,9 +241,9 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
             </span>
           </Field>
 
-          <Field label="Дата">
+          <Field label="Дата" hint="Стрелки листают неделю">
             <span className="flex items-center gap-2">
-              <Button tone="ghost" type="button" onClick={() => setDate(shiftIso(date, -1))}>
+              <Button tone="ghost" type="button" onClick={() => shiftWeek(-1)}>
                 ←
               </Button>
               <input
@@ -237,21 +251,30 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
                 name="date"
                 className={selectClass}
                 value={date}
-                onChange={(event) =>
-                  setDate(event.target.value === '' ? todayIso() : event.target.value)
-                }
+                onChange={(event) => {
+                  const next = event.target.value === '' ? todayIso() : event.target.value;
+                  setDate(next);
+                  setAnchor(next);
+                }}
               />
-              <Button tone="ghost" type="button" onClick={() => setDate(shiftIso(date, 1))}>
+              <Button tone="ghost" type="button" onClick={() => shiftWeek(1)}>
                 →
               </Button>
-              <Button tone="secondary" type="button" onClick={() => setDate(todayIso())}>
+              <Button
+                tone="secondary"
+                type="button"
+                onClick={() => {
+                  setDate(todayIso());
+                  setAnchor(todayIso());
+                }}
+              >
                 Сегодня
               </Button>
             </span>
           </Field>
         </div>
 
-        {/* Дата-стрип: неделя вокруг выбранной даты с бейджем замен. */}
+        {/* Дата-стрип: неделя (понедельник — воскресенье) с бейджем замен. */}
         <div className="mt-3 flex flex-wrap gap-2">
           {weekDays.map((iso) => (
             <button
@@ -342,8 +365,19 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
                             }}
                           >
                             {cell.map((lesson) => (
-                              <span key={lesson.id} className="text-xs">
+                              <span
+                                key={lesson.id}
+                                className={`rounded px-1 text-xs ${
+                                  lesson.status === 'replaced'
+                                    ? 'bg-amber-100 text-amber-900'
+                                    : 'text-slate-700'
+                                }`}
+                              >
                                 {lesson.subjectName}
+                                {/* Замена и её причина видны прямо в сетке недели. */}
+                                {lesson.status === 'replaced' && (
+                                  <span className="ml-1 font-medium">замена</span>
+                                )}
                                 <span className="block text-slate-500">
                                   {lesson.groupName} · {lesson.roomName ?? '—'}
                                 </span>
