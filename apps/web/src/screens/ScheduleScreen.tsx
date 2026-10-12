@@ -94,25 +94,20 @@ function LessonCard({
 }) {
   const status = STATUS[lesson.status] ?? { label: lesson.status, tone: 'neutral' as const };
 
-  /**
-   * Заливка карточки — цвет предмета, а не статуса.
-   *
-   * Событие (замена, отмена) показывается значком, перенос не обозначаем вовсе:
-   * раньше янтарная заливка говорила «замена», но тот же цвет не значил предмет,
-   * из-за чего схема читалась как случайная. Отменённое занятие остаётся серым:
-   * оно не идёт в зачёт загрузки.
-   */
-  const color = subjectColor(lesson.subjectId, lesson.subjectColor);
-  const filled = colorsEnabled && lesson.status !== 'cancelled';
-
   return (
+    /*
+      Большая плашка (вид «День»): цвет предмета показывается **только кружком**
+      рядом с названием, заливки нет — большой блок целиком в цвете выглядит
+      тяжёлым. Событие (замена, отмена) показывает значок в углу, перенос не
+      обозначаем вовсе. Мелкая плитка сетки (вид «Неделя») устроена наоборот: там
+      цвет — заливкой и без кружка.
+    */
     <div
       className={`relative rounded-md border p-3 ${
         lesson.status === 'cancelled'
           ? 'border-slate-200 bg-slate-50 text-slate-400'
-          : 'border-slate-200'
+          : 'border-slate-200 bg-white'
       }`}
-      style={filled ? { backgroundColor: `${color}22`, borderColor: color } : undefined}
     >
       {/* Значок события в углу: не мешает основной информации о занятии. */}
       {marker !== null && (
@@ -401,6 +396,11 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
                             }}
                           >
                             {cell.map((lesson) => (
+                              /*
+                                Мелкая плитка сетки: цвет предмета — **только
+                                заливкой**, без кружка. В большой плашке дня
+                                наоборот: кружок и никакой заливки.
+                              */
                               <span
                                 key={lesson.id}
                                 className={`rounded px-1 text-xs ${
@@ -416,19 +416,12 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
                                     : undefined
                                 }
                               >
-                                <SubjectDot
-                                  subjectId={lesson.subjectId}
-                                  color={lesson.subjectColor}
-                                  enabled={
-                                    appearance.colorsEnabled && lesson.status !== 'cancelled'
-                                  }
-                                />
                                 {lesson.subjectName}
                                 {/* Событие видно и в сетке недели: значок вместо слова. */}
                                 {lessonMarker(lesson, appearance) !== null && (
                                   <span className="ml-1">{lessonMarker(lesson, appearance)}</span>
                                 )}
-                                <span className="block pl-3.5 text-slate-500">
+                                <span className="block text-slate-500">
                                   {lesson.groupName} · {lesson.roomName ?? '—'}
                                 </span>
                               </span>
