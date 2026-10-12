@@ -5,3 +5,4 @@ export * from './password';
 export * from './schedule';
 export * from './username';
 export * from './subject-code';
+export * from './journal';
