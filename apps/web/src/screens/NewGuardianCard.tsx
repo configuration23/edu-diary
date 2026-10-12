@@ -2,7 +2,7 @@ import { useState } from 'react';
 
 import { errorMessage } from '../lib/api-client';
 import { useCreateUser, useLinkGuardian, useStudents } from '../lib/queries';
-import { Alert, Button, Card, EmptyState, Field, TextInput } from '../components/ui';
+import { Alert, Button, EmptyState, Field, TextInput } from '../components/ui';
 
 /**
  * Новый законный представитель.
@@ -24,7 +24,12 @@ const RELATIONS = [
   { value: 'other', label: 'Другое' },
 ] as const;
 
-export function NewGuardianCard({ onCreated }: { onCreated: (message: string) => void }) {
+/**
+ * Форма представителя без своей карточки: она живёт внутри блока с вкладками
+ * («Новая учётная запись» / «Новый законный представитель»), поэтому заголовок и
+ * рамку рисует родитель.
+ */
+export function NewGuardianForm({ onCreated }: { onCreated: (message: string) => void }) {
   const createUser = useCreateUser();
   const linkGuardian = useLinkGuardian();
   const students = useStudents({ limit: 200 });
@@ -41,10 +46,7 @@ export function NewGuardianCard({ onCreated }: { onCreated: (message: string) =>
   const studentOptions = students.data?.items ?? [];
 
   return (
-    <Card
-      title="Новый законный представитель"
-      description="Учётная запись родителя создаётся вместе с привязкой к ученику: отдельно она смысла не имеет."
-    >
+    <div>
       <form
         className="flex flex-col gap-4"
         onSubmit={async (event) => {
@@ -181,6 +183,6 @@ export function NewGuardianCard({ onCreated }: { onCreated: (message: string) =>
           </Button>
         </div>
       </form>
-    </Card>
+    </div>
   );
 }

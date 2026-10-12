@@ -186,6 +186,7 @@ export function useUsers(params: {
   search?: string;
   role?: string;
   limit?: number;
+  offset?: number;
 }): UseQueryResult<z.infer<typeof listUsersResponseSchema>> {
   const query = toQueryString({ ...params, limit: params.limit ?? 100 });
 
@@ -265,6 +266,7 @@ export function useAudit(params: {
   action?: string;
   accessOnly?: boolean;
   limit?: number;
+  offset?: number;
 }): UseQueryResult<z.infer<typeof listAuditResponseSchema>> {
   const query = toQueryString({ ...params, limit: params.limit ?? 100 });
 
@@ -360,7 +362,7 @@ export function useRevokeConsent() {
   });
 }
 
-export function useStudents(params: { search?: string; limit?: number }) {
+export function useStudents(params: { search?: string; limit?: number; offset?: number }) {
   const query = toQueryString({ ...params, limit: params.limit ?? 100 });
 
   return useQuery({

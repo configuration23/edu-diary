@@ -4,8 +4,9 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
 import type { SessionResponseDto, UserSummaryDto } from '@edu-diary/contracts';
+import { Pagination, usePageSize } from '../components/Pagination';
 import { GuardianLinksCard, LinkGuardianForm } from './StudentsCard';
-import { NewGuardianCard } from './NewGuardianCard';
+import { NewGuardianForm } from './NewGuardianCard';
 import { errorMessage } from '../lib/api-client';
 import {
   useCreateUser,
@@ -65,14 +66,18 @@ function RolesCell({ user }: { user: UserSummaryDto }) {
 }
 
 export function UsersScreen({ session }: { session: SessionResponseDto }) {
+  /** Какая форма открыта: учётная запись или законный представитель. */
+  const [tab, setTab] = useState<'user' | 'guardian'>('user');
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = usePageSize(10);
   const [editing, setEditing] = useState<string | null>(null);
   const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
   const [passwordFor, setPasswordFor] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
 
-  const users = useUsers({ search });
+  const users = useUsers({ search, limit: pageSize, offset: (page - 1) * pageSize });
   const roles = useRoles();
   const createUser = useCreateUser();
   const setUserRoles = useSetUserRoles();
@@ -116,88 +121,123 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
   return (
     <div className="flex flex-col gap-6">
       {canManage && (
+        /*
+          Один блок с вкладками: учётная запись и законный представитель — разные
+          сущности (представитель всегда связан с учеником), но заводить их удобнее
+          в одном месте, а не двумя блоками друг под другом.
+        */
         <Card
-          title="Новая учётная запись"
+          title="Новый пользователь"
           description="Учётная запись создаётся с временным паролем."
-        >
-          <form className="flex flex-col gap-4" onSubmit={onCreate} noValidate>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="ФИО" error={form.formState.errors.fullName?.message}>
-                <TextInput {...form.register('fullName')} />
-              </Field>
-              <Field
-                label="Логин"
-                hint="Строчные латинские буквы, цифры, точка, дефис"
-                error={form.formState.errors.username?.message}
+          actions={
+            <span className="flex gap-2">
+              <Button
+                tone={tab === 'user' ? 'primary' : 'secondary'}
+                type="button"
+                id="tab-user"
+                onClick={() => setTab('user')}
               >
-                {/* Автоподстановка логина по ФИО отложена: поле заполняется вручную. */}
-                <TextInput autoComplete="off" {...form.register('username')} />
-              </Field>
-              <Field
-                label="Временный пароль"
-                hint="Минимум 10 символов"
-                error={form.formState.errors.password?.message}
-              >
-                <TextInput
-                  type="password"
-                  autoComplete="new-password"
-                  {...form.register('password')}
-                />
-              </Field>
-              <Field
-                label="Почта"
-                hint="Необязательно"
-                error={form.formState.errors.email?.message}
-              >
-                <TextInput type="email" {...form.register('email')} />
-              </Field>
-            </div>
-
-            <fieldset>
-              <legend className="mb-2 text-sm font-medium text-slate-700">Роли сотрудника</legend>
-              <div className="flex flex-wrap gap-3">
-                {staffRoles.map((role) => (
-                  <label key={role.code} className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      value={role.code}
-                      {...form.register('roles')}
-                      onChange={(event) => {
-                        // Роли дают права все вместе: показываем предупреждение,
-                        // чтобы случайно не выдать лишнее.
-                        void form.register('roles').onChange(event);
-                        setNotice(null);
-                      }}
-                    />
-                    {roleTitle(role.code, role.title)}
-                  </label>
-                ))}
-              </div>
-              {form.formState.errors.roles !== undefined && (
-                <span className="mt-1 block text-xs text-red-700">
-                  {form.formState.errors.roles.message}
-                </span>
-              )}
-              <p className="mt-2 text-xs text-slate-500">
-                Учеников заводят в разделе «Группы и ученики» (блок «Новый ученик»), законных
-                представителей — блоком ниже: у них учётная запись всегда связана с человеком.
-              </p>
-            </fieldset>
-
-            {selectedCount > 1 && (
-              <Alert tone="warning">
-                Внимание! Вы выбрали больше одной роли! Учётная запись получит расширенные права!
-              </Alert>
-            )}
-
-            {createUser.isError && <Alert tone="error">{errorMessage(createUser.error)}</Alert>}
-
-            <div>
-              <Button type="submit" disabled={createUser.isPending}>
-                {createUser.isPending ? 'Создаём…' : 'Создать учётную запись'}
+                Учётная запись
               </Button>
+              <Button
+                tone={tab === 'guardian' ? 'primary' : 'secondary'}
+                type="button"
+                id="tab-guardian"
+                onClick={() => setTab('guardian')}
+              >
+                Законный представитель
+              </Button>
+            </span>
+          }
+        >
+          {tab === 'user' ? (
+            <form className="flex flex-col gap-4" onSubmit={onCreate} noValidate>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="ФИО" error={form.formState.errors.fullName?.message}>
+                  <TextInput {...form.register('fullName')} />
+                </Field>
+                <Field
+                  label="Логин"
+                  hint="Строчные латинские буквы, цифры, точка, дефис"
+                  error={form.formState.errors.username?.message}
+                >
+                  {/* Автоподстановка логина по ФИО отложена: поле заполняется вручную. */}
+                  <TextInput autoComplete="off" {...form.register('username')} />
+                </Field>
+                <Field
+                  label="Временный пароль"
+                  hint="Минимум 10 символов"
+                  error={form.formState.errors.password?.message}
+                >
+                  <TextInput
+                    type="password"
+                    autoComplete="new-password"
+                    {...form.register('password')}
+                  />
+                </Field>
+                <Field
+                  label="Почта"
+                  hint="Необязательно"
+                  error={form.formState.errors.email?.message}
+                >
+                  <TextInput type="email" {...form.register('email')} />
+                </Field>
+              </div>
+
+              <fieldset>
+                <legend className="mb-2 text-sm font-medium text-slate-700">Роли сотрудника</legend>
+                <div className="flex flex-wrap gap-3">
+                  {staffRoles.map((role) => (
+                    <label key={role.code} className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        value={role.code}
+                        {...form.register('roles')}
+                        onChange={(event) => {
+                          // Роли дают права все вместе: показываем предупреждение,
+                          // чтобы случайно не выдать лишнее.
+                          void form.register('roles').onChange(event);
+                          setNotice(null);
+                        }}
+                      />
+                      {roleTitle(role.code, role.title)}
+                    </label>
+                  ))}
+                </div>
+                {form.formState.errors.roles !== undefined && (
+                  <span className="mt-1 block text-xs text-red-700">
+                    {form.formState.errors.roles.message}
+                  </span>
+                )}
+                <p className="mt-2 text-xs text-slate-500">
+                  Учеников заводят в разделе «Группы и ученики» (блок «Новый ученик»), законных
+                  представителей — блоком ниже: у них учётная запись всегда связана с человеком.
+                </p>
+              </fieldset>
+
+              {selectedCount > 1 && (
+                <Alert tone="warning">
+                  Внимание! Вы выбрали больше одной роли! Учётная запись получит расширенные права!
+                </Alert>
+              )}
+
+              {createUser.isError && <Alert tone="error">{errorMessage(createUser.error)}</Alert>}
+
+              <div>
+                <Button type="submit" disabled={createUser.isPending}>
+                  {createUser.isPending ? 'Создаём…' : 'Создать учётную запись'}
+                </Button>
+              </div>
+            </form>
+          ) : (
+            <div className="flex flex-col gap-3">
+              <p className="text-sm text-slate-500">
+                Учётная запись законного представителя создаётся вместе с привязкой к ученику:
+                отдельно, без ученика, она смысла не имеет.
+              </p>
+              <NewGuardianForm onCreated={setNotice} />
             </div>
-          </form>
+          )}
         </Card>
       )}
 
@@ -205,12 +245,16 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
 
       <Card
         title="Учётные записи"
-        description={`Всего: ${users.data?.total ?? 0}`}
+        description="Список со страницами: количество строк на странице выбирается и запоминается."
         actions={
           <TextInput
             placeholder="Поиск по логину или ФИО"
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
+            onChange={(event) => {
+              setSearch(event.target.value);
+              // Поиск меняет выборку: возвращаемся на первую страницу.
+              setPage(1);
+            }}
             className="w-56"
           />
         }
@@ -280,6 +324,16 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
               </tr>
             ))}
           </Table>
+        )}
+
+        {users.data !== undefined && users.data.total > 0 && (
+          <Pagination
+            total={users.data.total}
+            page={page}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+          />
         )}
 
         {editing !== null && (
@@ -354,10 +408,10 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
       </Card>
 
       {/* Учеников ведут в «Группах и учениках»: там список людей и группы,
-          которые из них собираются. Здесь — учётные записи представителей. */}
+          которые из них собираются. Здесь — только привязки уже заведённых
+          представителей к ученикам. */}
       {canManage && (
         <>
-          <NewGuardianCard onCreated={setNotice} />
           <LinkGuardianForm onLinked={setNotice} />
           <GuardianLinksCard onNotice={setNotice} />
         </>

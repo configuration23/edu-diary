@@ -87,9 +87,12 @@ test.describe.serial('Этап 1: настройка, вход, права', () 
 
     // Поля ищем внутри карточки «Новый пользователь»: ниже на странице есть
     // блок «Новый ученик» со своими полями, в том числе «ФИО».
+    //
+    // Блок один, с вкладками: «Учётная запись» (открыта по умолчанию) и «Законный
+    // представитель».
     const userForm = page
       .locator('section')
-      .filter({ has: page.getByRole('heading', { name: 'Новая учётная запись' }) });
+      .filter({ has: page.getByRole('heading', { name: 'Новый пользователь' }) });
 
     await userForm.getByLabel('Логин').fill(TEACHER.username);
     await userForm.locator('input[name="fullName"]').fill(TEACHER.fullName);
