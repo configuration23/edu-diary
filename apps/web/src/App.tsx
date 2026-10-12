@@ -3,7 +3,8 @@ import { RouterProvider, createRootRoute, createRoute, createRouter } from '@tan
 import type { ReactNode } from 'react';
 
 import { AppLayout } from './components/AppLayout';
-import { AcademicContextProvider } from './components/AcademicContext';
+import { AcademicContextProvider, useAcademicContext } from './components/AcademicContext';
+import { AppearanceProvider } from './components/AppearanceContext';
 import { Alert } from './components/ui';
 import { errorMessage } from './lib/api-client';
 import { useSession, useSetupStatus } from './lib/queries';
@@ -14,7 +15,11 @@ import { CatalogsScreen } from './screens/CatalogsScreen';
 import { DashboardScreen } from './screens/DashboardScreen';
 import { GroupsScreen } from './screens/GroupsScreen';
 import { LoginScreen } from './screens/LoginScreen';
+import { LessonsScreen } from './screens/LessonsScreen';
 import { PrivacyScreen } from './screens/PrivacyScreen';
+import { ScheduleScreen } from './screens/ScheduleScreen';
+import { SubstitutionsScreen } from './screens/SubstitutionsScreen';
+import { ScheduleTemplateScreen } from './screens/ScheduleTemplateScreen';
 import { SecurityScreen } from './screens/SecurityScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { SetupScreen } from './screens/SetupScreen';
@@ -61,9 +66,11 @@ function RootComponent() {
   // Контекст учебного процесса нужен шапке (переключатель года и группы) и
   // разделам: собирается один раз на всё приложение.
   return (
-    <AcademicContextProvider session={session.data}>
-      <AppLayout session={session.data} branding={setup.data.branding} />
-    </AcademicContextProvider>
+    <AppearanceProvider>
+      <AcademicContextProvider session={session.data}>
+        <AppLayout session={session.data} branding={setup.data.branding} />
+      </AcademicContextProvider>
+    </AppearanceProvider>
   );
 }
 
@@ -131,11 +138,61 @@ const assignmentsRoute = createRoute({
   component: withSession((session) => <AssignmentsScreen session={session} />),
 });
 
+const scheduleRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/schedule',
+  component: withSession((session) => <ScheduleScreen session={session} />),
+});
+
+const scheduleTemplateRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/schedule/template',
+  component: withSession((session) => <ScheduleTemplateScreen session={session} />),
+});
+
+const substitutionsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/substitutions',
+  // `lessonId` приходит ссылкой из раздела «Уроки»: так администратор попадает в
+  // форму замены с уже выбранным занятием.
+  validateSearch: (search: Record<string, unknown>) => ({
+    lessonId: typeof search.lessonId === 'string' ? search.lessonId : undefined,
+  }),
+  component: () => <SubstitutionsRoute />,
+});
+
+const lessonsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/lessons',
+  component: withSession((session) => <LessonsScreen session={session} />),
+});
+
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/settings',
   component: SettingsScreen,
 });
+
+/** Замены: группа берётся из контекста, право — из сессии. */
+function SubstitutionsRoute() {
+  const { selectedGroupId } = useAcademicContext();
+  const session = useSession();
+  const search = substitutionsRoute.useSearch();
+
+  if (session.data == null) return <Splash />;
+
+  const canManage = session.data.permissions.some(
+    (grant) => grant.permission === 'substitutions:write' && grant.scope === 'all',
+  );
+
+  return (
+    <SubstitutionsScreen
+      groupId={selectedGroupId}
+      canManage={canManage}
+      initialLessonId={search.lessonId ?? null}
+    />
+  );
+}
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
@@ -143,6 +200,10 @@ const routeTree = rootRoute.addChildren([
   groupsRoute,
   catalogsRoute,
   assignmentsRoute,
+  scheduleRoute,
+  scheduleTemplateRoute,
+  substitutionsRoute,
+  lessonsRoute,
   usersRoute,
   privacyRoute,
   auditRoute,

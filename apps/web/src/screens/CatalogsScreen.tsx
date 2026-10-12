@@ -2,16 +2,20 @@ import { useState } from 'react';
 
 import type { GradeCategoryDto, RoomDto, SubjectDto } from '@edu-diary/contracts';
 import { Alert, Badge, Button, Card, EmptyState, Field, Table, TextInput } from '../components/ui';
+import { SUBJECT_COLOR_PALETTE, SubjectDot, subjectColor } from '../lib/appearance';
 import { errorMessage } from '../lib/api-client';
 import {
+  useBells,
   useCreateGradeCategory,
   useCreateRoom,
   useCreateSubject,
+  useDeleteBell,
   useDeleteGradeCategory,
   useDeleteRoom,
   useDeleteSubject,
   useGradeCategories,
   useRooms,
+  useSaveBell,
   useSubjects,
   useUpdateGradeCategory,
   useUpdateRoom,
@@ -42,13 +46,31 @@ function SubjectsCard() {
   const update = useUpdateSubject();
   const remove = useDeleteSubject();
 
+  /**
+   * Цвет нового предмета: первый свободный из палитры.
+   *
+   * Случайный выбор мог бы дать два почти одинаковых цвета подряд, поэтому идём по
+   * кругу оттенков и пропускаем занятые. Администратор может выбрать цвет вручную;
+   * пустое поле означает «подобрать автоматически».
+   */
+  const usedColors = new Set(
+    (subjects.data?.items ?? [])
+      .map((item) => item.color)
+      .filter((value): value is string => value !== null),
+  );
+  const nextSubjectColor =
+    SUBJECT_COLOR_PALETTE.find((candidate) => !usedColors.has(candidate)) ??
+    SUBJECT_COLOR_PALETTE[0]!;
+
   const [name, setName] = useState('');
   const [shortName, setShortName] = useState('');
   const [kind, setKind] = useState<'mandatory' | 'optional' | 'practice'>('mandatory');
+  const [color, setColor] = useState('');
   const [editing, setEditing] = useState<SubjectDto | null>(null);
   const [editName, setEditName] = useState('');
   const [editShortName, setEditShortName] = useState('');
   const [editKind, setEditKind] = useState<'mandatory' | 'optional' | 'practice'>('mandatory');
+  const [editColor, setEditColor] = useState('');
 
   return (
     <Card title="Предметы" description="По предмету ставятся оценки и строятся назначения.">
@@ -61,9 +83,11 @@ function SubjectsCard() {
               name,
               shortName: shortName === '' ? null : shortName,
               kind,
+              color: color === '' ? null : color,
             });
             setName('');
             setShortName('');
+            setColor('');
           } catch {
             // Ошибка показывается ниже.
           }
@@ -73,7 +97,7 @@ function SubjectsCard() {
           <Field label="Название">
             <TextInput required value={name} onChange={(event) => setName(event.target.value)} />
           </Field>
-          <Field label="Короткое имя" hint="Для журнала">
+          <Field label="Короткое имя" hint="Код для плиток расписания, 2–4 символа (необязательно)">
             <TextInput value={shortName} onChange={(event) => setShortName(event.target.value)} />
           </Field>
           <Field label="Вид">
@@ -90,6 +114,18 @@ function SubjectsCard() {
                 </option>
               ))}
             </select>
+          </Field>
+          <Field label="Цвет" hint="Пусто — подберём автоматически">
+            <span className="flex items-center gap-2">
+              <input
+                type="color"
+                name="color"
+                className="h-9 w-12 rounded border border-slate-300"
+                value={color === '' ? nextSubjectColor : color}
+                onChange={(event) => setColor(event.target.value)}
+              />
+              {color === '' && <span className="text-xs text-slate-500">по кругу оттенков</span>}
+            </span>
           </Field>
           <div className="flex items-end pb-2">
             <Button type="submit" disabled={create.isPending}>
@@ -115,7 +151,10 @@ function SubjectsCard() {
           <Table head={['Предмет', 'Коротко', 'Вид', '']}>
             {subjects.data.items.map((subject) => (
               <tr key={subject.id} className="border-b border-slate-100">
-                <td className="px-3 py-2 font-medium">{subject.name}</td>
+                <td className="px-3 py-2 font-medium">
+                  <SubjectDot subjectId={subject.id} color={subject.color} />
+                  {subject.name}
+                </td>
                 <td className="px-3 py-2 text-slate-600">{subject.shortName ?? '—'}</td>
                 <td className="px-3 py-2">
                   <Badge>{subjectKindLabel(subject.kind)}</Badge>
@@ -128,6 +167,7 @@ function SubjectsCard() {
                         setEditing(subject);
                         setEditName(subject.name);
                         setEditShortName(subject.shortName ?? '');
+                        setEditColor(subject.color ?? '');
                         setEditKind(subject.kind as 'mandatory' | 'optional' | 'practice');
                       }}
                     >
@@ -158,6 +198,7 @@ function SubjectsCard() {
                   name: editName,
                   shortName: editShortName === '' ? null : editShortName,
                   kind: editKind,
+                  color: editColor === '' ? null : editColor,
                 });
                 setEditing(null);
               } catch {
@@ -172,7 +213,7 @@ function SubjectsCard() {
                 onChange={(event) => setEditName(event.target.value)}
               />
             </Field>
-            <Field label="Короткое имя">
+            <Field label="Короткое имя" hint="Код для плиток расписания, 2–4 символа">
               <TextInput
                 value={editShortName}
                 onChange={(event) => setEditShortName(event.target.value)}
@@ -192,6 +233,20 @@ function SubjectsCard() {
                   </option>
                 ))}
               </select>
+            </Field>
+            <Field label="Цвет" hint="Заливка плиток и маркер в строках">
+              <span className="flex items-center gap-2">
+                <input
+                  type="color"
+                  name="editColor"
+                  className="h-9 w-12 rounded border border-slate-300"
+                  value={editColor === '' ? subjectColor(editing.id) : editColor}
+                  onChange={(event) => setEditColor(event.target.value)}
+                />
+                <Button tone="ghost" type="button" onClick={() => setEditColor('')}>
+                  Автоматически
+                </Button>
+              </span>
             </Field>
             <Button type="submit" disabled={update.isPending}>
               Сохранить
@@ -506,12 +561,154 @@ function CategoriesCard() {
   );
 }
 
+/**
+ * Звонки: сетка времени по номеру пары.
+ *
+ * Сетка различается между заведениями, поэтому живёт в справочнике, а не в коде.
+ * При составлении расписания время подставляется по номеру пары, но остаётся
+ * правимым — в отдельных случаях пара идёт в другое время.
+ */
+function BellsCard() {
+  const bells = useBells();
+  const save = useSaveBell();
+  const remove = useDeleteBell();
+
+  const [pairNumber, setPairNumber] = useState('1');
+  const [timeStart, setTimeStart] = useState('');
+  const [timeEnd, setTimeEnd] = useState('');
+  const [breakMinutes, setBreakMinutes] = useState('');
+
+  return (
+    <Card
+      title="Звонки"
+      description="Время пары подставляется в расписание по номеру пары и остаётся правимым."
+    >
+      <form
+        className="flex flex-col gap-3"
+        onSubmit={async (event) => {
+          event.preventDefault();
+          try {
+            await save.mutateAsync({
+              pairNumber: Number(pairNumber),
+              timeStart,
+              timeEnd,
+              breakMinutes: breakMinutes === '' ? null : Number(breakMinutes),
+            });
+            setTimeStart('');
+            setTimeEnd('');
+            setBreakMinutes('');
+          } catch {
+            // Ошибка показывается ниже.
+          }
+        }}
+      >
+        <div className="grid gap-3 sm:grid-cols-4">
+          <Field label="Пара">
+            <select
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+              value={pairNumber}
+              onChange={(event) => setPairNumber(event.target.value)}
+            >
+              {[1, 2, 3, 4, 5, 6, 7, 8].map((number) => (
+                <option key={number} value={String(number)}>
+                  {number}-я пара
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Начало">
+            <TextInput
+              required
+              type="time"
+              value={timeStart}
+              onChange={(event) => setTimeStart(event.target.value)}
+            />
+          </Field>
+          <Field label="Окончание">
+            <TextInput
+              required
+              type="time"
+              value={timeEnd}
+              onChange={(event) => setTimeEnd(event.target.value)}
+            />
+          </Field>
+          <Field label="Перемена, мин" hint="Необязательно">
+            <TextInput
+              inputMode="numeric"
+              value={breakMinutes}
+              onChange={(event) => setBreakMinutes(event.target.value)}
+            />
+          </Field>
+        </div>
+
+        <div>
+          <Button type="submit" disabled={save.isPending}>
+            Сохранить звонок
+          </Button>
+        </div>
+
+        {save.isError && <Alert tone="error">{errorMessage(save.error)}</Alert>}
+      </form>
+
+      <div className="mt-4">
+        {bells.data !== undefined && bells.data.items.length === 0 && (
+          <EmptyState>
+            Звонки не заполнены: при составлении расписания время придётся указывать вручную.
+          </EmptyState>
+        )}
+
+        {bells.data !== undefined && bells.data.items.length > 0 && (
+          <Table head={['Пара', 'Начало', 'Окончание', 'Перемена', '']}>
+            {bells.data.items.map((bell) => (
+              <tr key={bell.id} className="border-b border-slate-100">
+                <td className="px-3 py-2 font-medium">{bell.pairNumber}-я</td>
+                <td className="px-3 py-2">{bell.timeStart}</td>
+                <td className="px-3 py-2">{bell.timeEnd}</td>
+                <td className="px-3 py-2 text-slate-500">{bell.breakMinutes ?? '—'}</td>
+                <td className="px-3 py-2">
+                  <span className="flex flex-wrap gap-2">
+                    <Button
+                      tone="ghost"
+                      onClick={() => {
+                        setPairNumber(String(bell.pairNumber));
+                        setTimeStart(bell.timeStart);
+                        setTimeEnd(bell.timeEnd);
+                        setBreakMinutes(
+                          bell.breakMinutes === null ? '' : String(bell.breakMinutes),
+                        );
+                      }}
+                    >
+                      Править
+                    </Button>
+                    <Button
+                      tone="ghost"
+                      disabled={remove.isPending}
+                      onClick={() =>
+                        void remove.mutateAsync(bell.pairNumber).catch(() => undefined)
+                      }
+                    >
+                      Удалить
+                    </Button>
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </Table>
+        )}
+
+        {remove.isError && <Alert tone="error">{errorMessage(remove.error)}</Alert>}
+      </div>
+    </Card>
+  );
+}
+
 export function CatalogsScreen() {
   return (
     <div className="flex flex-col gap-6">
       <SubjectsCard />
       <RoomsCard />
       <CategoriesCard />
+      <BellsCard />
     </div>
   );
 }

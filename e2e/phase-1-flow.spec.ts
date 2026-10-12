@@ -83,10 +83,13 @@ test.describe.serial('Этап 1: настройка, вход, права', () 
 
   test('администратор создаёт пользователя с ролью преподавателя', async ({ page }) => {
     await ensureSession(page, ADMIN.username, ADMIN.password);
-    await page.getByRole('link', { name: 'Пользователи и роли' }).click();
+    await page.getByRole('link', { name: 'Учётные записи и роли' }).click();
 
     // Поля ищем внутри карточки «Новый пользователь»: ниже на странице есть
     // блок «Новый ученик» со своими полями, в том числе «ФИО».
+    //
+    // Блок один, с вкладками: «Учётная запись» (открыта по умолчанию) и «Законный
+    // представитель».
     const userForm = page
       .locator('section')
       .filter({ has: page.getByRole('heading', { name: 'Новый пользователь' }) });
@@ -97,9 +100,9 @@ test.describe.serial('Этап 1: настройка, вход, права', () 
 
     // Роли по умолчанию отмечен преподаватель — проверяем и оставляем.
     await expect(userForm.getByLabel('Преподаватель')).toBeChecked();
-    await userForm.getByRole('button', { name: 'Создать пользователя' }).click();
+    await userForm.getByRole('button', { name: 'Создать учётную запись' }).click();
 
-    await expect(page.getByText('Пользователь создан', { exact: false })).toBeVisible();
+    await expect(page.getByText('Учётная запись создана', { exact: false })).toBeVisible();
     await expect(page.getByRole('cell', { name: TEACHER.username })).toBeVisible();
   });
 
@@ -125,7 +128,7 @@ test.describe.serial('Этап 1: настройка, вход, права', () 
     await login(page, TEACHER.username, TEACHER.password);
     await expect(page.getByText(TEACHER.fullName)).toBeVisible();
     // Преподаватель не видит разделы администратора.
-    await expect(page.getByRole('link', { name: 'Пользователи и роли' })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Учётные записи и роли' })).toHaveCount(0);
   });
 
   test('пользователь меняет свой пароль и входит с новым', async ({ page }) => {

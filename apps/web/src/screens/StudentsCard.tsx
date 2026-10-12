@@ -11,6 +11,7 @@ import {
   useUnlinkGuardian,
   useUsers,
 } from '../lib/queries';
+import { Pagination, usePageSize } from '../components/Pagination';
 import {
   Alert,
   Badge,
@@ -285,8 +286,8 @@ export function LinkGuardianForm({ onLinked }: { onLinked: (message: string) => 
         {guardians.length === 0 && (
           <Alert tone="warning">
             {linkedGuardians.length > 0
-              ? 'Все законные представители этого ученика уже привязаны. Другого можно создать блоком «Новый законный представитель» в разделе «Пользователи и роли».'
-              : 'Пользователей с ролью «Родитель» пока нет — создайте их блоком «Новый законный представитель» в разделе «Пользователи и роли».'}
+              ? 'Все законные представители этого ученика уже привязаны. Другого можно создать блоком «Новый законный представитель» в разделе «Учётные записи и роли».'
+              : 'Учётных записей с ролью «Родитель» пока нет — создайте их блоком «Новый законный представитель» в разделе «Учётные записи и роли».'}
           </Alert>
         )}
 
@@ -385,7 +386,10 @@ function AccountForm({
  * список людей идёт первым, а группа — следом.
  */
 export function StudentsCard({ onNotice }: { onNotice: (message: string) => void }) {
-  const students = useStudents({ limit: 200 });
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = usePageSize(10);
+  const students = useStudents({ search, limit: pageSize, offset: (page - 1) * pageSize });
   const [accountFor, setAccountFor] = useState<{ id: string; name: string } | null>(null);
   const [accountNotice, setAccountNotice] = useState<string | null>(null);
 
@@ -394,11 +398,30 @@ export function StudentsCard({ onNotice }: { onNotice: (message: string) => void
       <CreateStudentForm onCreated={onNotice} />
 
       <Card title="Ученики" description="Карточка ученика — основа зачисления, согласий и журнала.">
+        <div className="mb-3">
+          <Field label="Поиск">
+            <TextInput
+              placeholder="ФИО ученика"
+              value={search}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                // Поиск меняет выборку: возвращаемся на первую страницу.
+                setPage(1);
+              }}
+              className="sm:max-w-xs"
+            />
+          </Field>
+        </div>
+
         {students.isLoading && <p className="text-sm text-slate-500">Загружаем…</p>}
         {students.isError && <Alert tone="error">{errorMessage(students.error)}</Alert>}
 
         {students.data !== undefined && students.data.items.length === 0 && (
-          <EmptyState>Учеников пока нет — заведите первого выше.</EmptyState>
+          <EmptyState>
+            {search === ''
+              ? 'Учеников пока нет — заведите первого выше.'
+              : 'По запросу никого не найдено.'}
+          </EmptyState>
         )}
 
         {students.data !== undefined && students.data.items.length > 0 && (
@@ -428,6 +451,16 @@ export function StudentsCard({ onNotice }: { onNotice: (message: string) => void
               </tr>
             ))}
           </Table>
+        )}
+
+        {students.data !== undefined && students.data.total > 0 && (
+          <Pagination
+            total={students.data.total}
+            page={page}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+          />
         )}
 
         {accountFor !== null && (

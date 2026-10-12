@@ -1,5 +1,14 @@
-﻿import {
+import {
   academicYearSchema,
+  bellScheduleSchema,
+  generateLessonsResponseSchema,
+  lessonGenerationPreviewSchema,
+  lessonSchema,
+  listLessonsResponseSchema,
+  listScheduleExceptionsResponseSchema,
+  listScheduleResponseSchema,
+  scheduleEntrySchema,
+  substitutionSchema,
   academicYearWithPeriodsSchema,
   assignmentSchema,
   brandingSchema,
@@ -15,13 +24,18 @@
   listEnrollmentsResponseSchema,
   listGradeCategoriesResponseSchema,
   listGuardianLinksResponseSchema,
+  listBellsResponseSchema,
+  listGroupOptionsResponseSchema,
   listGroupsResponseSchema,
   listPermissionsResponseSchema,
   listRolesResponseSchema,
   listRoomsResponseSchema,
   listSecurityEventsResponseSchema,
   listStudentsResponseSchema,
+  appearanceSchema,
   listSubjectsResponseSchema,
+  listSubstituteCandidatesResponseSchema,
+  listSubstitutionsResponseSchema,
   listUsersResponseSchema,
   periodSchema,
   policyResponseSchema,
@@ -34,6 +48,7 @@
   subjectSchema,
   suggestUsernameResponseSchema,
   userSummarySchema,
+  type LessonDto,
   type SessionResponseDto,
   type SetupStatusResponseDto,
 } from '@edu-diary/contracts';
@@ -41,6 +56,7 @@ import {
   useMutation,
   useQuery,
   useQueryClient,
+  type QueryClient,
   type UseMutationResult,
   type UseQueryResult,
 } from '@tanstack/react-query';
@@ -170,6 +186,7 @@ export function useUsers(params: {
   search?: string;
   role?: string;
   limit?: number;
+  offset?: number;
 }): UseQueryResult<z.infer<typeof listUsersResponseSchema>> {
   const query = toQueryString({ ...params, limit: params.limit ?? 100 });
 
@@ -249,6 +266,7 @@ export function useAudit(params: {
   action?: string;
   accessOnly?: boolean;
   limit?: number;
+  offset?: number;
 }): UseQueryResult<z.infer<typeof listAuditResponseSchema>> {
   const query = toQueryString({ ...params, limit: params.limit ?? 100 });
 
@@ -344,7 +362,7 @@ export function useRevokeConsent() {
   });
 }
 
-export function useStudents(params: { search?: string; limit?: number }) {
+export function useStudents(params: { search?: string; limit?: number; offset?: number }) {
   const query = toQueryString({ ...params, limit: params.limit ?? 100 });
 
   return useQuery({
@@ -426,7 +444,7 @@ export function useLinkGuardian() {
   });
 }
 
-/** Все связи «ученик ↔ представитель»: список в разделе «Пользователи и роли». */
+/** Все связи «ученик ↔ представитель»: список в разделе «Учётные записи и роли». */
 export function useGuardianLinks(studentId?: string) {
   const query = toQueryString({ limit: 200, ...(studentId === undefined ? {} : { studentId }) });
 
@@ -722,6 +740,41 @@ export function useCreateGradeCategory() {
   });
 }
 
+/** Звонки: сетка времени по номеру пары (справочник заведения). */
+export function useBells() {
+  return useQuery({
+    queryKey: ['bells'],
+    queryFn: () => apiRequest('/api/bells', listBellsResponseSchema),
+  });
+}
+
+/** Сохранение звонка: пара уникальна, поэтому одна операция и для создания, и для правки. */
+export function useSaveBell() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      pairNumber: number;
+      timeStart: string;
+      timeEnd: string;
+      breakMinutes?: number | null;
+    }) => apiRequest('/api/bells', bellScheduleSchema, { method: 'PUT', body: input }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ['bells'] });
+    },
+  });
+}
+
+export function useDeleteBell() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (pairNumber: number) =>
+      apiSend(`/api/bells/${pairNumber}`, { method: 'DELETE' }).then(() => pairNumber),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ['bells'] });
+    },
+  });
+}
+
 export function useUpdateGradeCategory() {
   const client = useQueryClient();
   return useMutation({
@@ -859,6 +912,308 @@ export function useCloseAssignment() {
         body: { endsOn: input.endsOn },
       }),
     onSuccess: () => invalidateAcademics(client),
+  });
+}
+
+// --- Расписание и уроки (Этап 3) ---
+
+function invalidateSchedule(client: QueryClient): void {
+  void client.invalidateQueries({ queryKey: ['schedule'] });
+  void client.invalidateQueries({ queryKey: ['lessons'] });
+  void client.invalidateQueries({ queryKey: ['substitutions'] });
+}
+
+/**
+ * Группы, расписание которых доступно смотрящему.
+ *
+ * Ученик и родитель не имеют права `academics:read@all`, поэтому общий список
+ * групп им недоступен: свои группы отдаёт расписание.
+ */
+export function useScheduleGroups() {
+  return useQuery({
+    queryKey: ['schedule', 'my-groups'],
+    queryFn: () => apiRequest('/api/schedule/my-groups', listGroupOptionsResponseSchema),
+  });
+}
+
+export function useScheduleEntries(params: { studyGroupId?: string; teacherUserId?: string } = {}) {
+  const query = toQueryString(params);
+
+  return useQuery({
+    queryKey: ['schedule', query],
+    queryFn: () => apiRequest(`/api/schedule${query}`, listScheduleResponseSchema),
+  });
+}
+
+export function useCreateScheduleEntry() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      assignmentId: string;
+      roomId?: string | null;
+      dayOfWeek: number;
+      pairNumber: number;
+      /** Можно не указывать: время возьмётся из звонков. */
+      timeStart?: string;
+      timeEnd?: string;
+      validFrom: string;
+      validTo?: string | null;
+    }) => apiRequest('/api/schedule', scheduleEntrySchema, { method: 'POST', body: input }),
+    onSuccess: () => invalidateSchedule(client),
+  });
+}
+
+export function useUpdateScheduleEntry() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      id: string;
+      roomId?: string | null;
+      dayOfWeek?: number;
+      pairNumber?: number;
+      timeStart?: string;
+      timeEnd?: string;
+      validFrom?: string;
+      validTo?: string | null;
+    }) =>
+      apiRequest(`/api/schedule/${input.id}`, scheduleEntrySchema, {
+        method: 'PATCH',
+        body: input,
+      }),
+    onSuccess: () => invalidateSchedule(client),
+  });
+}
+
+export function useDeleteScheduleEntry() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiSend(`/api/schedule/${id}`, { method: 'DELETE' }).then(() => id),
+    onSuccess: () => invalidateSchedule(client),
+  });
+}
+
+export function useLessons(
+  params: {
+    studyGroupId?: string;
+    teacherUserId?: string;
+    from?: string;
+    to?: string;
+    status?: string;
+  } = {},
+) {
+  const query = toQueryString(params);
+
+  return useQuery({
+    queryKey: ['lessons', query],
+    queryFn: () => apiRequest(`/api/lessons${query}`, listLessonsResponseSchema),
+  });
+}
+
+export function useGenerateLessons() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      studyGroupId: string;
+      from: string;
+      to: string;
+      /** Стереть уроки периода и создать заново по шаблону. */
+      recreate?: boolean;
+    }) =>
+      apiRequest('/api/lessons/generate', generateLessonsResponseSchema, {
+        method: 'POST',
+        body: input,
+      }),
+    onSuccess: () => invalidateSchedule(client),
+  });
+}
+
+/**
+ * Предварительный расчёт пересоздания: сколько уроков и замен попадёт под удаление.
+ *
+ * Запрашивается, когда администратор включает чекбокс «Пересоздать», чтобы
+ * предупреждение содержало реальные числа.
+ */
+export function useGenerationPreview() {
+  return useMutation({
+    mutationFn: (input: { studyGroupId: string; from: string; to: string }) =>
+      apiRequest('/api/lessons/generation-preview', lessonGenerationPreviewSchema, {
+        method: 'POST',
+        body: input,
+      }),
+  });
+}
+
+/**
+ * Урок вручную: внеплановое занятие или правка расписания на неделю.
+ *
+ * Такой урок не связан с шаблоном, поэтому генерация его не создаёт и не удаляет;
+ * пересоздание за период его затрёт (об этом предупреждает форма генерации).
+ */
+export function useCreateLesson() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      studyGroupId: string;
+      subjectId: string;
+      teacherUserId: string;
+      roomId?: string | null;
+      lessonDate: string;
+      pairNumber: number;
+      timeStart?: string;
+      timeEnd?: string;
+      topic?: string | null;
+    }) => apiRequest('/api/lessons', lessonSchema, { method: 'POST', body: input }),
+    onSuccess: () => invalidateSchedule(client),
+  });
+}
+
+export function useUpdateLesson() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      id: string;
+      lessonDate?: string;
+      pairNumber?: number;
+      timeStart?: string;
+      timeEnd?: string;
+      topic?: string | null;
+      status?: string;
+      roomId?: string | null;
+    }) => apiRequest(`/api/lessons/${input.id}`, lessonSchema, { method: 'PATCH', body: input }),
+    onSuccess: () => invalidateSchedule(client),
+  });
+}
+
+export function useDeleteLesson() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiSend(`/api/lessons/${id}`, { method: 'DELETE' }).then(() => id),
+    onSuccess: () => invalidateSchedule(client),
+  });
+}
+
+export function useCreateSubstitution() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      /** На один урок: даты берутся из урока, начало указывать не нужно. */
+      lessonId?: string | null;
+      assignmentId?: string | null;
+      substituteUserId: string;
+      startsOn?: string;
+      endsOn?: string | null;
+      reason: string;
+    }) => apiRequest('/api/substitutions', substitutionSchema, { method: 'POST', body: input }),
+    onSuccess: () => invalidateSchedule(client),
+  });
+}
+
+export function useDeleteSubstitution() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiSend(`/api/substitutions/${id}`, { method: 'DELETE' }).then(() => id),
+    onSuccess: () => invalidateSchedule(client),
+  });
+}
+
+/**
+ * Кандидаты на замену: активные преподаватели со статусом занятости на слот урока.
+ * Свободные приходят первыми — администратор выбирает заменяющего за пару секунд.
+ */
+export function useSubstituteCandidates(lessonId: string | null) {
+  return useQuery({
+    queryKey: ['substitute-candidates', lessonId],
+    enabled: lessonId !== null,
+    queryFn: () =>
+      apiRequest(
+        `/api/lessons/${String(lessonId)}/substitute-candidates`,
+        listSubstituteCandidatesResponseSchema,
+      ),
+  });
+}
+
+/** Журнал замен: список активных замен за период. */
+export function useSubstitutions(
+  params: { assignmentId?: string; substituteUserId?: string } = {},
+) {
+  const query = toQueryString(params);
+
+  return useQuery({
+    queryKey: ['substitutions', 'journal', query],
+    queryFn: () => apiRequest(`/api/substitutions${query}`, listSubstitutionsResponseSchema),
+  });
+}
+
+/**
+ * Восстановление отменённого урока.
+ *
+ * Отмена — это исключение на дату, а не удаление строки, поэтому возврат состоит
+ * из двух шагов: снять исключение и попросить генерацию вернуть урок в план по
+ * этой же дате. Широкий период не берём: генерация по одному дню ничего лишнего
+ * не пересчитывает.
+ */
+export function useRestoreLesson() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async (lesson: LessonDto) => {
+      const exceptions = await apiRequest(
+        '/api/schedule/exceptions',
+        listScheduleExceptionsResponseSchema,
+      );
+
+      const cancellation = exceptions.items.find(
+        (item) =>
+          item.exceptionDate === lesson.lessonDate &&
+          item.action === 'cancel' &&
+          item.scheduleEntryId === lesson.scheduleEntryId,
+      );
+
+      if (cancellation !== undefined) {
+        await apiSend(`/api/schedule/exceptions/${cancellation.id}`, { method: 'DELETE' });
+      }
+
+      await apiRequest('/api/lessons/generate', generateLessonsResponseSchema, {
+        method: 'POST',
+        body: {
+          studyGroupId: lesson.studyGroupId,
+          from: lesson.lessonDate,
+          to: lesson.lessonDate,
+        },
+      });
+
+      return lesson.id;
+    },
+    onSuccess: () => invalidateSchedule(client),
+  });
+}
+
+/**
+ * Оформление уроков: значки событий и цвета предметов.
+ *
+ * Настройка общая для заведения, но читают её все: интерфейс рисует значки по
+ * ней. Пока значение не загрузилось, используется DEFAULT_APPEARANCE из
+ * контрактов — интерфейс не должен ждать ради оформления.
+ */
+export function useAppearance() {
+  return useQuery({
+    queryKey: ['appearance'],
+    queryFn: () => apiRequest('/api/settings/appearance', appearanceSchema),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useUpdateAppearance() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      markersEnabled?: boolean;
+      markers?: { replaced?: string; cancelled?: string };
+      colorsEnabled?: boolean;
+    }) => apiRequest('/api/settings/appearance', appearanceSchema, { method: 'PUT', body: input }),
+    onSuccess: (data) => {
+      client.setQueryData(['appearance'], data);
+    },
   });
 }
 

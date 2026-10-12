@@ -1,8 +1,9 @@
 import { Link } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { requiredISODateSchema } from '@edu-diary/contracts';
 import type { SessionResponseDto } from '@edu-diary/contracts';
+import { useAcademicContext } from '../components/AcademicContext';
 import {
   Alert,
   Badge,
@@ -32,6 +33,9 @@ import {
  * показывает то, что вернул сервер, и отдельно предупреждает преподавателя.
  */
 
+/** Значение селекта «Группа», означающее все группы активного года. */
+const ALL_GROUPS = '__all__';
+
 function CreateAssignmentCard() {
   const teachers = useTeachers();
   const subjects = useSubjects();
@@ -40,6 +44,7 @@ function CreateAssignmentCard() {
   // Уже существующие назначения: по ним показываем мягкое предупреждение о
   // возможном наложении — сервер такое больше не запрещает.
   const existing = useAssignments();
+  const { activeYearStartsOn, allGroups } = useAcademicContext();
 
   const [teacherUserId, setTeacherUserId] = useState('');
   const [subjectId, setSubjectId] = useState('');
@@ -48,6 +53,18 @@ function CreateAssignmentCard() {
   const [endsOn, setEndsOn] = useState('');
   const [hoursPlanned, setHoursPlanned] = useState('');
   const [dateError, setDateError] = useState<string | null>(null);
+  const [bulkResult, setBulkResult] = useState<{ created: number; failed: string[] } | null>(null);
+
+  /**
+   * Начало назначения по умолчанию — начало активного учебного года. Поле
+   * остаётся редактируемым, поэтому подставляем только пока пользователь его не
+   * трогал: иначе выбор года затирал бы уже введённую дату.
+   */
+  const startsOnTouched = useRef(false);
+  useEffect(() => {
+    if (startsOnTouched.current || activeYearStartsOn === null) return;
+    setStartsOn(activeYearStartsOn);
+  }, [activeYearStartsOn]);
 
   const teacherOptions = (teachers.data?.items ?? []).filter((user) =>
     user.roles.some((role) => role.code === 'teacher'),
@@ -95,20 +112,44 @@ function CreateAssignmentCard() {
             return;
           }
 
-          try {
-            await create.mutateAsync({
-              teacherUserId,
-              subjectId,
-              studyGroupId,
-              startsOn,
-              endsOn: endsOn === '' ? null : endsOn,
-              hoursPlanned: hoursPlanned === '' ? null : Number(hoursPlanned),
-            });
-            setStartsOn('');
+          const targetGroups =
+            studyGroupId === ALL_GROUPS ? allGroups.map((group) => group.id) : [studyGroupId];
+
+          if (targetGroups.length === 0) {
+            setDateError('В активном году нет групп — назначение некуда поставить');
+            return;
+          }
+
+          // Режим «все группы» — это несколько назначений. Проверки сервера
+          // (один предмет в группе ведёт один преподаватель) могут отклонить
+          // часть из них, поэтому показываем, что получилось, а что нет.
+          const failed: string[] = [];
+          let created = 0;
+
+          for (const targetGroupId of targetGroups) {
+            try {
+              await create.mutateAsync({
+                teacherUserId,
+                subjectId,
+                studyGroupId: targetGroupId,
+                startsOn,
+                endsOn: endsOn === '' ? null : endsOn,
+                hoursPlanned: hoursPlanned === '' ? null : Number(hoursPlanned),
+              });
+              created += 1;
+            } catch (error) {
+              const name = allGroups.find((group) => group.id === targetGroupId)?.name ?? 'группа';
+              failed.push(`${name}: ${errorMessage(error)}`);
+            }
+          }
+
+          if (allGroups.length > 1 || targetGroups.length > 1) {
+            setBulkResult({ created, failed });
+          }
+
+          if (created > 0) {
             setEndsOn('');
             setHoursPlanned('');
-          } catch {
-            // Ошибка показывается ниже.
           }
         }}
       >
@@ -116,7 +157,7 @@ function CreateAssignmentCard() {
           <Alert tone="warning">
             Преподавателей ещё нет — создайте пользователя с ролью «Преподаватель» в разделе{' '}
             <Link to="/users" className="underline">
-              Пользователи и роли
+              Учётные записи и роли
             </Link>
             .
           </Alert>
@@ -161,6 +202,9 @@ function CreateAssignmentCard() {
               onChange={(event) => setStudyGroupId(event.target.value)}
             >
               <option value="">— выберите —</option>
+              {allGroups.length > 1 && (
+                <option value={ALL_GROUPS}>Все группы ({allGroups.length})</option>
+              )}
               {(groups.data?.items ?? []).map((group) => (
                 <option key={group.id} value={group.id}>
                   {group.name}
@@ -168,12 +212,15 @@ function CreateAssignmentCard() {
               ))}
             </select>
           </Field>
-          <Field label="Начало">
+          <Field label="Начало" hint="По умолчанию — начало учебного года">
             <TextInput
               required
               type="date"
               value={startsOn}
-              onChange={(event) => setStartsOn(event.target.value)}
+              onChange={(event) => {
+                startsOnTouched.current = true;
+                setStartsOn(event.target.value);
+              }}
             />
           </Field>
           <Field label="Окончание" hint="Пусто — действует до закрытия">
@@ -203,6 +250,20 @@ function CreateAssignmentCard() {
         )}
 
         {create.isError && <Alert tone="error">{errorMessage(create.error)}</Alert>}
+
+        {bulkResult !== null && (
+          <div className="flex flex-col gap-2">
+            {bulkResult.created > 0 && (
+              <Alert tone="success">
+                Создано назначений: {bulkResult.created}.
+                {bulkResult.failed.length > 0 ? ' Часть групп не удалось — причины ниже.' : ''}
+              </Alert>
+            )}
+            {bulkResult.failed.length > 0 && (
+              <Alert tone="warning">Не создано: {bulkResult.failed.join('; ')}</Alert>
+            )}
+          </div>
+        )}
 
         <div>
           <Button type="submit" disabled={create.isPending}>

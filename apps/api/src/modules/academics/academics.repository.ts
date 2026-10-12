@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, ilike, isNull, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, inArray, isNull, ne, sql } from 'drizzle-orm';
 
 import type { Database, Executor } from '../../shared/db/client';
 import {
@@ -112,6 +112,8 @@ export interface Dependencies {
 export interface AcademicsRepository {
   listStudents(filters: StudentListFilters): Promise<{ items: StudentRecord[]; total: number }>;
   findStudent(id: string, executor?: Executor): Promise<StudentRecord | null>;
+  /** Ученик по учётной записи: у ролей «ученик» и «родитель» известен её идентификатор. */
+  findStudentByUserId(userId: string, executor?: Executor): Promise<StudentRecord | null>;
   insertStudent(
     input: {
       userId: string | null;
@@ -172,6 +174,8 @@ export interface AcademicsRepository {
 
   listGroups(filters: {
     academicYearId?: string | undefined;
+    /** Ограничение конкретными группами: нужно выборкам «мои группы». */
+    ids?: readonly string[] | undefined;
     search?: string | undefined;
   }): Promise<StudyGroupRecord[]>;
   findGroup(id: string, executor?: Executor): Promise<StudyGroupRecord | null>;
@@ -203,6 +207,11 @@ export interface AcademicsRepository {
   countGroupDependencies(id: string, executor?: Executor): Promise<Dependencies>;
 
   listEnrollments(studyGroupId: string, executor?: Executor): Promise<EnrollmentRecord[]>;
+  /** Группы текущих зачислений перечисленных учеников: «мои группы» для ученика и родителя. */
+  listGroupsForStudents(
+    studentIds: readonly string[],
+    executor?: Executor,
+  ): Promise<{ id: string; name: string }[]>;
   listStudentEnrollments(
     studentId: string,
     executor?: Executor,
@@ -296,6 +305,46 @@ export function createAcademicsRepository(db: Database): AcademicsRepository {
     async findStudent(id: string, executor: Executor = db.orm): Promise<StudentRecord | null> {
       const rows = await executor.select().from(student).where(eq(student.id, id)).limit(1);
       return rows[0] ?? null;
+    },
+
+    /**
+     * Ученик по учётной записи: связь нужна ролям, которые приходят с
+     * идентификатором пользователя (ученик, родитель), а не ученика.
+     */
+    async findStudentByUserId(
+      userId: string,
+      executor: Executor = db.orm,
+    ): Promise<StudentRecord | null> {
+      const rows = await executor.select().from(student).where(eq(student.userId, userId)).limit(1);
+      return rows[0] ?? null;
+    },
+
+    /**
+     * Группы по текущим зачислениям учеников.
+     *
+     * Список учеников приходит снаружи: связь «представитель ↔ ученик» живёт в
+     * модуле учётных записей, и сюда её приводит порт, а не прямой запрос через
+     * границу модуля (ADR-031).
+     */
+    async listGroupsForStudents(studentIds: readonly string[], executor: Executor = db.orm) {
+      if (studentIds.length === 0) return [];
+
+      const rows = await executor
+        .selectDistinct({
+          id: studyGroup.id,
+          name: studyGroup.name,
+        })
+        .from(studentEnrollment)
+        .innerJoin(studyGroup, eq(studyGroup.id, studentEnrollment.studyGroupId))
+        .where(
+          and(
+            isNull(studentEnrollment.leftOn),
+            inArray(studentEnrollment.studentId, [...studentIds]),
+          ),
+        )
+        .orderBy(asc(studyGroup.name));
+
+      return rows;
     },
 
     async insertStudent(input, executor: Executor = db.orm): Promise<StudentRecord> {
@@ -436,6 +485,9 @@ export function createAcademicsRepository(db: Database): AcademicsRepository {
         filters.academicYearId === undefined
           ? undefined
           : eq(studyGroup.academicYearId, filters.academicYearId),
+        filters.ids === undefined || filters.ids.length === 0
+          ? undefined
+          : inArray(studyGroup.id, [...filters.ids]),
         filters.search === undefined || filters.search.trim() === ''
           ? undefined
           : ilike(studyGroup.name, `%${filters.search.trim()}%`),

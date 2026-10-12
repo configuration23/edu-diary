@@ -1,3 +1,9 @@
+import {
+  DEFAULT_APPEARANCE,
+  type AppearanceDto,
+  type UpdateAppearanceRequest,
+} from '@edu-diary/contracts';
+
 import type { Executor } from '../../shared/db/client';
 import { AppError } from '../../shared/errors';
 import type { SettingsRepository } from './settings.repository';
@@ -9,6 +15,7 @@ export const SETTING_KEYS = {
   brandingShortName: 'branding.short_name',
   brandingSignature: 'branding.signature',
   brandingLogo: 'branding.logo',
+  appearance: 'appearance.lessons',
   storageProvider: 'storage.provider',
   storageLocalPath: 'storage.local_path',
 } as const;
@@ -60,6 +67,17 @@ export interface SettingsService {
     actorUserId?: string | null,
     executor?: Executor,
   ): Promise<BrandingChange>;
+  /** Оформление уроков: значки событий и цвета предметов. */
+  readAppearance(executor?: Executor): Promise<AppearanceDto>;
+  updateAppearance(
+    input: UpdateAppearanceRequest,
+    actorUserId?: string | null,
+    executor?: Executor,
+  ): Promise<{
+    appearance: AppearanceDto;
+    before: AppearanceDto;
+    changed: UpdateAppearanceRequest;
+  }>;
 }
 
 function assertSettingKey(key: string): void {
@@ -86,6 +104,52 @@ export function createSettingsService(repository: SettingsRepository): SettingsS
     ]);
 
     return { title, shortName, signature, logoDataUrl };
+  };
+
+  /** Тип берём из интерфейса сервиса: у возвращаемого объекта нет своего имени. */
+  const updateAppearance: SettingsService['updateAppearance'] = async (
+    input,
+    actorUserId = null,
+    executor = undefined,
+  ) => {
+    const before = await readAppearance(executor);
+
+    // Как и у брендинга: `undefined` — «не трогать», иначе настройка целиком
+    // перезаписывалась бы частичным запросом. Значение собираем полным: в
+    // хранилище должно лежать готовое оформление, а не набор пропусков.
+    const next: AppearanceDto = {
+      markersEnabled: input.markersEnabled ?? before.markersEnabled,
+      markers: {
+        replaced: input.markers?.replaced ?? before.markers.replaced,
+        cancelled: input.markers?.cancelled ?? before.markers.cancelled,
+      },
+      colorsEnabled: input.colorsEnabled ?? before.colorsEnabled,
+    };
+
+    const changed: UpdateAppearanceRequest = {
+      ...(input.markersEnabled === undefined ? {} : { markersEnabled: next.markersEnabled }),
+      ...(input.markers === undefined ? {} : { markers: next.markers }),
+      ...(input.colorsEnabled === undefined ? {} : { colorsEnabled: next.colorsEnabled }),
+    };
+
+    await repository.upsert({ key: SETTING_KEYS.appearance, value: next, actorUserId }, executor);
+
+    return { appearance: next, before, changed };
+  };
+
+  const readAppearance = async (executor?: Executor): Promise<AppearanceDto> => {
+    const stored = await get<UpdateAppearanceRequest>(SETTING_KEYS.appearance, executor);
+
+    // Значения по умолчанию живут в коде: незаданная настройка не должна ломать
+    // интерфейс, а новый значок появляется без миграции.
+    return {
+      markersEnabled: stored?.markersEnabled ?? DEFAULT_APPEARANCE.markersEnabled,
+      markers: {
+        replaced: stored?.markers?.replaced ?? DEFAULT_APPEARANCE.markers.replaced,
+        cancelled: stored?.markers?.cancelled ?? DEFAULT_APPEARANCE.markers.cancelled,
+      },
+      colorsEnabled: stored?.colorsEnabled ?? DEFAULT_APPEARANCE.colorsEnabled,
+    };
   };
 
   return {
@@ -131,5 +195,8 @@ export function createSettingsService(repository: SettingsRepository): SettingsS
         changed,
       };
     },
+
+    readAppearance,
+    updateAppearance,
   };
 }

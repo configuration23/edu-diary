@@ -204,7 +204,15 @@ function EnrollForm({ groupId, groupName }: { groupId: string; groupName: string
   );
 }
 
-function GroupComposition({ groupId, groupName }: { groupId: string; groupName: string }) {
+function GroupComposition({
+  groupId,
+  groupName,
+  onClose,
+}: {
+  groupId: string;
+  groupName: string;
+  onClose: () => void;
+}) {
   const enrollments = useGroupEnrollments(groupId);
   const withdraw = useWithdrawStudent();
   const [withdrawFor, setWithdrawFor] = useState<string | null>(null);
@@ -213,6 +221,14 @@ function GroupComposition({ groupId, groupName }: { groupId: string; groupName: 
 
   return (
     <Card title={`Состав группы «${groupName}»`} description="Отчисление закрывает запись датой.">
+      {/* Кнопка закрытия: раньше состав открывался только повторным нажатием
+          на «Состав», и это было неочевидно. */}
+      <div className="flex justify-end">
+        <Button tone="ghost" type="button" onClick={onClose}>
+          Закрыть состав
+        </Button>
+      </div>
+
       {/* Порядок как в работе: сначала зачисляем, потом смотрим список и
           отчисляем по конкретному ученику. */}
       <EnrollForm groupId={groupId} groupName={groupName} />
@@ -470,7 +486,13 @@ export function GroupsScreen({ canManageStudents = false }: { canManageStudents?
         )}
       </Card>
 
-      {openGroup !== null && <GroupComposition groupId={openGroup.id} groupName={openGroup.name} />}
+      {openGroup !== null && (
+        <GroupComposition
+          groupId={openGroup.id}
+          groupName={openGroup.name}
+          onClose={() => setOpenGroup(null)}
+        />
+      )}
     </div>
   );
 }

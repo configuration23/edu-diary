@@ -1,5 +1,6 @@
 import { useState } from 'react';
 
+import { Pagination, usePageSize } from '../components/Pagination';
 import { errorMessage } from '../lib/api-client';
 import { useAudit } from '../lib/queries';
 import {
@@ -19,12 +20,27 @@ export function AuditScreen() {
   const [entityKind, setEntityKind] = useState('');
   const [action, setAction] = useState('');
   const [accessOnly, setAccessOnly] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = usePageSize(20);
 
+  /**
+   * Журнал только растёт, поэтому без страниц он быстро превращается в
+   * бесконечную ленту. Размер по умолчанию больше, чем в списках людей: записи
+   * короткие, и разбирать их удобнее пачками.
+   */
   const audit = useAudit({
     ...(entityKind === '' ? {} : { entityKind }),
     ...(action === '' ? {} : { action }),
     ...(accessOnly ? { accessOnly: true } : {}),
+    limit: pageSize,
+    offset: (page - 1) * pageSize,
   });
+
+  /** Любой фильтр меняет выборку: возвращаемся на первую страницу. */
+  const withReset = (apply: () => void): void => {
+    apply();
+    setPage(1);
+  };
 
   return (
     <Card
@@ -37,7 +53,7 @@ export function AuditScreen() {
           <TextInput
             placeholder="student, user, role…"
             value={entityKind}
-            onChange={(event) => setEntityKind(event.target.value)}
+            onChange={(event) => withReset(() => setEntityKind(event.target.value))}
             className="w-44"
           />
         </label>
@@ -46,7 +62,7 @@ export function AuditScreen() {
           <TextInput
             placeholder="create, update, access…"
             value={action}
-            onChange={(event) => setAction(event.target.value)}
+            onChange={(event) => withReset(() => setAction(event.target.value))}
             className="w-44"
           />
         </label>
@@ -54,17 +70,19 @@ export function AuditScreen() {
           <input
             type="checkbox"
             checked={accessOnly}
-            onChange={(event) => setAccessOnly(event.target.checked)}
+            onChange={(event) => withReset(() => setAccessOnly(event.target.checked))}
           />
           только доступ к персональным данным
         </label>
         <Button
           tone="secondary"
-          onClick={() => {
-            setEntityKind('');
-            setAction('');
-            setAccessOnly(false);
-          }}
+          onClick={() =>
+            withReset(() => {
+              setEntityKind('');
+              setAction('');
+              setAccessOnly(false);
+            })
+          }
         >
           Сбросить
         </Button>
@@ -129,6 +147,16 @@ export function AuditScreen() {
             </tr>
           ))}
         </Table>
+      )}
+
+      {audit.data !== undefined && audit.data.total > 0 && (
+        <Pagination
+          total={audit.data.total}
+          page={page}
+          pageSize={pageSize}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+        />
       )}
     </Card>
   );

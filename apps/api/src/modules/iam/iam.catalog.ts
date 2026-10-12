@@ -44,6 +44,31 @@ export const PERMISSIONS: readonly PermissionDefinition[] = [
     title: 'Назначения преподавателей на предметы и группы',
     scopeHint: 'all',
   },
+  {
+    code: 'schedule:read',
+    title: 'Просмотр расписания',
+    scopeHint: 'assigned',
+  },
+  {
+    code: 'schedule:write',
+    title: 'Составление расписания и исключений',
+    scopeHint: 'all',
+  },
+  {
+    code: 'lessons:read',
+    title: 'Просмотр уроков',
+    scopeHint: 'assigned',
+  },
+  {
+    code: 'lessons:write',
+    title: 'Правка уроков: тема, перенос, отмена',
+    scopeHint: 'assigned',
+  },
+  {
+    code: 'substitutions:write',
+    title: 'Замены преподавателя',
+    scopeHint: 'all',
+  },
   { code: 'audit:read', title: 'Просмотр журнала изменений и доступа', scopeHint: 'all' },
   { code: 'security:read', title: 'Просмотр событий безопасности', scopeHint: 'all' },
   { code: 'security:write', title: 'Разбор событий безопасности', scopeHint: 'all' },
@@ -111,6 +136,12 @@ export const SYSTEM_ROLES: readonly SystemRoleDefinition[] = [
       // Право выдано ровно на область `assigned`: преподаватель видит только
       // свои назначения, а «вижу всё» в модуле назначений требует `all`.
       { permission: 'assignments:read', scope: 'assigned' },
+      // Расписание и уроки: преподаватель видит и правит свои занятия. Замену
+      // оформляет администратор, но заменяющий видит чужой урок как свой —
+      // иначе замена бессмысленна (ADR-033).
+      { permission: 'schedule:read', scope: 'assigned' },
+      { permission: 'lessons:read', scope: 'assigned' },
+      { permission: 'lessons:write', scope: 'assigned' },
       { permission: 'grades:read', scope: 'assigned' },
       { permission: 'grades:write', scope: 'assigned' },
       { permission: 'attendance:read', scope: 'assigned' },
@@ -124,13 +155,22 @@ export const SYSTEM_ROLES: readonly SystemRoleDefinition[] = [
     // Преподаватель без этого права не увидит свои назначения после обновления
     // уже настроенной установки. Право только на чтение: менять назначения
     // по-прежнему может лишь администратор.
-    grantedOnSync: [{ permission: 'assignments:read', scope: 'assigned' }],
+    grantedOnSync: [
+      { permission: 'assignments:read', scope: 'assigned' },
+      // Расписание и уроки появились на Этапе 3: без выдачи на синхронизации
+      // преподаватель после обновления получил бы 403 на новом разделе.
+      { permission: 'schedule:read', scope: 'assigned' },
+      { permission: 'lessons:read', scope: 'assigned' },
+      { permission: 'lessons:write', scope: 'assigned' },
+    ],
   },
   {
     code: 'student',
     title: 'Ученик',
     permissions: [
       { permission: 'students:read', scope: 'own' },
+      { permission: 'schedule:read', scope: 'own' },
+      { permission: 'lessons:read', scope: 'own' },
       { permission: 'grades:read', scope: 'own' },
       { permission: 'attendance:read', scope: 'own' },
       { permission: 'homework:read', scope: 'own' },
@@ -145,6 +185,8 @@ export const SYSTEM_ROLES: readonly SystemRoleDefinition[] = [
       // «own» для родителя означает «свои дети»: конкретные ученики определяются
       // привязками и проверяются в сервисе (ADR-005).
       { permission: 'students:read', scope: 'own' },
+      { permission: 'schedule:read', scope: 'own' },
+      { permission: 'lessons:read', scope: 'own' },
       { permission: 'grades:read', scope: 'own' },
       { permission: 'attendance:read', scope: 'own' },
       { permission: 'homework:read', scope: 'own' },

@@ -9,6 +9,7 @@ import type { AccessScope } from '@edu-diary/domain';
 
 import type { AuditActor } from '../../shared/actor';
 import type { Database, Executor } from '../../shared/db/client';
+import { withDatabaseErrors } from '../../shared/db/errors';
 import { withTransaction } from '../../shared/db/transaction';
 import { AppError } from '../../shared/errors';
 import type { PasswordHasher } from '../../shared/password-hasher';
@@ -225,45 +226,52 @@ export function createUsersService(dependencies: UsersServiceDependencies): User
       const email = input.email ?? null;
       const phone = input.phone ?? null;
 
-      const created = await withTransaction(db, options.executor, async (tx) => {
-        const row = await users.insert(
-          {
-            username,
-            passwordHash,
-            fullName: input.fullName,
-            email,
-            phone,
-            mustChangePassword,
-          },
-          tx,
-        );
+      const created = await withDatabaseErrors(
+        () =>
+          withTransaction(db, options.executor, async (tx) => {
+            const row = await users.insert(
+              {
+                username,
+                passwordHash,
+                fullName: input.fullName,
+                email,
+                phone,
+                mustChangePassword,
+              },
+              tx,
+            );
 
-        await users.setRoles(
-          row.id,
-          roleRows.map((role) => role.id),
-          tx,
-        );
+            await users.setRoles(
+              row.id,
+              roleRows.map((role) => role.id),
+              tx,
+            );
 
-        await audit.record(
-          {
-            action: 'create',
-            entityKind: 'user',
-            entityId: row.id,
-            after: {
-              username,
-              fullName: input.fullName,
-              email,
-              phone,
-              roles: roleRows.map((role) => role.code),
-              mustChangePassword,
-            },
-          },
-          options.actor,
-          tx,
-        );
+            await audit.record(
+              {
+                action: 'create',
+                entityKind: 'user',
+                entityId: row.id,
+                after: {
+                  username,
+                  fullName: input.fullName,
+                  email,
+                  phone,
+                  roles: roleRows.map((role) => role.code),
+                  mustChangePassword,
+                },
+              },
+              options.actor,
+              tx,
+            );
 
-        return row;
-      });
+            return row;
+          }),
+        {
+          // Логин и почта уникальны: занятое значение — это конфликт, а не сбой.
+          unique: `Логин «${username}» уже занят`,
+        },
+      );
 
       return {
         ...created,

@@ -71,7 +71,17 @@ function shiftDays(days) {
   return date.toISOString().slice(0, 10);
 }
 
-const counts = { students: 0, groups: 0, subjects: 0, rooms: 0, assignments: 0, links: 0 };
+const counts = {
+  students: 0,
+  groups: 0,
+  subjects: 0,
+  rooms: 0,
+  assignments: 0,
+  links: 0,
+  bells: 0,
+  entries: 0,
+  lessons: 0,
+};
 const reused = [];
 
 async function findOrCreate(label, find, create) {
@@ -285,9 +295,68 @@ async function main() {
     reused.push('назначение');
   }
 
+  // Идентификатор нужен расписанию: шаблон ссылается на назначение.
+  const allAssignments = await request('GET', '/api/assignments');
+  const assignment = allAssignments.items.find(
+    (item) => item.studyGroupId === group.id && item.subjectId === subjects[0].id,
+  );
+  if (assignment === undefined) {
+    throw new Error('Назначение не найдено: без него расписание не составить');
+  }
+
+  // 7. Звонки, занятие в расписании и уроки на ближайший период.
+  //
+  // Показываем полный путь Этапа 3: справочник задаёт время пары, шаблон ставит
+  // занятие в сетку, генерация порождает уроки по датам. Всё идемпотентно:
+  // повторный запуск не дублирует ни звонки, ни занятия, ни уроки.
+  const bells = await request('GET', '/api/bells');
+  const wantsBells = [
+    { pairNumber: 1, timeStart: '08:30', timeEnd: '10:00', breakMinutes: 10 },
+    { pairNumber: 2, timeStart: '10:10', timeEnd: '11:40', breakMinutes: 10 },
+    { pairNumber: 3, timeStart: '12:10', timeEnd: '13:40', breakMinutes: 10 },
+  ];
+  for (const bell of wantsBells) {
+    const existing = bells.items.find((item) => item.pairNumber === bell.pairNumber);
+    if (existing === undefined) {
+      await request('PUT', '/api/bells', bell);
+      counts.bells += 1;
+    } else {
+      if (!reused.includes('звонки')) reused.push('звонки');
+    }
+  }
+
+  const entries = await request('GET', `/api/schedule?studyGroupId=${group.id}`);
+  const hasEntry = entries.items.some((item) => item.pairNumber === 2 && item.dayOfWeek === 2);
+  if (!hasEntry) {
+    await request('POST', '/api/schedule', {
+      assignmentId: assignment.id,
+      roomId: room.id,
+      dayOfWeek: 2,
+      pairNumber: 2,
+      // Время не указываем: сервер берёт его из звонков.
+      validFrom: shiftDays(-30),
+    });
+    counts.entries += 1;
+  } else {
+    reused.push('занятие в расписании');
+  }
+
+  const lessons = await request('GET', `/api/lessons?studyGroupId=${group.id}`);
+  if (lessons.items.length === 0) {
+    const generated = await request('POST', '/api/lessons/generate', {
+      studyGroupId: group.id,
+      from: shiftDays(0),
+      to: shiftDays(30),
+    });
+    counts.lessons = generated.created;
+  } else {
+    reused.push('уроки');
+  }
+
   console.log(
     `Создано: учеников ${counts.students}, групп ${counts.groups}, предметов ${counts.subjects}, ` +
-      `аудиторий ${counts.rooms}, назначений ${counts.assignments}, связей ${counts.links}.`,
+      `аудиторий ${counts.rooms}, назначений ${counts.assignments}, связей ${counts.links}, ` +
+      `звонков ${counts.bells}, занятий ${counts.entries}, уроков ${counts.lessons}.`,
   );
   if (reused.length > 0) console.log(`Уже было (переиспользовано): ${reused.join(', ')}.`);
   console.log(`Вход ученика: demin-as / ${PASSWORD}`);

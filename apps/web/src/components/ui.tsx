@@ -1,6 +1,50 @@
 import type { ReactNode } from 'react';
+import { useRef, useState } from 'react';
 
 /** Небольшой набор примитивов интерфейса (ARCHITECTURE.md §2): без тяжёлого UI-кита. */
+
+/**
+ * Выбор файла с видимой кнопкой.
+ *
+ * Системный `<input type="file">` выглядит как подпись и не подсвечивается при
+ * наведении, поэтому было неочевидно, что на него можно нажать. Здесь кнопка своя,
+ * а поле ввода скрыто; выбранный файл показываем рядом.
+ */
+export function FilePicker({
+  accept,
+  name,
+  buttonLabel = 'Выбрать файл',
+  onSelect,
+}: {
+  accept: string;
+  name?: string;
+  buttonLabel?: string;
+  onSelect: (file: File | undefined) => void;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
+
+  return (
+    <span className="flex flex-wrap items-center gap-3">
+      <input
+        ref={input}
+        type="file"
+        name={name}
+        accept={accept}
+        className="hidden"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          setFileName(file?.name ?? null);
+          onSelect(file);
+        }}
+      />
+      <Button tone="secondary" type="button" onClick={() => input.current?.click()}>
+        {buttonLabel}
+      </Button>
+      <span className="text-sm text-slate-500">{fileName ?? 'файл не выбран'}</span>
+    </span>
+  );
+}
 
 export function Card({
   title,
@@ -58,17 +102,20 @@ export function Field({
   label,
   hint,
   error,
+  className,
   children,
 }: {
   label: string;
   hint?: string;
   error?: string;
+  /** Дополнительные классы обёртки: например `ml-auto`, чтобы увести поле вправо. */
+  className?: string;
   children: ReactNode;
 }) {
   // Подсказка и ошибка вынесены за пределы <label>: иначе они попадают в
   // доступное имя поля, и обращение к нему по названию становится неточным.
   return (
-    <div className="block">
+    <div className={className === undefined ? 'block' : `block ${className}`}>
       <label className="block">
         <span className="mb-1 block text-sm font-medium text-slate-700">{label}</span>
         {children}
@@ -143,7 +190,12 @@ export function Table({ head, children }: { head: string[]; children: ReactNode 
             ))}
           </tr>
         </thead>
-        <tbody>{children}</tbody>
+        {/*
+          Строки подсвечиваются при наведении: кликабельные места должны быть
+          заметны без подсказки. Строки правки помечаются `data-static` — они
+          открыты по клику и фон у них свой.
+        */}
+        <tbody className="[&>tr:not([data-static]):hover]:bg-slate-50">{children}</tbody>
       </table>
     </div>
   );

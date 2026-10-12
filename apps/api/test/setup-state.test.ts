@@ -29,6 +29,27 @@ function createFakeSettings(values: Map<string, unknown>): {
         changed: {},
       };
     },
+    // Оформление уроков в этом тесте не участвует: состояние настройки от него
+    // не зависит, но интерфейс сервиса обязан быть полным.
+    async readAppearance() {
+      return {
+        markersEnabled: true,
+        markers: { replaced: '🔄' as const, cancelled: '❎' as const },
+        colorsEnabled: true,
+      };
+    },
+    async updateAppearance(input) {
+      const appearance = {
+        markersEnabled: input.markersEnabled ?? true,
+        markers: {
+          replaced: input.markers?.replaced ?? ('🔄' as const),
+          cancelled: input.markers?.cancelled ?? ('❎' as const),
+        },
+        colorsEnabled: input.colorsEnabled ?? true,
+      };
+
+      return { appearance, before: appearance, changed: input };
+    },
   };
 
   return { settings, reads: () => reads };
