@@ -8,8 +8,10 @@ import { useAppearanceSettings } from '../components/AppearanceContext';
 import { Alert, Badge, Button, Card, EmptyState, Field, TextInput } from '../components/ui';
 import { SubjectDot, lessonMarker, subjectColor } from '../lib/appearance';
 import { errorMessage } from '../lib/api-client';
+import { hasBells, pairsFromBells } from '../lib/schedule-pairs';
 import {
   useCreateLesson,
+  useBells,
   useDeleteLesson,
   useGenerateLessons,
   useGenerationPreview,
@@ -33,7 +35,6 @@ import {
  * Ученику и родителю этот раздел не нужен: у них есть «Расписание».
  */
 
-const PAIRS = [1, 2, 3, 4, 5, 6, 7, 8];
 const DAYS_SHORT = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 
 const STATUS: Record<
@@ -557,6 +558,10 @@ export function LessonsScreen({ session }: { session: SessionResponseDto }) {
   const [newSlot, setNewSlot] = useState<{ date: string; pairNumber: number } | null>(null);
 
   const appearance = useAppearanceSettings();
+  const bells = useBells();
+
+  // Строки сетки — только заведённые пары: незачем показывать восемь, если их четыре.
+  const pairs = pairsFromBells(bells.data?.items);
 
   /** Окно запроса: неделя — 7 дней с понедельника, месяц — календарный месяц. */
   const rangeStart = period === 'week' ? mondayOf(anchor) : `${anchor.slice(0, 7)}-01`;
@@ -789,6 +794,15 @@ export function LessonsScreen({ session }: { session: SessionResponseDto }) {
           </div>
         )}
 
+        {!hasBells(bells.data?.items) && (
+          <div className="mt-3">
+            <Alert tone="warning">
+              В справочнике «Звонки» не задано ни одной пары, поэтому сетка показывает только
+              первую. Заполните звонки — и появится столько строк, сколько пар в заведении.
+            </Alert>
+          </div>
+        )}
+
         {lessons.isError && <Alert tone="error">{errorMessage(lessons.error)}</Alert>}
 
         {selectedLesson !== null && (
@@ -845,7 +859,7 @@ export function LessonsScreen({ session }: { session: SessionResponseDto }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {PAIRS.map((pair) => (
+                    {pairs.map((pair) => (
                       <tr key={pair} className="border-t border-slate-100">
                         <td className="px-1 py-1 align-top text-xs font-medium text-slate-500">
                           {pair}

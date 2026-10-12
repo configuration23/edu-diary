@@ -4,6 +4,7 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 import { useAcademicContext } from '../components/AcademicContext';
 import { Alert, Button, Card, EmptyState, Field, Table, TextInput } from '../components/ui';
 import { errorMessage } from '../lib/api-client';
+import { hasBells, pairsFromBells } from '../lib/schedule-pairs';
 import {
   useAssignments,
   useBells,
@@ -33,8 +34,6 @@ const DAYS = [
   { value: 6, label: 'Суббота' },
   { value: 7, label: 'Воскресенье' },
 ];
-
-const PAIRS = [1, 2, 3, 4, 5, 6, 7, 8];
 
 function canManageSchedule(session: SessionResponseDto): boolean {
   return session.permissions.some(
@@ -104,6 +103,9 @@ function EntryForm({
   const rooms = useRooms();
   const bells = useBells();
   const create = useCreateScheduleEntry();
+
+  // Пары для выбора — только заведённые в звонках: остальные всё равно нельзя заполнить.
+  const pairs = pairsFromBells(bells.data?.items);
 
   const [assignmentId, setAssignmentId] = useState('');
   const [roomId, setRoomId] = useState('');
@@ -220,7 +222,7 @@ function EntryForm({
             value={pairNumber}
             onChange={(event) => setPairNumber(event.target.value)}
           >
-            {PAIRS.map((number) => (
+            {pairs.map((number) => (
               <option key={number} value={String(number)}>
                 {number}-я пара
               </option>
@@ -333,11 +335,14 @@ function EntryForm({
  */
 function EntryEditor({
   entry,
+  pairs,
   onDone,
   onRemove,
   removePending,
 }: {
   entry: ScheduleEntryDto;
+  /** Пары, заведённые в звонках: остальные в расписании не используются. */
+  pairs: number[];
   onDone: () => void;
   /** Удаление живёт в форме правки: клик по строке не должен ничего удалять. */
   onRemove?: () => void;
@@ -376,7 +381,7 @@ function EntryEditor({
           value={pairNumber}
           onChange={(event) => setPairNumber(event.target.value)}
         >
-          {PAIRS.map((number) => (
+          {pairs.map((number) => (
             <option key={number} value={String(number)}>
               {number}-я пара
             </option>
@@ -451,6 +456,10 @@ export function ScheduleTemplateScreen({ session }: { session: SessionResponseDt
     selectedGroupId === null ? {} : { studyGroupId: selectedGroupId },
   );
   const remove = useDeleteScheduleEntry();
+  const bells = useBells();
+
+  // Пары для выбора — только заведённые в звонках: остальные всё равно нельзя заполнить.
+  const pairs = pairsFromBells(bells.data?.items);
   const users = useTeachers();
   const [editingId, setEditingId] = useState<string | null>(null);
   const editable = canManageSchedule(session);
@@ -488,6 +497,15 @@ export function ScheduleTemplateScreen({ session }: { session: SessionResponseDt
       >
         {!editable && (
           <GroupField groups={groups} selectedGroupId={selectedGroupId} selectGroup={selectGroup} />
+        )}
+
+        {!hasBells(bells.data?.items) && (
+          <div className="mt-3">
+            <Alert tone="warning">
+              В справочнике «Звонки» не задано ни одной пары: доступна только первая. Остальные
+              появятся, когда заполните расписание звонков.
+            </Alert>
+          </div>
         )}
 
         {entries.isError && <Alert tone="error">{errorMessage(entries.error)}</Alert>}
@@ -555,6 +573,7 @@ export function ScheduleTemplateScreen({ session }: { session: SessionResponseDt
                       <td colSpan={7} className="px-3 py-2">
                         <EntryEditor
                           entry={entry}
+                          pairs={pairs}
                           onDone={() => setEditingId(null)}
                           onRemove={() => {
                             void remove.mutateAsync(entry.id).catch(() => undefined);

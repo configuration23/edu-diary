@@ -6,7 +6,8 @@ import { useAppearanceSettings } from '../components/AppearanceContext';
 import { Alert, Badge, Button, Card, EmptyState, Field, Table } from '../components/ui';
 import { SubjectDot, lessonMarker, subjectColor } from '../lib/appearance';
 import { errorMessage } from '../lib/api-client';
-import { useLessons, useScheduleGroups } from '../lib/queries';
+import { hasBells, pairsFromBells } from '../lib/schedule-pairs';
+import { useBells, useLessons, useScheduleGroups } from '../lib/queries';
 
 /**
  * Расписание: итоговые занятия на дату и на неделю.
@@ -30,8 +31,6 @@ const DAYS_FULL = [
   'Суббота',
   'Воскресенье',
 ];
-
-const PAIRS = [1, 2, 3, 4, 5, 6, 7, 8];
 
 const selectClass = 'w-full rounded-md border border-slate-300 px-3 py-2 text-sm';
 
@@ -180,6 +179,10 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
   const [anchor, setAnchor] = useState(todayIso());
 
   const appearance = useAppearanceSettings();
+  const bells = useBells();
+
+  // Строки сетки — только заведённые пары: незачем показывать восемь, если их четыре.
+  const pairs = pairsFromBells(bells.data?.items);
 
   const weekStart = mondayOf(anchor);
   const weekDays = Array.from({ length: 6 }, (_, index) => shiftIso(weekStart, index));
@@ -219,7 +222,7 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
       lesson.status !== 'cancelled' && lesson.timeStart <= nowTime && nowTime <= lesson.timeEnd,
   );
 
-  const emptyPairs = PAIRS.filter(
+  const emptyPairs = pairs.filter(
     (pair) =>
       !dayLessons.some((lesson) => lesson.pairNumber === pair && lesson.status !== 'cancelled'),
   );
@@ -323,6 +326,15 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
           ))}
         </div>
 
+        {!hasBells(bells.data?.items) && (
+          <div className="mt-3">
+            <Alert tone="warning">
+              В справочнике «Звонки» не задано ни одной пары, поэтому сетка показывает только
+              первую. Заполните звонки — и появится столько строк, сколько пар в заведении.
+            </Alert>
+          </div>
+        )}
+
         {lessons.isError && <Alert tone="error">{errorMessage(lessons.error)}</Alert>}
 
         {view === 'day' && (
@@ -371,7 +383,7 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
         {view === 'week' && (
           <div className="mt-4">
             <Table head={['Пара', ...weekDays.map((iso) => formatDay(iso))]}>
-              {PAIRS.map((pair) => (
+              {pairs.map((pair) => (
                 <tr key={pair} className="border-b border-slate-100 align-top">
                   <td className="px-3 py-2 font-medium">{pair}-я</td>
                   {weekDays.map((iso) => {
