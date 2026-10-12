@@ -331,7 +331,18 @@ function EntryForm({
  * списке уже отфильтрована (группа), и редактор закрывается кнопкой, а не «сам»
  * после сохранения.
  */
-function EntryEditor({ entry, onDone }: { entry: ScheduleEntryDto; onDone: () => void }) {
+function EntryEditor({
+  entry,
+  onDone,
+  onRemove,
+  removePending,
+}: {
+  entry: ScheduleEntryDto;
+  onDone: () => void;
+  /** Удаление живёт в форме правки: клик по строке не должен ничего удалять. */
+  onRemove?: () => void;
+  removePending?: boolean;
+}) {
   const rooms = useRooms();
   const update = useUpdateScheduleEntry();
   const [pairNumber, setPairNumber] = useState(String(entry.pairNumber));
@@ -405,6 +416,11 @@ function EntryEditor({ entry, onDone }: { entry: ScheduleEntryDto; onDone: () =>
         <Button tone="ghost" type="button" onClick={onDone}>
           Закрыть
         </Button>
+        {onRemove !== undefined && (
+          <Button tone="ghost" type="button" disabled={removePending === true} onClick={onRemove}>
+            Убрать занятие
+          </Button>
+        )}
       </span>
 
       {update.isError && <Alert tone="error">{errorMessage(update.error)}</Alert>}
@@ -492,7 +508,17 @@ export function ScheduleTemplateScreen({ session }: { session: SessionResponseDt
               {items.map((entry) => (
                 // Фрагмент с ключом: к строке занятия добавляется строка правки.
                 <Fragment key={entry.id}>
-                  <tr className="border-b border-slate-100 align-top">
+                  {/*
+                    Клик по строке открывает правку занятия. Кнопка «Править»
+                    остаётся как явная подсказка, а «Убрать» живёт в самой форме:
+                    удаление не должно срабатывать случайным нажатием на строку.
+                  */}
+                  <tr
+                    className={`border-b border-slate-100 align-top ${
+                      editable ? 'cursor-pointer' : ''
+                    } ${editingId === entry.id ? 'bg-slate-50' : ''}`}
+                    onClick={editable ? () => setEditingId(entry.id) : undefined}
+                  >
                     <td className="px-3 py-2">{dayLabel(entry.dayOfWeek)}</td>
                     <td className="px-3 py-2">{entry.pairNumber}-я</td>
                     <td className="px-3 py-2 whitespace-nowrap">
@@ -509,27 +535,33 @@ export function ScheduleTemplateScreen({ session }: { session: SessionResponseDt
                     <td className="px-3 py-2 text-slate-500">{entry.roomName ?? '—'}</td>
                     <td className="px-3 py-2">
                       {editable && editingId !== entry.id && (
-                        <span className="flex flex-wrap gap-2">
-                          <Button tone="ghost" onClick={() => setEditingId(entry.id)}>
-                            Править
-                          </Button>
-                          <Button
-                            tone="ghost"
-                            disabled={remove.isPending}
-                            onClick={() => void remove.mutateAsync(entry.id).catch(() => undefined)}
-                          >
-                            Убрать
-                          </Button>
-                        </span>
+                        <Button
+                          tone="ghost"
+                          onClick={(event) => {
+                            // Кнопка внутри строки: не даём клику сработать дважды.
+                            event.stopPropagation();
+                            setEditingId(entry.id);
+                          }}
+                        >
+                          Править
+                        </Button>
                       )}
                     </td>
                   </tr>
                   {editingId === entry.id && (
                     // Правка — отдельной строкой таблицы: поля выстраиваются в линию,
                     // а не сжимаются в ячейку «Предмет».
-                    <tr className="border-b border-slate-100 bg-slate-50">
+                    <tr data-static className="border-b border-slate-100 bg-slate-50">
                       <td colSpan={7} className="px-3 py-2">
-                        <EntryEditor entry={entry} onDone={() => setEditingId(null)} />
+                        <EntryEditor
+                          entry={entry}
+                          onDone={() => setEditingId(null)}
+                          onRemove={() => {
+                            void remove.mutateAsync(entry.id).catch(() => undefined);
+                            setEditingId(null);
+                          }}
+                          removePending={remove.isPending}
+                        />
                       </td>
                     </tr>
                   )}

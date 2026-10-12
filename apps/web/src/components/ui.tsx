@@ -143,7 +143,12 @@ export function Table({ head, children }: { head: string[]; children: ReactNode 
             ))}
           </tr>
         </thead>
-        <tbody>{children}</tbody>
+        {/*
+          Строки подсвечиваются при наведении: кликабельные места должны быть
+          заметны без подсказки. Строки правки помечаются `data-static` — они
+          открыты по клику и фон у них свой.
+        */}
+        <tbody className="[&>tr:not([data-static]):hover]:bg-slate-50">{children}</tbody>
       </table>
     </div>
   );
