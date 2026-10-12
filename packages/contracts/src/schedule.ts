@@ -206,6 +206,8 @@ export const lessonSchema = z.object({
   groupName: z.string(),
   subjectId: uuidSchema,
   subjectName: z.string(),
+  /** Короткое имя предмета из справочника: код для плиток расписания. */
+  subjectShortName: z.string().nullable(),
   /** Кто ведёт урок: при замене — заменяющий. */
   teacherUserId: uuidSchema,
   teacherName: z.string(),

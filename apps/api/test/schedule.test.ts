@@ -567,6 +567,9 @@ describeWithDatabase('расписание и уроки', () => {
     expect(items.length).toBe(created);
     expect(items.every((lesson) => lesson.status === 'planned')).toBe(true);
     expect(items[0]?.teacherName).toBe('Преподаватель Расписания');
+    // Код плитки интерфейс берёт из «Короткого имени» справочника, а не режет
+    // название сам: в уроке должно быть это поле.
+    expect(items[0]?.subjectShortName).toBe('ОП');
 
     // Повторный запуск: ни новых уроков, ни изменений.
     const second = await testApp.app.inject({

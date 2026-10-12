@@ -77,6 +77,8 @@ export interface LessonRecord {
   groupName: string;
   subjectId: string;
   subjectName: string;
+  /** Короткое имя предмета из справочника: код для плиток расписания. */
+  subjectShortName: string | null;
   teacherUserId: string;
   plannedTeacherUserId: string | null;
   roomId: string | null;
@@ -144,6 +146,9 @@ const LESSON_SELECTION = {
   groupName: studyGroup.name,
   subjectId: lesson.subjectId,
   subjectName: subject.name,
+  // Короткое имя предмета: интерфейс берёт код плитки из справочника, а не режет
+  // название сам.
+  subjectShortName: subject.shortName,
   teacherUserId: lesson.teacherUserId,
   plannedTeacherUserId: lesson.plannedTeacherUserId,
   roomId: lesson.roomId,

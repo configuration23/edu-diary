@@ -1,5 +1,5 @@
 import type { ScheduleEntryDto, SessionResponseDto } from '@edu-diary/contracts';
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 
 import { useAcademicContext } from '../components/AcademicContext';
 import { Alert, Button, Card, EmptyState, Field, Table, TextInput } from '../components/ui';
@@ -490,41 +490,50 @@ export function ScheduleTemplateScreen({ session }: { session: SessionResponseDt
           <div className="mt-4">
             <Table head={['День', 'Пара', 'Время', 'Предмет', 'Преподаватель', 'Аудитория', '']}>
               {items.map((entry) => (
-                <tr key={entry.id} className="border-b border-slate-100 align-top">
-                  <td className="px-3 py-2">{dayLabel(entry.dayOfWeek)}</td>
-                  <td className="px-3 py-2">{entry.pairNumber}-я</td>
-                  <td className="px-3 py-2 whitespace-nowrap">
-                    {entry.timeStart}–{entry.timeEnd}
-                  </td>
-                  <td className="px-3 py-2">
-                    {entry.subjectName}
-                    <div className="text-xs text-slate-500">
-                      {entry.groupName} · с {entry.validFrom}
-                      {entry.validTo === null ? '' : ` по ${entry.validTo}`}
-                    </div>
-                    {editingId === entry.id && (
-                      <EntryEditor entry={entry} onDone={() => setEditingId(null)} />
-                    )}
-                  </td>
-                  <td className="px-3 py-2">{teacherName(entry.teacherUserId)}</td>
-                  <td className="px-3 py-2 text-slate-500">{entry.roomName ?? '—'}</td>
-                  <td className="px-3 py-2">
-                    {editable && editingId !== entry.id && (
-                      <span className="flex flex-wrap gap-2">
-                        <Button tone="ghost" onClick={() => setEditingId(entry.id)}>
-                          Править
-                        </Button>
-                        <Button
-                          tone="ghost"
-                          disabled={remove.isPending}
-                          onClick={() => void remove.mutateAsync(entry.id).catch(() => undefined)}
-                        >
-                          Убрать
-                        </Button>
-                      </span>
-                    )}
-                  </td>
-                </tr>
+                // Фрагмент с ключом: к строке занятия добавляется строка правки.
+                <Fragment key={entry.id}>
+                  <tr className="border-b border-slate-100 align-top">
+                    <td className="px-3 py-2">{dayLabel(entry.dayOfWeek)}</td>
+                    <td className="px-3 py-2">{entry.pairNumber}-я</td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      {entry.timeStart}–{entry.timeEnd}
+                    </td>
+                    <td className="px-3 py-2">
+                      {entry.subjectName}
+                      <div className="text-xs text-slate-500">
+                        {entry.groupName} · с {entry.validFrom}
+                        {entry.validTo === null ? '' : ` по ${entry.validTo}`}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2">{teacherName(entry.teacherUserId)}</td>
+                    <td className="px-3 py-2 text-slate-500">{entry.roomName ?? '—'}</td>
+                    <td className="px-3 py-2">
+                      {editable && editingId !== entry.id && (
+                        <span className="flex flex-wrap gap-2">
+                          <Button tone="ghost" onClick={() => setEditingId(entry.id)}>
+                            Править
+                          </Button>
+                          <Button
+                            tone="ghost"
+                            disabled={remove.isPending}
+                            onClick={() => void remove.mutateAsync(entry.id).catch(() => undefined)}
+                          >
+                            Убрать
+                          </Button>
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                  {editingId === entry.id && (
+                    // Правка — отдельной строкой таблицы: поля выстраиваются в линию,
+                    // а не сжимаются в ячейку «Предмет».
+                    <tr className="border-b border-slate-100 bg-slate-50">
+                      <td colSpan={7} className="px-3 py-2">
+                        <EntryEditor entry={entry} onDone={() => setEditingId(null)} />
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               ))}
             </Table>
           </div>

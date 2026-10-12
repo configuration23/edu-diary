@@ -74,6 +74,7 @@ function toLessonDto(
     groupName: lesson.groupName,
     subjectId: lesson.subjectId,
     subjectName: lesson.subjectName,
+    subjectShortName: lesson.subjectShortName,
     teacherUserId: lesson.teacherUserId,
     teacherName: teacherNames.get(lesson.teacherUserId) ?? '',
     plannedTeacherUserId: lesson.plannedTeacherUserId,

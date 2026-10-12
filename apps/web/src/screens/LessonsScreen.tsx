@@ -394,7 +394,9 @@ export function LessonsScreen({ session }: { session: SessionResponseDto }) {
         STATUS_TILE[lesson.status] ?? colorOf(lesson.subjectId)
       }`}
     >
-      <span className="font-medium">{subjectCode(lesson.subjectName)}</span>
+      <span className="font-medium">
+        {subjectCode(lesson.subjectName, lesson.subjectShortName)}
+      </span>
       {selectedGroupId === null && <span className="block truncate">{lesson.groupName}</span>}
     </button>
   );
