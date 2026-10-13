@@ -198,4 +198,87 @@ test.describe.serial('Этап 1: настройка, вход, права', () 
       expect(response.status(), `${method} /api/audit/:id`).toBe(404);
     }
   });
+
+  /**
+   * Консоль браузера должна оставаться чистой.
+   *
+   * Здесь, а не в отдельном файле: мастер настройки проходится в этом же наборе, и
+   * на чистой базе система существует только начиная отсюда. Отдельный файл шёл
+   * первым по алфавиту, попадал на экран мастера и падал.
+   *
+   * Разделяем дефект и ожидаемое:
+   * - **исключения страницы и сообщения консоли** — дефект;
+   * - **500 и выше** — дефект сервера;
+   * - **401** — сессии нет. Один такой ответ на загрузку страницы нормален: cookie
+   *   сессии `httpOnly`, и приложение обязано спросить сервер. Больше — значит, после
+   *   выхода запросы предыдущего пользователя продолжают уходить без сессии (так и
+   *   было: семь-восемь 401 подряд);
+   * - **403** — права: роль просит то, чего ей не положено. Это не дефект.
+   *
+   * Отдельная ловушка: браузер печатает «Failed to load resource» на каждый неудачный
+   * ответ. Если считать это ошибкой приложения, проверка начнёт падать на ожидаемых
+   * 403, поэтому такие сообщения отбрасываем, а ответы считаем по статусам.
+   */
+  test('консоль браузера чиста при обходе разделов', async ({ page }) => {
+    const consoleErrors: string[] = [];
+    const pageErrors: string[] = [];
+    const serverErrors: string[] = [];
+    const unauthorized: string[] = [];
+
+    page.on('console', (message) => {
+      if (message.type() !== 'error') return;
+      if (message.text().includes('Failed to load resource')) return;
+      consoleErrors.push(message.text());
+    });
+    page.on('pageerror', (error) => pageErrors.push(error.message));
+    page.on('response', (response) => {
+      const url = new URL(response.url());
+      if (!url.pathname.startsWith('/api/')) return;
+
+      const label = `${String(response.status())} ${url.pathname}`;
+      if (response.status() >= 500) serverErrors.push(label);
+      if (response.status() === 401) unauthorized.push(label);
+    });
+
+    // Входим администратором: у него доступны все разделы.
+    await ensureSession(page, ADMIN.username, ADMIN.password);
+
+    const lessons = await page.request.get('/api/lessons');
+    const lessonId = ((await lessons.json()) as { items: Array<{ id: string }> }).items[0]?.id;
+
+    const screens = [
+      '/',
+      '/academics',
+      '/groups',
+      '/catalogs',
+      '/assignments',
+      '/schedule',
+      '/schedule/template',
+      '/substitutions',
+      '/lessons',
+      ...(lessonId === undefined ? [] : [`/lessons/${lessonId}`]),
+      '/users',
+      '/privacy',
+      '/audit',
+      '/security',
+      '/settings',
+    ];
+
+    for (const path of screens) {
+      await page.goto(path);
+      await expect(page.getByRole('link', { name: 'Обзор' })).toBeVisible();
+    }
+
+    expect(pageErrors, 'исключения страницы').toEqual([]);
+    expect(consoleErrors, 'ошибки консоли').toEqual([]);
+    expect(serverErrors, 'ошибки сервера').toEqual([]);
+
+    /*
+     * Один 401 на загрузку страницы — это проверка «есть ли сессия»: cookie `httpOnly`,
+     * иначе не узнать. Разрешаем по одному на каждый переход, но не больше.
+     */
+    expect(unauthorized.length, `лишние 401: ${unauthorized.join(' | ')}`).toBeLessThanOrEqual(
+      screens.length,
+    );
+  });
 });
