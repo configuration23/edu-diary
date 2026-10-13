@@ -428,8 +428,18 @@ test('Этап 4, шаг 2: пересчёт плюсов в оценку', asyn
   await page.getByRole('button', { name: 'Пересчитать + / ·' }).click();
   await expect(page.getByText('Выдано оценок: 1')).toBeVisible();
 
-  // Оценка «5» появилась на уроке последнего знака.
-  await expect(page.locator('ul.marks-row > li > button[aria-label^="5,"]').first()).toBeVisible();
+  /**
+   * На уроке последнего знака осталась только оценка «5»: сами знаки съедены и в
+   * журнале не показываются. Это была ошибка: оценка появлялась, а знаки оставались
+   * висеть рядом, хотя счётчик обнулялся.
+   */
+  const lastLesson = page.locator('ul.marks-row > li > button[aria-label]');
+  await expect(lastLesson).toHaveCount(1);
+  await expect(lastLesson.first()).toHaveAttribute('aria-label', /^5,/);
+
+  // И на уроке первого знака тоже пусто: он оплатил оценку.
+  await page.goto(`/lessons/${lessonIds[0] as string}`);
+  await expect(page.locator('ul.marks-row > li > button[aria-label]')).toHaveCount(0);
 
   // Повторный пересчёт ничего не меняет: знаки уже оплачены оценкой.
   await page.getByRole('button', { name: 'Пересчитать + / ·' }).click();

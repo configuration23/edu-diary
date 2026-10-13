@@ -325,7 +325,19 @@ export function createJournalRepository(db: Database): JournalRepository {
   return {
     async listGradesForLesson(lessonId, executor: Executor = db.orm) {
       return queryGrades(executor)
-        .where(and(eq(gradeEntry.lessonId, lessonId), isNull(gradeEntry.deletedAt)))
+        .where(
+          and(
+            eq(gradeEntry.lessonId, lessonId),
+            isNull(gradeEntry.deletedAt),
+            /**
+             * Съеденные знаки в журнале не показываем: пересчёт «плюсы и точки →
+             * оценка» уже превратил их в оценку, и рядом с ней они выглядели бы
+             * как отметки, которых больше нет. Сами строки остаются в базе — по ним
+             * видно, из чего сложилась оценка, и их можно восстановить.
+             */
+            isNull(gradeEntry.consumedByGradeId),
+          ),
+        )
         .orderBy(asc(gradeEntry.createdAt));
     },
 
@@ -419,6 +431,8 @@ export function createJournalRepository(db: Database): JournalRepository {
       const conditions = [
         eq(gradeEntry.studentId, filter.studentId),
         isNull(gradeEntry.deletedAt),
+        // Съеденные знаки уже стали оценкой: в аналитике они не отметки.
+        isNull(gradeEntry.consumedByGradeId),
         sql`${gradeEntry.lessonId} in (select id from lesson where subject_id = ${filter.subjectId}${
           filter.from === undefined ? sql`` : sql` and lesson_date >= ${filter.from}`
         }${filter.to === undefined ? sql`` : sql` and lesson_date <= ${filter.to}`})`,
@@ -433,6 +447,8 @@ export function createJournalRepository(db: Database): JournalRepository {
       const conditions = [
         inArray(gradeEntry.studentId, filter.studentIds),
         isNull(gradeEntry.deletedAt),
+        // Съеденные знаки уже стали оценкой: в аналитике они не отметки.
+        isNull(gradeEntry.consumedByGradeId),
         sql`${gradeEntry.lessonId} in (select id from lesson where 1 = 1${
           filter.subjectId === undefined ? sql`` : sql` and subject_id = ${filter.subjectId}`
         }${filter.from === undefined ? sql`` : sql` and lesson_date >= ${filter.from}`}${

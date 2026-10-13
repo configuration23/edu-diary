@@ -80,6 +80,23 @@ describeWithDatabase('пересчёт знаков в оценки', () => {
   };
 
   /** Идентификатор урока по дате: без него тест молча проверял бы не тот урок. */
+  /**
+   * Включить пересчёт с нужным порогом.
+   *
+   * Каждый сценарий задаёт порог сам: иначе он зависит от того, что выставил
+   * предыдущий тест, и падает при запуске одного теста или в другом порядке.
+   */
+  const enableSign = async (sign: 'plus' | 'dot', threshold: number): Promise<void> => {
+    const response = await testApp.app.inject({
+      method: 'PATCH',
+      url: `/api/sign-rules/${sign}`,
+      headers: auth(),
+      payload: { threshold, isActive: true },
+    });
+
+    expect(response.statusCode, response.body).toBe(200);
+  };
+
   const lessonAt = (lessons: Map<string, string>, date: string): string => {
     const id = lessons.get(date);
     if (id === undefined) throw new Error(`урок на ${date} не создан`);
@@ -305,6 +322,8 @@ describeWithDatabase('пересчёт знаков в оценки', () => {
     // Свой предмет: знаки этого сценария не должны попадать в чужие счётчики.
     subjectId = await freshSubject();
 
+    await enableSign('plus', 3);
+
     const dates = [shiftDays(-28), shiftDays(-26), shiftDays(-25), shiftDays(-22)];
     const lessons = await createLessons(dates);
 
@@ -337,6 +356,36 @@ describeWithDatabase('пересчёт знаков в оценки', () => {
     expect(gradesOf(onLastLesson)[0]?.sign).toBe('plus');
   });
 
+  it('съеденные знаки не показываются в журнале на своих уроках', async () => {
+    /**
+     * Баг из проверки владельцем: после пересчёта знаки пропали из счётчика, но
+     * остались в списке отметок урока. Журнал должен показывать только оценку,
+     * которая за них поставлена.
+     *
+     * Предмет и даты — свои: знаки прошлых сценариев в счётчик не попадают.
+     */
+    subjectId = await freshSubject();
+
+    await enableSign('plus', 2);
+
+    const dates = [shiftDays(-8), shiftDays(-7)];
+    const lessons = await createLessons(dates);
+    await putSign(lessonAt(lessons, dates[0] as string), 'plus', homeReasonId);
+    await putSign(lessonAt(lessons, dates[1] as string), 'plus', answerReasonId);
+
+    expect((await apply()).awarded).toBe(1);
+
+    // На уроке последнего знака остаётся только оценка, самого знака нет.
+    const lastLesson = gradesOf(await journalOf(lessonAt(lessons, dates[1] as string)));
+    expect(lastLesson).toHaveLength(1);
+    expect(lastLesson[0]?.value).toBe('5');
+    expect(lastLesson.some((grade) => grade.sign !== null)).toBe(false);
+
+    // И на уроке первого знака тоже пусто: он съеден.
+    const firstLesson = gradesOf(await journalOf(lessonAt(lessons, dates[0] as string)));
+    expect(firstLesson).toHaveLength(0);
+  });
+
   it('повторный пересчёт ничего не меняет', async () => {
     const again = await apply();
     expect(again.awarded).toBe(0);
@@ -356,6 +405,8 @@ describeWithDatabase('пересчёт знаков в оценки', () => {
     });
     expect(enableDot.statusCode, enableDot.body).toBe(200);
 
+    await enableSign('dot', 2);
+
     const dates = [shiftDays(-19), shiftDays(-18)];
     const lessons = await createLessons(dates);
     await putSign(lessonAt(lessons, dates[0] as string), 'dot', homeReasonId);
@@ -373,6 +424,8 @@ describeWithDatabase('пересчёт знаков в оценки', () => {
     // Свой предмет: счётчик начинается с нуля, иначе знаки прошлых сценариев
     // добирали бы лишние оценки.
     subjectId = await freshSubject();
+
+    await enableSign('plus', 3);
 
     const dates = [
       shiftDays(-15),
@@ -394,25 +447,29 @@ describeWithDatabase('пересчёт знаков в оценки', () => {
      * Оценка ставится на урок последнего знака в наборе, поэтому ищем по всем
      * урокам: первая «5» — на третьем, вторая — на шестом.
      */
+    const perLesson: Record<string, unknown[]> = {};
     const fives: Json[] = [];
     for (const date of dates) {
       const journal = await journalOf(lessonAt(lessons, date));
-      fives.push(...gradesOf(journal).filter((grade) => grade.value === '5'));
+      const grades = gradesOf(journal);
+      perLesson[date] = grades.map((grade) => ({ value: grade.value, sign: grade.sign }));
+      fives.push(...grades.filter((grade) => grade.value === '5'));
     }
 
-    expect(fives).toHaveLength(2);
+    expect(fives, `оценки по урокам: ${JSON.stringify(perLesson)}`).toHaveLength(2);
   });
 
   it('выключенный знак не пересчитывается', async () => {
     subjectId = await freshSubject();
 
-    const disabled = await testApp.app.inject({
+    /** Порог задаём, но пересчёт оставляем выключенным: проверяем именно выключатель. */
+    const configured = await testApp.app.inject({
       method: 'PATCH',
       url: '/api/sign-rules/plus',
       headers: auth(),
-      payload: { isActive: false },
+      payload: { threshold: 3, isActive: false },
     });
-    expect(disabled.statusCode, disabled.body).toBe(200);
+    expect(configured.statusCode, configured.body).toBe(200);
 
     const dates = [shiftDays(-6), shiftDays(-5), shiftDays(-4)];
     const lessons = await createLessons(dates);
@@ -436,6 +493,8 @@ describeWithDatabase('пересчёт знаков в оценки', () => {
 
   it('выданная оценка — обычная: её можно править и удалить', async () => {
     subjectId = await freshSubject();
+
+    await enableSign('dot', 2);
 
     const dates = [shiftDays(-2), shiftDays(-1)];
     const lessons = await createLessons(dates);

@@ -333,12 +333,6 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
   const cancelled = lesson.status === 'cancelled';
   /** Включённые знаки: по ним пересчёт действительно выдаёт оценки. */
   const activeSignRules = signRules.filter((rule) => rule.isActive);
-  /**
-   * Причины знаков: по ним видно, что оценка получена пересчётом «плюсы и точки».
-   * Отдельного признака у оценки нет, потому что оценка — обычная: её правят и
-   * удаляют как любую другую.
-   */
-  const signReasonIds = new Set(signRules.map((rule) => rule.categoryId));
 
   /** Постановка отметки: цифра или знак, всегда с причиной. */
   const putMark = async (
@@ -529,16 +523,6 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
                                       {grade.categoryCode}
                                     </sup>
                                   )}
-                                  {/* Оценка за накопленные знаки: так видно её происхождение. */}
-                                  {grade.categoryId !== null &&
-                                    signReasonIds.has(grade.categoryId) && (
-                                      <sup
-                                        className="ml-1 text-xs text-amber-600"
-                                        title="Оценка за накопленные знаки"
-                                      >
-                                        ★
-                                      </sup>
-                                    )}
                                 </button>
                               </li>
                             ))}
