@@ -158,6 +158,11 @@ export const markAllPresentRequestSchema = z.object({
   exceptStudentIds: z.array(uuidSchema).max(200).optional(),
 });
 
+export const markAllPresentResponseSchema = z.object({
+  marked: z.number().int().nonnegative(),
+});
+export type MarkAllPresentResponseDto = z.infer<typeof markAllPresentResponseSchema>;
+
 export const gradeRevisionSchema = z.object({
   id: uuidSchema,
   action: z.enum(['create', 'update', 'delete', 'restore']),

@@ -302,20 +302,31 @@ function LessonDetails({
         )}
       </form>
 
+      <div className="flex flex-wrap gap-2">
+        {/* Журнал доступен и преподавателю: он ведёт урок, а не только смотрит. */}
+        <Button
+          tone="primary"
+          type="button"
+          onClick={() =>
+            void navigate({ to: '/lessons/$lessonId', params: { lessonId: lesson.id } })
+          }
+        >
+          Журнал урока
+        </Button>
+
+        {canManage && lesson.status !== 'cancelled' && (
+          <Button
+            tone="ghost"
+            type="button"
+            onClick={() => void navigate({ to: '/substitutions', search: { lessonId: lesson.id } })}
+          >
+            Заменить
+          </Button>
+        )}
+      </div>
+
       {canManage && (
         <div className="flex flex-wrap gap-2">
-          {lesson.status !== 'cancelled' && (
-            <Button
-              tone="ghost"
-              type="button"
-              onClick={() =>
-                void navigate({ to: '/substitutions', search: { lessonId: lesson.id } })
-              }
-            >
-              Заменить
-            </Button>
-          )}
-
           {lesson.status !== 'cancelled' && (
             <Button
               tone="ghost"

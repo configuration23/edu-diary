@@ -15,6 +15,7 @@ import { CatalogsScreen } from './screens/CatalogsScreen';
 import { DashboardScreen } from './screens/DashboardScreen';
 import { GroupsScreen } from './screens/GroupsScreen';
 import { LoginScreen } from './screens/LoginScreen';
+import { LessonJournalScreen } from './screens/LessonJournalScreen';
 import { LessonsScreen } from './screens/LessonsScreen';
 import { PrivacyScreen } from './screens/PrivacyScreen';
 import { ScheduleScreen } from './screens/ScheduleScreen';
@@ -167,6 +168,13 @@ const lessonsRoute = createRoute({
   component: withSession((session) => <LessonsScreen session={session} />),
 });
 
+/** Журнал урока: оценки и посещаемость конкретного занятия. */
+const lessonJournalRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/lessons/$lessonId',
+  component: withSession((session) => <LessonJournalScreen session={session} />),
+});
+
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/settings',
@@ -204,6 +212,7 @@ const routeTree = rootRoute.addChildren([
   scheduleTemplateRoute,
   substitutionsRoute,
   lessonsRoute,
+  lessonJournalRoute,
   usersRoute,
   privacyRoute,
   auditRoute,

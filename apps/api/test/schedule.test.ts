@@ -1414,7 +1414,12 @@ describeWithDatabase('расписание и уроки', () => {
     // Время задаём явно: справочник звонков в этом наборе тестов очищается
     // отдельной проверкой, и зависеть от него здесь не стоит.
     const freePair = 3;
-    const lessonDate = nextWeekday(3);
+    /**
+     * Дату берём внутри окна пересоздания — это ближайшая среда, начиная с
+     * `from`. Иначе проверка «пересоздание затирает разовый урок» зависела бы от
+     * того, какой сегодня день недели, и падала бы по вторникам.
+     */
+    const lessonDate = nextWeekday(3, from);
 
     const created = await testApp.app.inject({
       method: 'POST',
@@ -1468,6 +1473,22 @@ describeWithDatabase('расписание и уроки', () => {
     });
     const result = generated.json() as Json;
     expect(result.deleted).toBe(0);
+
+    /**
+     * Проверяем, что разовый урок попал в окно пересоздания: если его дата вне
+     * диапазона, дальше проверять нечего — пересоздание по определению работает
+     * только внутри периода.
+     */
+    const inWindow = await testApp.app.inject({
+      method: 'GET',
+      url: `/api/lessons?studyGroupId=${groupId}&from=${from}&to=${to}`,
+      headers: auth(),
+    });
+    const windowItems = (inWindow.json() as { items: Json[] }).items;
+    expect(
+      windowItems.some((lesson) => lesson.id === manualLesson.id),
+      `разовый урок вне окна ${from}..${to}: дата урока ${lessonDate} (сегодня ${shiftDays(0)}), список: ${inWindow.body.slice(0, 200)}`,
+    ).toBe(true);
 
     const survived = await testApp.app.inject({
       method: 'GET',
