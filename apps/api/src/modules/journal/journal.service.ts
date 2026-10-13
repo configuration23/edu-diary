@@ -1,4 +1,5 @@
 import {
+  ATTENDANCE_SHORT,
   attendanceBreakdown,
   countSigns,
   escalationState,
@@ -133,6 +134,49 @@ export interface JournalService {
   ): Promise<GradeRecord>;
   deleteGrade(gradeId: string, reason: string, options: MutationOptions): Promise<void>;
   restoreGrade(gradeId: string, options: MutationOptions): Promise<void>;
+  /** Удаление отметки посещаемости: мягкое, с обязательной причиной (ADR-011). */
+  deleteAttendance(attendanceId: string, reason: string, options: MutationOptions): Promise<void>;
+  restoreAttendance(attendanceId: string, options: MutationOptions): Promise<void>;
+  /** История правок отметки посещаемости: кто, когда, было и стало. */
+  listAttendanceRevisions(attendanceId: string): Promise<
+    {
+      action: string;
+      before: string | null;
+      after: string | null;
+      reason: string | null;
+      actorName: string | null;
+      createdAt: Date;
+    }[]
+  >;
+  /**
+   * Удалённые отметки урока.
+   *
+   * Без этой выборки восстановление недостижимо: удалённое исчезает из журнала, и
+   * администратор не знает, что именно там было.
+   */
+  deletedForLesson(lessonId: string): Promise<{
+    grades: {
+      id: string;
+      studentId: string;
+      studentName: string;
+      mark: string;
+      categoryTitle: string | null;
+      deletedAt: Date;
+      deletedReason: string | null;
+      deletedByName: string | null;
+    }[];
+    attendance: {
+      id: string;
+      studentId: string;
+      studentName: string;
+      status: string;
+      isExcused: boolean;
+      reason: string | null;
+      deletedAt: Date;
+      deletedReason: string | null;
+      deletedByName: string | null;
+    }[];
+  }>;
   listGradeRevisions(gradeId: string): Promise<
     {
       action: string;
@@ -206,6 +250,12 @@ function describeMark(value: string | null, sign: string | null): string {
 /** Подпись знака для аудита: «+» или «·». */
 function signLabel(sign: 'plus' | 'dot'): string {
   return sign === 'plus' ? '+' : '·';
+}
+
+/** Подпись отметки посещаемости для истории правок: «Н», «У», «Б», «О», «П». */
+function statusLabel(status: string, isExcused: boolean): string {
+  if (status === 'not_present' && isExcused) return 'У';
+  return ATTENDANCE_SHORT[status as AttendanceStatus] ?? status;
 }
 
 export function createJournalService(dependencies: JournalServiceDependencies): JournalService {
@@ -529,6 +579,21 @@ export function createJournalService(dependencies: JournalServiceDependencies): 
       const current = await journal.findGrade(gradeId);
       if (current === null) throw new AppError('NOT_FOUND', 'Оценка не найдена');
 
+      /**
+       * Съеденный знак восстанавливать нельзя.
+       *
+       * Пересчёт «плюсы и точки → оценка» уже превратил этот знак в оценку. Вернув
+       * знак, мы получили бы и оценку, и знак — то есть двойной учёт. Если знак нужно
+       * вернуть, оценку сначала удаляют, а потом пересчитывают заново.
+       */
+      if (current.consumedByGradeId !== null) {
+        throw new AppError(
+          'CONFLICT',
+          'Знак уже превращён в оценку пересчётом: сначала удалите оценку',
+          { details: { reason: 'sign_consumed' } },
+        );
+      }
+
       await withTransaction(db, options.executor, async (tx) => {
         await journal.restoreGrade(gradeId, tx);
         await journal.recordGradeRevision(
@@ -566,6 +631,131 @@ export function createJournalService(dependencies: JournalServiceDependencies): 
         actorName: row.actorName,
         createdAt: row.revision.createdAt,
       }));
+    },
+
+    async deleteAttendance(attendanceId, reason, options) {
+      const current = await journal.findAttendance(attendanceId);
+      if (current === null) throw new AppError('NOT_FOUND', 'Отметка посещаемости не найдена');
+
+      await withTransaction(db, options.executor, async (tx) => {
+        const removed = await journal.softDeleteAttendance(
+          attendanceId,
+          { reason, actorId: options.actor.userId },
+          tx,
+        );
+        if (!removed) throw new AppError('NOT_FOUND', 'Отметка посещаемости не найдена');
+
+        await journal.recordAttendanceRevision(
+          {
+            attendanceEntryId: attendanceId,
+            action: 'delete',
+            before: statusLabel(current.status, current.isExcused),
+            after: null,
+            reason,
+            actorId: options.actor.userId,
+          },
+          tx,
+        );
+
+        await audit.record(
+          {
+            action: 'delete',
+            entityKind: 'attendance_entry',
+            entityId: attendanceId,
+            before: { status: current.status, isExcused: current.isExcused },
+            after: { reason },
+          },
+          options.actor,
+          tx,
+        );
+      });
+    },
+
+    async restoreAttendance(attendanceId, options) {
+      const current = await journal.findAttendance(attendanceId);
+      if (current === null) throw new AppError('NOT_FOUND', 'Отметка посещаемости не найдена');
+
+      /**
+       * У ученика на уроке может быть только одна отметка посещаемости. Если за время
+       * после удаления ему поставили новую, восстанавливать старую нельзя: получилось
+       * бы две. Администратор сначала удаляет новую — и решает, какая верна.
+       */
+      const active = await journal.listAttendanceForLessonIncludingDeleted(current.lessonId);
+      const conflict = active.find(
+        (mark) => mark.studentId === current.studentId && mark.deletedAt === null,
+      );
+      if (conflict !== undefined && conflict.id !== attendanceId) {
+        throw new AppError('CONFLICT', 'У ученика уже есть отметка на этом уроке', {
+          details: { reason: 'attendance_exists' },
+        });
+      }
+
+      await withTransaction(db, options.executor, async (tx) => {
+        await journal.restoreAttendance(attendanceId, tx);
+        await journal.recordAttendanceRevision(
+          {
+            attendanceEntryId: attendanceId,
+            action: 'restore',
+            before: null,
+            after: statusLabel(current.status, current.isExcused),
+            reason: 'Восстановлено администратором',
+            actorId: options.actor.userId,
+          },
+          tx,
+        );
+
+        await audit.record(
+          {
+            action: 'restore',
+            entityKind: 'attendance_entry',
+            entityId: attendanceId,
+            after: { status: current.status, isExcused: current.isExcused },
+          },
+          options.actor,
+          tx,
+        );
+      });
+    },
+
+    async listAttendanceRevisions(attendanceId) {
+      const rows = await journal.listAttendanceRevisions(attendanceId);
+      return rows.map((row) => ({
+        action: row.revision.action,
+        before: row.revision.before,
+        after: row.revision.after,
+        reason: row.revision.reason,
+        actorName: row.actorName,
+        createdAt: row.revision.createdAt,
+      }));
+    },
+
+    async deletedForLesson(lessonId) {
+      await requireLesson(lessonId);
+      const removed = await journal.listDeletedForLesson(lessonId);
+
+      return {
+        grades: removed.grades.map((grade) => ({
+          id: grade.id,
+          studentId: grade.studentId,
+          studentName: grade.studentName,
+          mark: describeMark(grade.value, grade.sign),
+          categoryTitle: grade.categoryTitle,
+          deletedAt: grade.deletedAt,
+          deletedReason: grade.deletedReason,
+          deletedByName: grade.deletedByName,
+        })),
+        attendance: removed.attendance.map((mark) => ({
+          id: mark.id,
+          studentId: mark.studentId,
+          studentName: mark.studentName,
+          status: mark.status,
+          isExcused: mark.isExcused,
+          reason: mark.reason,
+          deletedAt: mark.deletedAt,
+          deletedReason: mark.deletedReason,
+          deletedByName: mark.deletedByName,
+        })),
+      };
     },
 
     async saveAttendance(lessonId, input, options) {

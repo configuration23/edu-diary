@@ -2,6 +2,8 @@ import {
   applySignRulesRequestSchema,
   applySignRulesResponseSchema,
   attendanceEntrySchema,
+  deleteAttendanceRequestSchema,
+  listDeletedResponseSchema,
   gradeEntrySchema,
   lessonJournalSchema,
   listGradeRevisionsResponseSchema,
@@ -211,6 +213,84 @@ export function registerJournalRoutes(
           reason: item.reason,
           actorName: item.actorName,
           createdAt: new Date(item.createdAt).toISOString(),
+        })),
+      });
+    },
+  );
+
+  /**
+   * Удаление отметки посещаемости: мягкое, с обязательной причиной.
+   *
+   * Удаляет тот, кто ведёт журнал: преподаватель — свои уроки, администратор — любые.
+   */
+  app.delete(
+    '/attendance/:id',
+    { preHandler: requirePermission('attendance:write', 'assigned') },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const body = deleteAttendanceRequestSchema.parse(request.body);
+      await journal.deleteAttendance(id, body.reason, mutationOptions(request));
+
+      reply.status(204);
+      return null;
+    },
+  );
+
+  /** Восстановление удалённой отметки посещаемости: только администратор. */
+  app.post(
+    '/attendance/:id/restore',
+    { preHandler: requirePermission('attendance:write', 'all') },
+    async (request) => {
+      const { id } = request.params as { id: string };
+      await journal.restoreAttendance(id, mutationOptions(request));
+
+      return { restored: true };
+    },
+  );
+
+  /** История правок отметки посещаемости: кто, когда, было и стало. */
+  app.get(
+    '/attendance/:id/revisions',
+    { preHandler: requirePermission('attendance:read', 'own') },
+    async (request) => {
+      const { id } = request.params as { id: string };
+      const items = await journal.listAttendanceRevisions(id);
+
+      return listGradeRevisionsResponseSchema.parse({
+        items: items.map((item) => ({
+          id: '00000000-0000-0000-0000-000000000000',
+          action: item.action,
+          before: item.before,
+          after: item.after,
+          reason: item.reason,
+          actorName: item.actorName,
+          createdAt: new Date(item.createdAt).toISOString(),
+        })),
+      });
+    },
+  );
+
+  /**
+   * Удалённые отметки урока: что убрали, кто и почему.
+   *
+   * Нужны администратору, чтобы вернуть отметку: из журнала удалённое исчезает, и
+   * без этого списка восстанавливать было бы нечего.
+   */
+  app.get(
+    '/lessons/:id/deleted',
+    { preHandler: requirePermission('grades:read', 'all') },
+    async (request) => {
+      const { id } = request.params as { id: string };
+      const items = await journal.deletedForLesson(id);
+
+      return listDeletedResponseSchema.parse({
+        grades: items.grades.map((grade) => ({
+          ...grade,
+          deletedAt: new Date(grade.deletedAt).toISOString(),
+        })),
+        attendance: items.attendance.map((mark) => ({
+          ...mark,
+          deletedAt: new Date(mark.deletedAt).toISOString(),
         })),
       });
     },

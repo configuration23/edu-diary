@@ -240,6 +240,50 @@ export const gradeRevisionSchema = z.object({
 });
 export type GradeRevisionDto = z.infer<typeof gradeRevisionSchema>;
 
+/**
+ * Удалённая отметка: что убрали, кто и почему.
+ *
+ * Без такого списка восстановление недостижимо: удалённое исчезает из журнала, и
+ * администратор не знает, что именно там было.
+ */
+export const deletedGradeSchema = z.object({
+  id: uuidSchema,
+  studentId: uuidSchema,
+  studentName: z.string(),
+  /** Подпись отметки: «5», «+», «·». */
+  mark: z.string(),
+  categoryTitle: z.string().nullable(),
+  deletedAt: z.string(),
+  deletedReason: z.string().nullable(),
+  deletedByName: z.string().nullable(),
+});
+export type DeletedGradeDto = z.infer<typeof deletedGradeSchema>;
+
+export const deletedAttendanceSchema = z.object({
+  id: uuidSchema,
+  studentId: uuidSchema,
+  studentName: z.string(),
+  status: attendanceStatusSchema,
+  isExcused: z.boolean(),
+  reason: z.string().nullable(),
+  deletedAt: z.string(),
+  deletedReason: z.string().nullable(),
+  deletedByName: z.string().nullable(),
+});
+export type DeletedAttendanceDto = z.infer<typeof deletedAttendanceSchema>;
+
+export const listDeletedResponseSchema = z.object({
+  grades: z.array(deletedGradeSchema),
+  attendance: z.array(deletedAttendanceSchema),
+});
+export type ListDeletedResponseDto = z.infer<typeof listDeletedResponseSchema>;
+
+/** Удаление отметки посещаемости: причина обязательна (ADR-011). */
+export const deleteAttendanceRequestSchema = z.object({
+  reason: z.string().min(3).max(200),
+});
+export type DeleteAttendanceRequestDto = z.infer<typeof deleteAttendanceRequestSchema>;
+
 export const listGradeRevisionsResponseSchema = z.object({ items: z.array(gradeRevisionSchema) });
 
 /** Аналитика: средний балл и посещаемость. */

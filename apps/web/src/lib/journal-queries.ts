@@ -6,6 +6,7 @@ import {
   attendanceEntrySchema,
   gradeEntrySchema,
   lessonJournalSchema,
+  listDeletedResponseSchema,
   listGradeCategoriesResponseSchema,
   listGradeRevisionsResponseSchema,
   markAllPresentResponseSchema,
@@ -183,5 +184,66 @@ export function useApplySignRules(lessonId: string | null) {
       if (lessonId !== null) invalidateJournal(client, lessonId);
       void client.invalidateQueries({ queryKey: ['journal-stats'] });
     },
+  });
+}
+
+/**
+ * Удалённые отметки урока: что убрали, кто и почему.
+ *
+ * Список нужен администратору: из журнала удалённое исчезает, и без него вернуть
+ * отметку было бы нечем.
+ */
+export function useDeletedMarks(lessonId: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: ['journal-deleted', lessonId],
+    enabled: lessonId !== null && enabled,
+    queryFn: () =>
+      apiRequest(`/api/lessons/${String(lessonId)}/deleted`, listDeletedResponseSchema),
+  });
+}
+
+/** Восстановление удалённой отметки: и оценки, и посещаемости. */
+export function useRestoreMark(lessonId: string | null) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { kind: 'grade' | 'attendance'; id: string }) =>
+      apiSend(`/api/${input.kind === 'grade' ? 'grades' : 'attendance'}/${input.id}/restore`, {
+        method: 'POST',
+      }),
+    onSuccess: () => {
+      if (lessonId !== null) invalidateJournal(client, lessonId);
+      // Список удалённого — отдельный запрос: без сброса он показывал бы уже
+      // восстановленную отметку как удалённую.
+      void client.invalidateQueries({ queryKey: ['journal-deleted', lessonId] });
+    },
+  });
+}
+
+/** Удаление отметки посещаемости: причина обязательна (ADR-011). */
+export function useDeleteAttendance(lessonId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { attendanceId: string; reason: string }) =>
+      apiSend(`/api/attendance/${input.attendanceId}`, {
+        method: 'DELETE',
+        body: { reason: input.reason },
+      }),
+    onSuccess: () => {
+      invalidateJournal(client, lessonId);
+      void client.invalidateQueries({ queryKey: ['journal-deleted', lessonId] });
+    },
+  });
+}
+
+/** История правок отметки посещаемости: кто, когда, было и стало. */
+export function useAttendanceRevisions(attendanceId: string | null) {
+  return useQuery({
+    queryKey: ['attendance-revisions', attendanceId],
+    enabled: attendanceId !== null,
+    queryFn: () =>
+      apiRequest(
+        `/api/attendance/${String(attendanceId)}/revisions`,
+        listGradeRevisionsResponseSchema,
+      ),
   });
 }

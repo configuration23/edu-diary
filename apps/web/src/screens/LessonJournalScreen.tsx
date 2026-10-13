@@ -2,6 +2,7 @@ import {
   ATTENDANCE_LABELS,
   type AttendanceStatusDto,
   type GradeCategoryDto,
+  type GradeRevisionDto,
   type GradeEntryDto,
   type SessionResponseDto,
 } from '@edu-diary/contracts';
@@ -15,12 +16,16 @@ import { SubjectDot } from '../lib/appearance';
 import { errorMessage } from '../lib/api-client';
 import {
   useApplySignRules,
+  useDeleteAttendance,
   useDeleteJournalGrade,
+  useDeletedMarks,
   useGradeCategoriesList,
   useGradeRevisions,
   useLessonJournal,
   useSaveAttendance,
   useSaveGrade,
+  useAttendanceRevisions,
+  useRestoreMark,
   useUpdateJournalGrade,
 } from '../lib/journal-queries';
 
@@ -139,21 +144,40 @@ function ReasonPicker({
   );
 }
 
+/** История правок: одна вёрстка и для оценки, и для посещаемости. */
+function RevisionList({ revisions }: { revisions: GradeRevisionDto[] | undefined }) {
+  if (revisions === undefined || revisions.length === 0) {
+    return <p className="text-sm text-slate-500">Правок не было.</p>;
+  }
+
+  return (
+    <ul className="flex flex-col gap-1 text-sm text-slate-600">
+      {revisions.map((item) => (
+        <li key={item.id}>
+          {item.actorName ?? 'система'}: {item.before ?? '—'} → {item.after ?? '—'}
+          {item.reason === null ? '' : ` · ${item.reason}`}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /** Правка отметки: новая оценка, причина правки и история. */
 function EditPanel({
   gradeId,
   lessonId,
   reasons,
+  revisions,
   onClose,
 }: {
   gradeId: string;
   lessonId: string;
   reasons: GradeCategoryDto[];
+  revisions: GradeRevisionDto[] | undefined;
   onClose: () => void;
 }) {
   const update = useUpdateJournalGrade(lessonId);
   const remove = useDeleteJournalGrade(lessonId);
-  const revisions = useGradeRevisions(gradeId);
 
   const [value, setValue] = useState('');
   const [categoryId, setCategoryId] = useState('');
@@ -258,18 +282,7 @@ function EditPanel({
 
       <div>
         <p className="mb-1 text-sm font-medium text-slate-700">История правок</p>
-        {revisions.data === undefined || revisions.data.items.length === 0 ? (
-          <p className="text-sm text-slate-500">Правок не было.</p>
-        ) : (
-          <ul className="flex flex-col gap-1 text-sm text-slate-600">
-            {revisions.data.items.map((item) => (
-              <li key={item.id}>
-                {item.actorName ?? 'система'}: {item.before ?? '—'} → {item.after ?? '—'}
-                {item.reason === null ? '' : ` · ${item.reason}`}
-              </li>
-            ))}
-          </ul>
-        )}
+        <RevisionList revisions={revisions} />
       </div>
     </div>
   );
@@ -286,6 +299,13 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
   const saveGrade = useSaveGrade(lessonId ?? '');
   const saveAttendance = useSaveAttendance(lessonId ?? '');
   const applySignRules = useApplySignRules(lessonId);
+  const deleteAttendance = useDeleteAttendance(lessonId ?? '');
+  const restoreMark = useRestoreMark(lessonId);
+
+  const canRestore = session.permissions.some(
+    (grant) => grant.permission === 'grades:read' && grant.scope === 'all',
+  );
+  const deleted = useDeletedMarks(lessonId, canRestore);
 
   /** Для кого выбираем причину отметки: ученик и то, что ставим. */
   const [pending, setPending] = useState<{ studentId: string; mark: PendingMark } | null>(null);
@@ -301,6 +321,15 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
   const [absenceReason, setAbsenceReason] = useState('');
   /** Раскрытая правка отметки. */
   const [editingGradeId, setEditingGradeId] = useState<string | null>(null);
+  /** Удаление отметки посещаемости: спрашиваем причину. */
+  const [deletingAttendance, setDeletingAttendance] = useState<string | null>(null);
+  const [attendanceDeleteReason, setAttendanceDeleteReason] = useState('');
+  /** Чья история посещаемости раскрыта. */
+  const [historyAttendanceId, setHistoryAttendanceId] = useState<string | null>(null);
+
+  /** История правок: хуки нельзя вызывать условно, поэтому читаем по выбранным идентификаторам. */
+  const gradeRevisions = useGradeRevisions(editingGradeId);
+  const attendanceRevisions = useAttendanceRevisions(historyAttendanceId);
 
   const canWrite = session.permissions.some((grant) => grant.permission === 'grades:write');
   const canAttend = session.permissions.some((grant) => grant.permission === 'attendance:write');
@@ -691,8 +720,90 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
                                     {attendanceLetter(status)}
                                   </Button>
                                 ))}
+                                {/* Удаление — мягкое: отметка останется в списке удалённого. */}
+                                <Button
+                                  tone="ghost"
+                                  type="button"
+                                  title="Удалить отметку посещаемости"
+                                  onClick={() => {
+                                    setDeletingAttendance(student.attendance?.id ?? null);
+                                    setAttendanceDeleteReason('');
+                                  }}
+                                >
+                                  Удалить
+                                </Button>
+                                <Button
+                                  tone="ghost"
+                                  type="button"
+                                  title="История правок отметки"
+                                  onClick={() =>
+                                    setHistoryAttendanceId(
+                                      historyAttendanceId === student.attendance?.id
+                                        ? null
+                                        : (student.attendance?.id ?? null),
+                                    )
+                                  }
+                                >
+                                  История
+                                </Button>
                               </span>
                             )}
+
+                            {historyAttendanceId !== null &&
+                              historyAttendanceId === student.attendance?.id && (
+                                <div className="mt-2 rounded-md border border-slate-200 bg-slate-50 p-3">
+                                  <p className="mb-1 text-sm font-medium text-slate-700">
+                                    История отметки
+                                  </p>
+                                  <RevisionList revisions={attendanceRevisions.data?.items} />
+                                </div>
+                              )}
+
+                            {deletingAttendance !== null &&
+                              deletingAttendance === student.attendance?.id && (
+                                <div className="mt-2 flex flex-wrap items-end gap-2 rounded-md border border-slate-200 bg-slate-50 p-3">
+                                  <div className="flex-1">
+                                    <Field
+                                      label="Причина удаления"
+                                      hint="Отметка скроется, но останется в списке удалённого"
+                                    >
+                                      <TextInput
+                                        name="attendanceDeleteReason"
+                                        value={attendanceDeleteReason}
+                                        onChange={(event) =>
+                                          setAttendanceDeleteReason(event.target.value)
+                                        }
+                                      />
+                                    </Field>
+                                  </div>
+                                  <Button
+                                    tone="danger"
+                                    type="button"
+                                    disabled={
+                                      deleteAttendance.isPending ||
+                                      attendanceDeleteReason.trim().length < 3
+                                    }
+                                    onClick={() =>
+                                      void deleteAttendance
+                                        .mutateAsync({
+                                          attendanceId: student.attendance?.id ?? '',
+                                          reason: attendanceDeleteReason,
+                                        })
+                                        .then(() => setDeletingAttendance(null))
+                                        .catch(() => undefined)
+                                    }
+                                  >
+                                    Удалить отметку
+                                  </Button>
+                                  <Button
+                                    tone="ghost"
+                                    type="button"
+                                    onClick={() => setDeletingAttendance(null)}
+                                  >
+                                    Отмена
+                                  </Button>
+                                </div>
+                              )}
                           </span>
                         )}
 
@@ -788,6 +899,7 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
                               gradeId={editingGradeId}
                               lessonId={lessonId}
                               reasons={reasonList}
+                              revisions={gradeRevisions.data?.items}
                               onClose={() => setEditingGradeId(null)}
                             />
                           </td>
@@ -806,6 +918,74 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
         {saveAttendance.isError && <Alert tone="error">{errorMessage(saveAttendance.error)}</Alert>}
         {reasons.isError && <Alert tone="error">{errorMessage(reasons.error)}</Alert>}
       </Card>
+
+      {/*
+        Удалённые отметки: только администратору. Из журнала удалённое исчезает, и
+        без этого списка вернуть отметку было бы нечем.
+      */}
+      {canRestore && deleted.data !== undefined && (
+        <Card
+          title="Удалённые отметки"
+          description="Отметки не стёрты: их можно вернуть. Видно, кто и почему удалил."
+        >
+          {deleted.data.grades.length === 0 && deleted.data.attendance.length === 0 ? (
+            <EmptyState>Удалённых отметок нет.</EmptyState>
+          ) : (
+            <ul className="flex flex-col gap-2 text-sm">
+              {deleted.data.grades.map((grade) => (
+                <li key={grade.id} className="flex flex-wrap items-center gap-2">
+                  <span className="font-semibold">{grade.mark}</span>
+                  <span className="text-slate-500">{grade.studentName}</span>
+                  {grade.categoryTitle !== null && (
+                    <span className="text-xs text-slate-500">{grade.categoryTitle}</span>
+                  )}
+                  <span className="text-xs text-slate-400">
+                    {grade.deletedByName ?? 'система'} · {grade.deletedReason ?? 'без причины'}
+                  </span>
+                  <Button
+                    tone="secondary"
+                    type="button"
+                    disabled={restoreMark.isPending}
+                    onClick={() =>
+                      void restoreMark
+                        .mutateAsync({ kind: 'grade', id: grade.id })
+                        .catch(() => undefined)
+                    }
+                  >
+                    Восстановить
+                  </Button>
+                </li>
+              ))}
+
+              {deleted.data.attendance.map((mark) => (
+                <li key={mark.id} className="flex flex-wrap items-center gap-2">
+                  <span className="font-semibold">
+                    {attendanceLetter(mark.status as AttendanceStatusDto, mark.isExcused)}
+                  </span>
+                  <span className="text-slate-500">{mark.studentName}</span>
+                  <span className="text-xs text-slate-400">
+                    {mark.deletedByName ?? 'система'} · {mark.deletedReason ?? 'без причины'}
+                  </span>
+                  <Button
+                    tone="secondary"
+                    type="button"
+                    disabled={restoreMark.isPending}
+                    onClick={() =>
+                      void restoreMark
+                        .mutateAsync({ kind: 'attendance', id: mark.id })
+                        .catch(() => undefined)
+                    }
+                  >
+                    Восстановить
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {restoreMark.isError && <Alert tone="error">{errorMessage(restoreMark.error)}</Alert>}
+        </Card>
+      )}
     </div>
   );
 }

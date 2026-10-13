@@ -29,6 +29,13 @@ const STUDENT = {
   password: 'kolledzh-zhurnal-uchenik-2025',
 };
 
+/** Свои роли для сценария удаления: сценарии не должны делить учётные записи. */
+const TEACHER_DELETED = {
+  username: `e2e-prepod-udalenie-${RUN}`,
+  fullName: `Преподаватель Удаления ${RUN}`,
+  password: 'kolledzh-udalenie-prepod-2025',
+};
+
 function shiftDays(days: number): string {
   const date = new Date();
   date.setDate(date.getDate() + days);
@@ -51,10 +58,17 @@ function nextWeekday(dayOfWeek: number): string {
   ].join('-');
 }
 
+/**
+ * Вход в систему с подтверждением.
+ *
+ * Ждём появления общей навигации: без этого следующий шаг мог уйти на другую
+ * страницу до того, как вход завершился, и проверка искала бы элементы формы входа.
+ */
 async function login(page: Page, username: string, password: string): Promise<void> {
   await page.getByLabel('Логин').fill(username);
   await page.getByLabel('Пароль').fill(password);
   await page.getByRole('button', { name: 'Войти' }).click();
+  await expect(page.getByRole('link', { name: 'Обзор' })).toBeVisible();
 }
 
 /** Тело ответа с проверкой: тест не должен молча продолжать после ошибки. */
@@ -303,6 +317,135 @@ test('Этап 4: журнал урока — оценки с причинами
   await expect(page.getByRole('row', { name: new RegExp(STUDENT_NAME) })).toBeVisible();
   // Ставить оценки ученик не может: кнопок выставления нет.
   await expect(page.getByRole('button', { name: '5', exact: true })).toHaveCount(0);
+});
+
+/**
+ * Шаг 3: удаление и восстановление.
+ *
+ * Преподаватель удаляет отметку с причиной, администратор видит её в списке
+ * удалённого и возвращает. Без этого списка восстанавливать было бы нечего:
+ * из журнала удалённое исчезает.
+ *
+ * Отдельный сценарий, а не продолжение предыдущего: после долгой работы на экране
+ * страница успевает перерисоваться, и проверки становятся не про то, что проверяем.
+ */
+test('Этап 4, шаг 3: удалённую оценку видно и можно вернуть', async ({ page }) => {
+  await page.goto('/');
+  await login(page, ADMIN.username, ADMIN.password);
+  await expect(page.getByRole('link', { name: 'Учебный год' })).toBeVisible();
+
+  const group = await bodyOf<{ id: string }>(
+    await page.request.post('/api/groups', {
+      data: {
+        academicYearId: (
+          await bodyOf<{ items: Array<{ id: string }> }>(
+            await page.request.get('/api/academic-years'),
+            'учебные годы',
+          )
+        ).items[0]?.id,
+        name: `УД-${RUN}`,
+        startsOn: shiftDays(-30),
+        endsOn: shiftDays(60),
+      },
+    }),
+    'группа',
+  );
+
+  const subject = await bodyOf<{ id: string }>(
+    await page.request.post('/api/subjects', {
+      data: { name: `Удаление (E2E ${RUN})`, shortName: 'УД', kind: 'mandatory' },
+    }),
+    'предмет',
+  );
+
+  const teacher = await bodyOf<{ id: string }>(
+    await page.request.post('/api/users', {
+      data: {
+        username: TEACHER_DELETED.username,
+        fullName: TEACHER_DELETED.fullName,
+        password: TEACHER_DELETED.password,
+        roles: ['teacher'],
+      },
+    }),
+    'преподаватель',
+  );
+
+  await bodyOf(
+    await page.request.post('/api/assignments', {
+      data: {
+        teacherUserId: teacher.id,
+        subjectId: subject.id,
+        studyGroupId: group.id,
+        startsOn: shiftDays(-25),
+      },
+    }),
+    'назначение',
+  );
+
+  const student = await bodyOf<{ id: string }>(
+    await page.request.post('/api/students', {
+      data: {
+        fullName: `Ученик Удаления ${RUN}`,
+        account: {
+          username: `e2e-uchenik-udalenie-${RUN}`,
+          password: 'kolledzh-udalenie-uchenik-2025',
+        },
+      },
+    }),
+    'ученик',
+  );
+
+  await page.request.post(`/api/groups/${group.id}/enrollments`, {
+    data: { studentId: student.id, joinedOn: shiftDays(-25) },
+  });
+
+  const lesson = await bodyOf<{ id: string }>(
+    await page.request.post('/api/lessons', {
+      data: {
+        studyGroupId: group.id,
+        subjectId: subject.id,
+        teacherUserId: teacher.id,
+        lessonDate: shiftDays(-1),
+        pairNumber: 1,
+        timeStart: '08:30',
+        timeEnd: '10:00',
+      },
+    }),
+    'урок',
+  );
+
+  // Преподаватель ставит оценку и тут же удаляет её с причиной.
+  await page.getByRole('button', { name: 'Выйти' }).click();
+  await login(page, TEACHER_DELETED.username, TEACHER_DELETED.password);
+  await page.goto(`/lessons/${lesson.id}`);
+
+  await page.getByRole('button', { name: '4', exact: true }).click();
+  await page.getByLabel('Причина').selectOption({ label: 'Д — Домашнее задание' });
+  await page.getByRole('button', { name: 'Поставить' }).click();
+  await expect(page.getByRole('button', { name: '4, Домашнее задание' })).toBeVisible();
+
+  await page.getByRole('button', { name: '4, Домашнее задание' }).click();
+  await page.getByLabel('Причина удаления').fill('Поставлено не тому ученику');
+  await page.getByRole('button', { name: 'Удалить отметку' }).click();
+
+  // Из журнала отметка исчезла.
+  await expect(page.getByRole('button', { name: '4, Домашнее задание' })).toHaveCount(0);
+
+  // Администратор видит её в удалённых и возвращает.
+  await page.getByRole('button', { name: 'Выйти' }).click();
+  await login(page, ADMIN.username, ADMIN.password);
+  await page.goto(`/lessons/${lesson.id}`);
+
+  const deletedCard = page.locator('section', { hasText: 'Удалённые отметки' });
+
+  await expect(page.getByRole('heading', { level: 2, name: 'Удалённые отметки' })).toBeVisible();
+  await expect(page.getByText('Поставлено не тому ученику')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Восстановить' }).first().click();
+
+  // После восстановления список удалённого пуст, а отметка вернулась в журнал.
+  await expect(deletedCard.getByRole('button', { name: 'Восстановить' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '4, Домашнее задание' })).toBeVisible();
 });
 
 test('Этап 4, шаг 2: пересчёт плюсов в оценку', async ({ page }) => {

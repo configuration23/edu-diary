@@ -22,6 +22,9 @@ export interface GradeRecord {
   categoryTitle: string | null;
   categoryWeight: number | null;
   comment: string | null;
+  /** Оценка, оплатившая этот знак пересчётом. 
+ull — знак свободен. */
+  consumedByGradeId: string | null;
   createdAt: Date;
 }
 
@@ -32,6 +35,13 @@ export interface AttendanceRecord {
   status: string;
   isExcused: boolean;
   reason: string | null;
+  /**
+   * Когда отметку убрали. `null` — отметка действует.
+   *
+   * Поле нужно восстановлению: без него не отличить действующую отметку от
+   * удалённой, и можно вернуть вторую на того же ученика.
+   */
+  deletedAt: Date | null;
   createdAt: Date;
 }
 
@@ -43,6 +53,36 @@ export interface RevisionRecord {
   reason: string | null;
   actorId: string | null;
   createdAt: Date;
+}
+
+/**
+ * Удалённая отметка: видно, что убрали, кто и почему.
+ *
+ * Такие строки остаются в базе (ADR-011), но в журнал не попадают: их место — в
+ * списке удалённого, откуда администратор может вернуть отметку.
+ */
+export interface DeletedGradeRecord {
+  id: string;
+  studentId: string;
+  studentName: string;
+  value: string | null;
+  sign: string | null;
+  categoryTitle: string | null;
+  deletedAt: Date;
+  deletedReason: string | null;
+  deletedByName: string | null;
+}
+
+export interface DeletedAttendanceRecord {
+  id: string;
+  studentId: string;
+  studentName: string;
+  status: string;
+  isExcused: boolean;
+  reason: string | null;
+  deletedAt: Date;
+  deletedReason: string | null;
+  deletedByName: string | null;
 }
 
 /** Накопленный знак: пересчёт съедает знаки и помечает их оплатившей оценкой. */
@@ -163,6 +203,42 @@ export interface JournalRepository {
     studentId: string,
     executor?: Executor,
   ): Promise<AttendanceRecord | null>;
+  /** Отметка по идентификатору: нужна для правки, удаления и восстановления. */
+  findAttendance(id: string, executor?: Executor): Promise<AttendanceRecord | null>;
+  softDeleteAttendance(
+    id: string,
+    input: { reason: string; actorId: string | null },
+    executor?: Executor,
+  ): Promise<boolean>;
+  restoreAttendance(id: string, executor?: Executor): Promise<boolean>;
+  /**
+   * Удалённые отметки урока: оценки и посещаемость.
+   *
+   * Без этой выборки восстановление недостижимо — удалённое исчезает из журнала, и
+   * администратор не знает, что именно там было.
+   */
+  listDeletedForLesson(
+    lessonId: string,
+    executor?: Executor,
+  ): Promise<{
+    grades: DeletedGradeRecord[];
+    attendance: DeletedAttendanceRecord[];
+  }>;
+  /** История правок отметки посещаемости: кто, когда, было и стало. */
+  listAttendanceRevisions(
+    attendanceEntryId: string,
+    executor?: Executor,
+  ): Promise<{ revision: RevisionRecord; actorName: string | null }[]>;
+  /**
+   * Все отметки посещаемости урока, включая удалённые.
+   *
+   * Нужны, чтобы при восстановлении не создать вторую отметку на того же ученика:
+   * действующая и удалённая строки живут в одной таблице.
+   */
+  listAttendanceForLessonIncludingDeleted(
+    lessonId: string,
+    executor?: Executor,
+  ): Promise<AttendanceRecord[]>;
   insertAttendance(
     input: {
       lessonId: string;
@@ -233,6 +309,7 @@ const GRADE_SELECTION = {
   categoryTitle: gradeCategory.title,
   categoryWeight: gradeCategory.weight,
   comment: gradeEntry.comment,
+  consumedByGradeId: gradeEntry.consumedByGradeId,
   createdAt: gradeEntry.createdAt,
 };
 
@@ -350,6 +427,7 @@ export function createJournalRepository(db: Database): JournalRepository {
           status: attendanceEntry.status,
           isExcused: attendanceEntry.isExcused,
           reason: attendanceEntry.reason,
+          deletedAt: attendanceEntry.deletedAt,
           createdAt: attendanceEntry.createdAt,
         })
         .from(attendanceEntry)
@@ -479,6 +557,7 @@ export function createJournalRepository(db: Database): JournalRepository {
           status: attendanceEntry.status,
           isExcused: attendanceEntry.isExcused,
           reason: attendanceEntry.reason,
+          deletedAt: attendanceEntry.deletedAt,
           createdAt: attendanceEntry.createdAt,
         })
         .from(attendanceEntry)
@@ -612,6 +691,7 @@ export function createJournalRepository(db: Database): JournalRepository {
           status: attendanceEntry.status,
           isExcused: attendanceEntry.isExcused,
           reason: attendanceEntry.reason,
+          deletedAt: attendanceEntry.deletedAt,
           createdAt: attendanceEntry.createdAt,
         })
         .from(attendanceEntry)
@@ -625,6 +705,199 @@ export function createJournalRepository(db: Database): JournalRepository {
         .limit(1);
 
       return rows[0] ?? null;
+    },
+
+    async findAttendance(id, executor: Executor = db.orm) {
+      const rows = await executor
+        .select({
+          id: attendanceEntry.id,
+          lessonId: attendanceEntry.lessonId,
+          studentId: attendanceEntry.studentId,
+          status: attendanceEntry.status,
+          isExcused: attendanceEntry.isExcused,
+          reason: attendanceEntry.reason,
+          deletedAt: attendanceEntry.deletedAt,
+          createdAt: attendanceEntry.createdAt,
+        })
+        .from(attendanceEntry)
+        .where(eq(attendanceEntry.id, id))
+        .limit(1);
+
+      return rows[0] ?? null;
+    },
+
+    async softDeleteAttendance(id, input, executor: Executor = db.orm) {
+      const rows = await executor
+        .update(attendanceEntry)
+        .set({
+          deletedAt: new Date(),
+          deletedBy: input.actorId,
+          deletedReason: input.reason,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(attendanceEntry.id, id), isNull(attendanceEntry.deletedAt)))
+        .returning({ id: attendanceEntry.id });
+
+      return rows.length > 0;
+    },
+
+    async restoreAttendance(id, executor: Executor = db.orm) {
+      const rows = await executor
+        .update(attendanceEntry)
+        .set({ deletedAt: null, deletedBy: null, deletedReason: null, updatedAt: new Date() })
+        .where(eq(attendanceEntry.id, id))
+        .returning({ id: attendanceEntry.id });
+
+      return rows.length > 0;
+    },
+
+    async listDeletedForLesson(lessonId, executor: Executor = db.orm) {
+      /**
+       * Удалённые отметки урока: оценки и посещаемость вместе.
+       *
+       * Без этой выборки восстановление недостижимо: удалённое просто исчезает из
+       * журнала, и администратор не знает, что там было. Показываем и причину
+       * удаления, и кто удалил — иначе восстановление будет вслепую.
+       */
+      const grades = await executor.execute(sql`
+        select
+          g.id,
+          'grade' as kind,
+          g.student_id,
+          s.full_name as student_name,
+          g.value,
+          g.sign,
+          g.deleted_at,
+          g.deleted_reason,
+          u.full_name as deleted_by_name,
+          c.title as category_title
+        from grade_entry g
+        join student s on s.id = g.student_id
+        left join app_user u on u.id = g.deleted_by
+        left join grade_category c on c.id = g.category_id
+        where g.lesson_id = ${lessonId} and g.deleted_at is not null
+      `);
+
+      const attendance = await executor.execute(sql`
+        select
+          a.id,
+          'attendance' as kind,
+          a.student_id,
+          s.full_name as student_name,
+          a.status,
+          a.is_excused,
+          a.reason,
+          a.deleted_at,
+          a.deleted_reason,
+          u.full_name as deleted_by_name
+        from attendance_entry a
+        join student s on s.id = a.student_id
+        left join app_user u on u.id = a.deleted_by
+        where a.lesson_id = ${lessonId} and a.deleted_at is not null
+      `);
+
+      return {
+        grades: (
+          grades as unknown as {
+            id: string;
+            student_id: string;
+            student_name: string;
+            value: string | null;
+            sign: string | null;
+            deleted_at: Date;
+            deleted_reason: string | null;
+            deleted_by_name: string | null;
+            category_title: string | null;
+          }[]
+        ).map((row) => ({
+          id: row.id,
+          studentId: row.student_id,
+          studentName: row.student_name,
+          value: row.value,
+          sign: row.sign,
+          categoryTitle: row.category_title,
+          deletedAt: row.deleted_at,
+          deletedReason: row.deleted_reason,
+          deletedByName: row.deleted_by_name,
+        })),
+        attendance: (
+          attendance as unknown as {
+            id: string;
+            student_id: string;
+            student_name: string;
+            status: string;
+            is_excused: boolean;
+            reason: string | null;
+            deleted_at: Date;
+            deleted_reason: string | null;
+            deleted_by_name: string | null;
+          }[]
+        ).map((row) => ({
+          id: row.id,
+          studentId: row.student_id,
+          studentName: row.student_name,
+          status: row.status,
+          isExcused: row.is_excused,
+          reason: row.reason,
+          deletedAt: row.deleted_at,
+          deletedReason: row.deleted_reason,
+          deletedByName: row.deleted_by_name,
+        })),
+      };
+    },
+
+    async listAttendanceForLessonIncludingDeleted(lessonId, executor: Executor = db.orm) {
+      const rows = await executor
+        .select({
+          id: attendanceEntry.id,
+          lessonId: attendanceEntry.lessonId,
+          studentId: attendanceEntry.studentId,
+          status: attendanceEntry.status,
+          isExcused: attendanceEntry.isExcused,
+          reason: attendanceEntry.reason,
+          deletedAt: attendanceEntry.deletedAt,
+          createdAt: attendanceEntry.createdAt,
+        })
+        .from(attendanceEntry)
+        .where(eq(attendanceEntry.lessonId, lessonId));
+
+      return rows;
+    },
+
+    async listAttendanceRevisions(attendanceEntryId, executor: Executor = db.orm) {
+      const rows = await executor.execute(sql`
+        select
+          r.id, r.action, r.before, r.after, r.reason, r.actor_id, r.created_at,
+          u.full_name as actor_name
+        from attendance_revision r
+        left join app_user u on u.id = r.actor_id
+        where r.attendance_entry_id = ${attendanceEntryId}
+        order by r.created_at desc
+      `);
+
+      return (
+        rows as unknown as {
+          id: string;
+          action: string;
+          before: string | null;
+          after: string | null;
+          reason: string | null;
+          actor_id: string | null;
+          created_at: Date;
+          actor_name: string | null;
+        }[]
+      ).map((row) => ({
+        revision: {
+          id: row.id,
+          action: row.action,
+          before: row.before,
+          after: row.after,
+          reason: row.reason,
+          actorId: row.actor_id,
+          createdAt: row.created_at,
+        },
+        actorName: row.actor_name,
+      }));
     },
 
     async insertAttendance(input, executor: Executor = db.orm) {
@@ -657,6 +930,7 @@ export function createJournalRepository(db: Database): JournalRepository {
           status: attendanceEntry.status,
           isExcused: attendanceEntry.isExcused,
           reason: attendanceEntry.reason,
+          deletedAt: attendanceEntry.deletedAt,
           createdAt: attendanceEntry.createdAt,
         })
         .from(attendanceEntry)
