@@ -446,6 +446,20 @@ test('Этап 4, шаг 3: удалённую оценку видно и мож
   // После восстановления список удалённого пуст, а отметка вернулась в журнал.
   await expect(deletedCard.getByRole('button', { name: 'Восстановить' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: '4, Домашнее задание' })).toBeVisible();
+
+  /**
+   * То же самое делает сам администратор.
+   *
+   * Отдельная проверка, потому что дефект нашёлся именно здесь: после удаления
+   * администратором отметка не появлялась в списке удалённого до обновления
+   * страницы — не сбрасывался кэш списка.
+   */
+  await page.getByRole('button', { name: '4, Домашнее задание' }).click();
+  await page.getByLabel('Причина удаления').fill('Удаляю как администратор');
+  await page.getByRole('button', { name: 'Удалить отметку' }).click();
+
+  await expect(page.getByText('Удаляю как администратор')).toBeVisible();
+  await expect(deletedCard.getByRole('button', { name: 'Восстановить' })).toHaveCount(1);
 });
 
 test('Этап 4, шаг 2: пересчёт плюсов в оценку', async ({ page }) => {

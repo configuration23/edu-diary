@@ -136,7 +136,15 @@ export function useDeleteJournalGrade(lessonId: string) {
         method: 'DELETE',
         body: { reason: input.reason },
       }),
-    onSuccess: () => invalidateJournal(client, lessonId),
+    onSuccess: () => {
+      invalidateJournal(client, lessonId);
+      /**
+       * Список удалённого — отдельный запрос. Без его сброса удалённая отметка в
+       * корзине не появлялась до обновления страницы: журнал обновлялся, а список
+       * оставался прежним.
+       */
+      void client.invalidateQueries({ queryKey: ['journal-deleted', lessonId] });
+    },
   });
 }
 
