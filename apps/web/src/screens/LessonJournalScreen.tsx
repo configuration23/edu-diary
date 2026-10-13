@@ -50,6 +50,19 @@ const SIGNS: { sign: 'plus' | 'dot'; label: string; hint: string }[] = [
 /** Буквы журнала: П, Н, Б, О. «У» — это «Н» с уважительной причиной. */
 const ATTENDANCE_CHOICES: AttendanceStatusDto[] = ['present', 'not_present', 'sick', 'late'];
 
+/**
+ * Удаление отметки посещаемости скрыто по решению владельца.
+ *
+ * Причина: поставив посещение один раз, отменить его пока нельзя — можно только
+ * заменить другой буквой. Функционал при этом целый: сервер удаляет отметку мягко
+ * (`attendance_entry.deleted_at`), она попадает в список удалённого и
+ * восстанавливается администратором, история правок ведётся.
+ *
+ * Вернуть кнопку — поменять значение на `true`. Отдельная константа, а не удалённый
+ * код: через месяц никто не вспомнит, что удаление было сделано и проверено.
+ */
+const ATTENDANCE_DELETE_ENABLED = false;
+
 const selectClass = 'w-full rounded-md border border-slate-300 px-3 py-2 text-sm';
 
 /** Что стоит ученику: «5», «+» или «·». */
@@ -333,6 +346,8 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
 
   const canWrite = session.permissions.some((grant) => grant.permission === 'grades:write');
   const canAttend = session.permissions.some((grant) => grant.permission === 'attendance:write');
+  /** Удаление посещаемости: включено ли в интерфейсе (сейчас скрыто, см. константу). */
+  const canDeleteAttendance = ATTENDANCE_DELETE_ENABLED && canAttend;
   const reasonList = reasons.data?.items ?? [];
 
   if (journal.isLoading) {
@@ -720,18 +735,26 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
                                     {attendanceLetter(status)}
                                   </Button>
                                 ))}
-                                {/* Удаление — мягкое: отметка останется в списке удалённого. */}
-                                <Button
-                                  tone="ghost"
-                                  type="button"
-                                  title="Удалить отметку посещаемости"
-                                  onClick={() => {
-                                    setDeletingAttendance(student.attendance?.id ?? null);
-                                    setAttendanceDeleteReason('');
-                                  }}
-                                >
-                                  Удалить
-                                </Button>
+                                {/*
+                                  Удаление отметки посещаемости скрыто по решению владельца:
+                                  один раз поставив посещение, его пока можно только заменить
+                                  другой буквой. Функционал (кнопка, окно причины, маршрут API)
+                                  оставлен целым — вернуть его значит поменять `canDeleteAttendance`
+                                  на `canAttend && !cancelled`.
+                                */}
+                                {canDeleteAttendance && (
+                                  <Button
+                                    tone="ghost"
+                                    type="button"
+                                    title="Удалить отметку посещаемости"
+                                    onClick={() => {
+                                      setDeletingAttendance(student.attendance?.id ?? null);
+                                      setAttendanceDeleteReason('');
+                                    }}
+                                  >
+                                    Удалить
+                                  </Button>
+                                )}
                                 <Button
                                   tone="ghost"
                                   type="button"
