@@ -244,10 +244,11 @@ export type UpdateRoomRequestDto = z.infer<typeof updateRoomRequestSchema>;
 
 export const gradeCategorySchema = z.object({
   id: uuidSchema,
+  /** Код причины: до двух символов, например `Д`, `К`, `Пр`. */
   code: z.string(),
   title: z.string(),
-  /** Вес в среднем балле: 1 — обычная оценка, больше — «весомее». */
-  weight: z.number().int(),
+  /** Вес в среднем балле: 1 — обычная оценка, 5 — «весомее» не бывает. */
+  weight: z.number().int().min(1).max(5),
   color: z.string().nullable(),
   isDefault: z.boolean(),
 });
@@ -258,14 +259,22 @@ export const listGradeCategoriesResponseSchema = z.object({
 });
 export type ListGradeCategoriesResponseDto = z.infer<typeof listGradeCategoriesResponseSchema>;
 
+/**
+ * Код причины: до двух символов.
+ *
+ * В журнале причина показывается кодом рядом с оценкой (`5 · К`), поэтому длинный
+ * код не влезет. Допускаем русские и латинские буквы с цифрами: «Пр», «К», «Д», «L1».
+ */
+export const gradeCategoryCodeSchema = z
+  .string()
+  .min(1)
+  .max(2)
+  .regex(/^[\p{L}\p{N}]+$/u, 'Код причины: до двух букв или цифр');
+
 export const createGradeCategoryRequestSchema = z.object({
-  code: z
-    .string()
-    .min(2)
-    .max(40)
-    .regex(/^[a-z][a-z0-9_]*$/, 'Код: строчные латинские буквы, цифры и подчёркивание'),
+  code: gradeCategoryCodeSchema,
   title: z.string().min(1).max(60),
-  weight: z.number().int().min(1).max(10).default(1),
+  weight: z.number().int().min(1).max(5).default(1),
   color: z.string().max(40).nullable().optional(),
   isDefault: z.boolean().default(false),
 });
@@ -274,19 +283,33 @@ export type CreateGradeCategoryRequestDto = z.infer<typeof createGradeCategoryRe
 export const updateGradeCategoryRequestSchema = z
   .object({
     title: z.string().min(1).max(60).optional(),
-    weight: z.number().int().min(1).max(10).optional(),
+    weight: z.number().int().min(1).max(5).optional(),
     color: z.string().max(40).nullable().optional(),
     isDefault: z.boolean().optional(),
   })
   .refine((value) => Object.keys(value).length > 0, { message: 'Нет полей для изменения' });
 export type UpdateGradeCategoryRequestDto = z.infer<typeof updateGradeCategoryRequestSchema>;
 
-/** Категории оценок по умолчанию: нужны, пока администратор не завёл свои. */
+/**
+ * Причины оценок «из коробки»: код, название и вес.
+ *
+ * Заводятся при старте приложения, как каталог прав: на новой установке они есть
+ * сразу, на существующей — добавляются недостающие. Изменённые пользователем
+ * названия и веса не перезаписываются: справочник принадлежит заведению.
+ *
+ * Вес по умолчанию одинаковый (1): «весомость» — решение заведения, а не наше.
+ */
 export const DEFAULT_GRADE_CATEGORIES = [
-  { code: 'current', title: 'Текущая', weight: 1, isDefault: true },
-  { code: 'test', title: 'Контрольная работа', weight: 3, isDefault: false },
-  { code: 'independent', title: 'Самостоятельная работа', weight: 2, isDefault: false },
-  { code: 'oral', title: 'Устный ответ', weight: 1, isDefault: false },
+  { code: 'Д', title: 'Домашнее задание', weight: 1 },
+  { code: 'О', title: 'Ответ на уроке', weight: 1 },
+  { code: 'П', title: 'Поведение', weight: 1 },
+  { code: 'К', title: 'Контрольная работа', weight: 1 },
+  { code: 'Э', title: 'Экзамен', weight: 1 },
+  { code: 'С', title: 'Самостоятельная работа', weight: 1 },
+  { code: 'Л', title: 'Лабораторная или практическая работа', weight: 1 },
+  { code: 'Т', title: 'Тест', weight: 1 },
+  { code: 'З', title: 'Зачёт', weight: 1 },
+  { code: 'Пр', title: 'Проект', weight: 1 },
 ] as const;
 
 // --- Назначения «преподаватель ↔ предмет ↔ группа» (Этап 2) ---

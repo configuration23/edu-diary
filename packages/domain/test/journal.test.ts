@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ATTENDANCE_STATUSES,
   attendanceBreakdown,
+  attendanceLetter,
   countSigns,
   escalationState,
   isAttendanceStatus,
@@ -11,7 +12,6 @@ import {
   markNumber,
   pendingApplications,
   weightedAverage,
-  type AttendanceMark,
 } from '../src/journal';
 
 /**
@@ -74,26 +74,42 @@ describe('средний балл с весами', () => {
 });
 
 describe('посещаемость', () => {
-  const marks = (statuses: AttendanceMark['status'][]): AttendanceMark[] =>
-    statuses.map((status) => ({ status }));
-
   it('статусы проверяются по списку', () => {
     expect(isAttendanceStatus('present')).toBe(true);
     expect(isAttendanceStatus('опоздал')).toBe(false);
   });
 
-  it('считает проценты по всем статусам и общий процент «был»', () => {
-    const result = attendanceBreakdown(
-      marks(['present', 'present', 'absent', 'sick', 'absent', 'present', 'excused', 'late']),
-    );
+  it('считает проценты по всем статусам и общий процент «присутствовал»', () => {
+    const result = attendanceBreakdown([
+      { status: 'present' },
+      { status: 'present' },
+      { status: 'not_present' },
+      { status: 'sick' },
+      { status: 'not_present', isExcused: true },
+      { status: 'present' },
+      { status: 'late' },
+      { status: 'not_present' },
+    ]);
 
     expect(result.total).toBe(8);
-    // Был 3 из 8 → 37.5 %
+    // Присутствовал 3 из 8 → 37.5 %
     expect(result.percent).toBe(37.5);
-    expect(result.byStatus.present.count).toBe(3);
-    expect(result.byStatus.absent.percent).toBe(25);
+    expect(result.present).toBe(3);
+    // Уважительных — одна: отсутствие с галочкой.
+    expect(result.excused).toBe(1);
+    expect(result.byStatus.not_present.count).toBe(3);
+    expect(result.byStatus.not_present.percent).toBe(37.5);
     expect(result.byStatus.sick.percent).toBe(12.5);
+    expect(result.byStatus.late.percent).toBe(12.5);
     expect(Object.keys(result.byStatus).sort()).toEqual([...ATTENDANCE_STATUSES].sort());
+  });
+
+  it('буква отметки: «Н» с уважительной причиной показывается как «У»', () => {
+    expect(attendanceLetter('present')).toBe('П');
+    expect(attendanceLetter('not_present')).toBe('Н');
+    expect(attendanceLetter('not_present', true)).toBe('У');
+    expect(attendanceLetter('sick')).toBe('Б');
+    expect(attendanceLetter('late')).toBe('О');
   });
 
   it('без отметок проценты нулевые, а не деление на ноль', () => {

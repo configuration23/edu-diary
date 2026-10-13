@@ -1,3 +1,4 @@
+import { DEFAULT_GRADE_CATEGORIES } from '@edu-diary/contracts';
 import {
   compareISODates,
   describeRange,
@@ -294,6 +295,11 @@ export interface AcademicsService {
   deleteRoom(id: string, options: MutationOptions): Promise<void>;
 
   listGradeCategories(): Promise<GradeCategoryRecord[]>;
+  /**
+   * Синхронизация причин оценок «из коробки»: недостающие добавляются,
+   * существующие не перезаписываются — названия и веса правит заведение.
+   */
+  syncGradeCategories(): Promise<{ created: number; total: number }>;
   createGradeCategory(
     input: CreateGradeCategoryInput,
     options: MutationOptions,
@@ -1543,6 +1549,27 @@ export function createAcademicsService(
 
     listGradeCategories() {
       return academics.listGradeCategories();
+    },
+
+    async syncGradeCategories() {
+      let created = 0;
+
+      for (const reason of DEFAULT_GRADE_CATEGORIES) {
+        const existing = await academics.findGradeCategoryByCode(reason.code);
+        if (existing !== null) continue;
+
+        await academics.insertGradeCategory({
+          code: reason.code,
+          title: reason.title,
+          weight: reason.weight,
+          color: null,
+          isDefault: true,
+        });
+        created += 1;
+      }
+
+      const all = await academics.listGradeCategories();
+      return { created, total: all.length };
     },
 
     async createGradeCategory(input, options): Promise<GradeCategoryRecord> {

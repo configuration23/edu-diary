@@ -16,24 +16,38 @@ export const gradeSignSchema = z.enum(['plus', 'dot']);
 
 export const GRADE_SIGN_LABELS = { plus: '+', dot: '.' } as const;
 
-export const attendanceStatusSchema = z.enum(['present', 'absent', 'excused', 'sick', 'late']);
+/**
+ * Посещаемость: П (присутствовал), Н (не был), Б (болел), О (опоздал).
+ *
+ * «Уважительная» — не отдельная буква, а признак `isExcused` к «Н»: в журнале
+ * преподаватель нажимает «Н» и при необходимости ставит галочку с причиной.
+ * Устаревшее значение `excused` осталось в схеме ради уже сохранённых отметок.
+ */
+export const attendanceStatusSchema = z.enum(['present', 'not_present', 'sick', 'late', 'excused']);
 export type AttendanceStatusDto = z.infer<typeof attendanceStatusSchema>;
 
 export const ATTENDANCE_LABELS: Record<AttendanceStatusDto, string> = {
-  present: 'Был',
-  absent: 'Прогул',
-  excused: 'Уважительная',
+  present: 'Присутствовал',
+  not_present: 'Не был',
   sick: 'Болел',
   late: 'Опоздал',
+  excused: 'Уважительная',
 };
 
+/** Буквы журнала: то, что видно в интерфейсе. */
 export const ATTENDANCE_SHORT: Record<AttendanceStatusDto, string> = {
   present: 'П',
-  absent: 'О',
-  excused: 'У',
+  not_present: 'Н',
   sick: 'Б',
-  late: 'Н',
+  late: 'О',
+  excused: 'У',
 };
+
+/** Что показывать в журнале: «Н» с галочкой уважительной становится «У». */
+export function attendanceLetter(status: string, isExcused = false): string {
+  if (status === 'not_present' && isExcused) return 'У';
+  return ATTENDANCE_SHORT[status as AttendanceStatusDto] ?? '?';
+}
 
 /** Отметка в журнале: то, что видно в списке учеников на уроке. */
 export const gradeEntrySchema = z.object({
@@ -44,9 +58,11 @@ export const gradeEntrySchema = z.object({
   value: gradeValueSchema.nullable(),
   /** Знак: у оценки `null`. */
   sign: gradeSignSchema.nullable(),
+  /** Причина оценки: обязательна при выставлении (см. справочник причин). */
   categoryId: uuidSchema.nullable(),
+  categoryCode: z.string().nullable(),
   categoryTitle: z.string().nullable(),
-  /** Вес категории: нужен аналитике, чтобы не запрашивать справочник заново. */
+  /** Вес причины: нужен аналитике, чтобы не запрашивать справочник заново. */
   categoryWeight: z.number().int().nullable(),
   comment: z.string().nullable(),
   createdAt: z.string(),
@@ -58,6 +74,8 @@ export const attendanceEntrySchema = z.object({
   lessonId: uuidSchema,
   studentId: uuidSchema,
   status: attendanceStatusSchema,
+  /** Галочка «уважительная»: в журнале показывается буквой «У». */
+  isExcused: z.boolean(),
   reason: z.string().nullable(),
   createdAt: z.string(),
 });
@@ -67,8 +85,11 @@ export type AttendanceEntryDto = z.infer<typeof attendanceEntrySchema>;
 export const journalStudentSchema = z.object({
   studentId: uuidSchema,
   fullName: z.string(),
-  /** Числовая оценка за этот урок: `null`, если не выставлена. */
-  grade: gradeEntrySchema.nullable(),
+  /**
+   * Все отметки за урок. Их может быть несколько: за один урок ставят и оценку за
+   * ответ, и оценку за контрольную, а знаков — сколько угодно.
+   */
+  grades: z.array(gradeEntrySchema),
   attendance: attendanceEntrySchema.nullable(),
   /** Накопление знаков по предмету за период: из него складывается правило. */
   signs: z.object({
@@ -116,8 +137,16 @@ export const saveGradeRequestSchema = z
     /** Либо числовая оценка, либо знак. */
     value: gradeValueSchema.nullable().optional(),
     sign: gradeSignSchema.nullable().optional(),
-    categoryId: uuidSchema.nullable().optional(),
+    /** Причина: обязательна — она объясняет оценку и задаёт вес в аналитике. */
+    categoryId: uuidSchema,
     comment: z.string().max(500).nullable().optional(),
+    /**
+     * Заменить отметку с той же причиной.
+     *
+     * Без подтверждения сервер отвечает конфликтом: иначе случайное второе нажатие
+     * создавало бы вторую оценку «за тот же ответ».
+     */
+    replace: z.boolean().optional(),
   })
   .refine((input) => (input.value ?? null) !== null || (input.sign ?? null) !== null, {
     message: 'Нужна оценка или знак',
@@ -131,7 +160,7 @@ export const updateGradeRequestSchema = z
   .object({
     value: gradeValueSchema.nullable().optional(),
     sign: gradeSignSchema.nullable().optional(),
-    categoryId: uuidSchema.nullable().optional(),
+    categoryId: uuidSchema.optional(),
     comment: z.string().max(500).nullable().optional(),
     /** Причина правки: без неё история бесполезна (ADR-011). */
     reason: z.string().min(3).max(200),
@@ -145,11 +174,24 @@ export const deleteGradeRequestSchema = z.object({
   reason: z.string().min(3).max(200),
 });
 
-export const saveAttendanceRequestSchema = z.object({
-  studentId: uuidSchema,
-  status: attendanceStatusSchema,
-  reason: z.string().max(200).nullable().optional(),
-});
+/**
+ * Посещаемость: буква журнала и признак «уважительная».
+ *
+ * Причина передаётся только для уважительной: без неё отметка «У» не имеет смысла.
+ * Для прогула без уважительной причины ничего заполнять не нужно.
+ */
+export const saveAttendanceRequestSchema = z
+  .object({
+    studentId: uuidSchema,
+    status: attendanceStatusSchema,
+    /** Галочка «уважительная»: в журнале показывается буквой «У». */
+    isExcused: z.boolean().optional(),
+    reason: z.string().max(200).nullable().optional(),
+  })
+  .refine((input) => input.isExcused !== true || (input.reason ?? '').trim().length >= 3, {
+    message: 'Для уважительной причины нужен текст',
+    path: ['reason'],
+  });
 export type SaveAttendanceRequestDto = z.infer<typeof saveAttendanceRequestSchema>;
 
 /** «Отметить всех присутствующими»: массовая операция по уроку. */

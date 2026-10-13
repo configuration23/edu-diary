@@ -64,12 +64,12 @@ export const gradeEntry = pgTable(
     index('grade_entry_lesson_idx').on(table.lessonId),
     index('grade_entry_student_idx').on(table.studentId),
     /**
-     * Одна оценка на ученика в уроке. Частичный индекс: удалённая запись место не
-     * занимает, иначе после мягкого удаления нельзя было бы поставить новую оценку.
+     * Уникальности «ученик + урок» здесь **нет намеренно**: за урок можно поставить
+     * несколько оценок и знаков — например, ответ на уроке и контрольную работу.
+     * От случайного дубля защищает сервис: он сравнивает причину и спрашивает
+     * подтверждение замены.
      */
-    uniqueIndex('grade_entry_lesson_student_key')
-      .on(table.lessonId, table.studentId)
-      .where(sql`${table.deletedAt} is null`),
+    index('grade_entry_lesson_student_idx').on(table.lessonId, table.studentId),
   ],
 );
 
@@ -86,9 +86,15 @@ export const attendanceEntry = pgTable(
     studentId: uuid('student_id')
       .notNull()
       .references(() => student.id, { onDelete: 'cascade' }),
-    /** present | absent | excused | sick | late */
+    /** present | not_present | sick | late (плюс устаревший excused из ранней версии). */
     status: text('status').notNull(),
-    /** Причина: обязательна для прогула и уважительной (правило проверяет сервис). */
+    /**
+     * Отметка «уважительная»: ставится вместе с отсутствием и требует причины.
+     *
+     * Отдельным признаком, а не статусом: в журнале это не пятая буква, а галочка
+     * к «Н» — «не был по уважительной причине».
+     */
+    isExcused: boolean('is_excused').notNull().default(false),
     reason: text('reason'),
     createdBy: uuid('created_by').references(() => appUser.id, { onDelete: 'set null' }),
     deletedAt: timestamp('deleted_at', { withTimezone: true }),

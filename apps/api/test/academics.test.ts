@@ -1,4 +1,4 @@
-﻿import { describe, expect, it, afterAll, beforeAll } from 'vitest';
+import { describe, expect, it, afterAll, beforeAll } from 'vitest';
 
 import {
   completeSetup,
@@ -344,9 +344,10 @@ describeWithDatabase('группы, зачисления и справочник
       method: 'POST',
       url: '/api/grade-categories',
       headers: auth(),
-      payload: { code: 'project', title: 'Проект', weight: 3 },
+      // Код «Пр» занят причиной «из коробки»: проверяем свою причину с другим кодом.
+      payload: { code: 'П2', title: 'Проектная работа', weight: 3 },
     });
-    expect(category.statusCode).toBe(201);
+    expect(category.statusCode, category.body).toBe(201);
 
     const subjectId = (subject.json() as Json).id as string;
     const updated = await testApp.app.inject({

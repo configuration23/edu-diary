@@ -5,6 +5,7 @@ import {
   attendanceEntrySchema,
   gradeEntrySchema,
   lessonJournalSchema,
+  listGradeCategoriesResponseSchema,
   listGradeRevisionsResponseSchema,
   markAllPresentResponseSchema,
 } from '@edu-diary/contracts';
@@ -33,7 +34,13 @@ export function useLessonJournal(lessonId: string | null) {
   });
 }
 
-/** Оценка или знак за урок: повторная запись заменяет прежнюю отметку. */
+/**
+ * Оценка или знак за урок.
+ *
+ * Отметок за урок может быть несколько, но причина обязательна. Если отметка с
+ * такой же причиной уже есть, сервер отвечает конфликтом — интерфейс показывает
+ * подтверждение и повторяет запрос с `replace`.
+ */
 export function useSaveGrade(lessonId: string) {
   const client = useQueryClient();
   return useMutation({
@@ -41,8 +48,11 @@ export function useSaveGrade(lessonId: string) {
       studentId: string;
       value?: string | null;
       sign?: string | null;
-      categoryId?: string | null;
+      /** Причина обязательна: она объясняет оценку и задаёт вес в аналитике. */
+      categoryId: string;
       comment?: string | null;
+      /** Заменить отметку с той же причиной (подтверждение из интерфейса). */
+      replace?: boolean;
     }) =>
       apiRequest(`/api/lessons/${lessonId}/grades`, gradeEntrySchema, {
         method: 'POST',
@@ -52,11 +62,17 @@ export function useSaveGrade(lessonId: string) {
   });
 }
 
-/** Посещаемость: статус и причина. */
+/** Посещаемость: буква журнала и признак «уважительная» с текстом причины. */
 export function useSaveAttendance(lessonId: string) {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (input: { studentId: string; status: string; reason?: string | null }) =>
+    mutationFn: (input: {
+      studentId: string;
+      status: string;
+      /** Галочка «уважительная»: без неё причина не нужна. */
+      isExcused?: boolean;
+      reason?: string | null;
+    }) =>
       apiRequest(`/api/lessons/${lessonId}/attendance`, attendanceEntrySchema, {
         method: 'POST',
         body: input,
@@ -65,7 +81,12 @@ export function useSaveAttendance(lessonId: string) {
   });
 }
 
-/** «Отметить всех присутствующими»: одно действие на весь урок. */
+/**
+ * «Отметить всех присутствующими».
+ *
+ * Кнопки в интерфейсе нет: на практике отмечать приходится выборочно. Запрос
+ * оставлен намеренно — вернём, если понадобится.
+ */
 export function useMarkAllPresent(lessonId: string) {
   const client = useQueryClient();
   return useMutation({
@@ -86,6 +107,7 @@ export function useUpdateJournalGrade(lessonId: string) {
       gradeId: string;
       value?: string | null;
       sign?: string | null;
+      categoryId?: string;
       comment?: string | null;
       reason: string;
     }) =>
@@ -94,6 +116,7 @@ export function useUpdateJournalGrade(lessonId: string) {
         body: {
           ...(input.value === undefined ? {} : { value: input.value }),
           ...(input.sign === undefined ? {} : { sign: input.sign }),
+          ...(input.categoryId === undefined ? {} : { categoryId: input.categoryId }),
           ...(input.comment === undefined ? {} : { comment: input.comment }),
           reason: input.reason,
         },
@@ -122,5 +145,20 @@ export function useGradeRevisions(gradeId: string | null) {
     enabled: gradeId !== null,
     queryFn: () =>
       apiRequest(`/api/grades/${String(gradeId)}/revisions`, listGradeRevisionsResponseSchema),
+  });
+}
+
+/**
+ * Справочник причин оценок: из него выбирается причина отметки.
+ *
+ * Причины «из коробки» создаются при старте приложения, поэтому список не бывает
+ * пустым. Держим его в кэше подольше: справочник меняется редко, а открывают
+ * журнал часто.
+ */
+export function useGradeCategoriesList() {
+  return useQuery({
+    queryKey: ['grade-categories'],
+    queryFn: () => apiRequest('/api/grade-categories', listGradeCategoriesResponseSchema),
+    staleTime: 5 * 60 * 1000,
   });
 }

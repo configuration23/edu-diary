@@ -1,5 +1,7 @@
+import { sql } from 'drizzle-orm';
 import {
   boolean,
+  check,
   date,
   index,
   integer,
@@ -161,16 +163,33 @@ export const room = pgTable('room', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
-/** Категория оценки с весом в среднем балле (§5, Этап 4 считает по весам). */
-export const gradeCategory = pgTable('grade_category', {
-  id: uuid('id')
-    .primaryKey()
-    .$defaultFn(() => uuidv7()),
-  code: text('code').notNull().unique(),
-  title: text('title').notNull(),
-  weight: integer('weight').notNull().default(1),
-  color: text('color'),
-  isDefault: boolean('is_default').notNull().default(false),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-});
+/**
+ * Причина оценки с весом в среднем балле (Этап 4).
+ *
+ * В журнале причина обязательна: она объясняет, за что поставлена оценка, и от неё
+ * зависит вес в аналитике («контрольная» весомее «ответа на уроке»). Названия и веса
+ * администратор правит сам; коды «из коробки» синхронизируются при старте, но
+ * изменённые пользователем не перезаписываются.
+ */
+export const gradeCategory = pgTable(
+  'grade_category',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .$defaultFn(() => uuidv7()),
+    /** Код причины: до двух символов, например `Д`, `К`, `Пр`. */
+    code: text('code').notNull().unique(),
+    title: text('title').notNull(),
+    /**
+     * Вес в среднем балле: целое от 1 до 5. Ограничение продублировано проверкой
+     * в базе — справочник правят руками и через API, а «вес 0» или «вес 100»
+     * ломали бы аналитику незаметно.
+     */
+    weight: integer('weight').notNull().default(1),
+    color: text('color'),
+    isDefault: boolean('is_default').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  () => [check('grade_category_weight_check', sql`"weight" between 1 and 5`)],
+);

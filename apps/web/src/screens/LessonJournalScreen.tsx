@@ -1,9 +1,11 @@
 import {
   ATTENDANCE_LABELS,
-  ATTENDANCE_SHORT,
   type AttendanceStatusDto,
+  type GradeCategoryDto,
+  type GradeEntryDto,
   type SessionResponseDto,
 } from '@edu-diary/contracts';
+import { attendanceLetter } from '@edu-diary/domain';
 import { useNavigate, useParams } from '@tanstack/react-router';
 import { useState } from 'react';
 
@@ -13,24 +15,24 @@ import { SubjectDot } from '../lib/appearance';
 import { errorMessage } from '../lib/api-client';
 import {
   useDeleteJournalGrade,
+  useGradeCategoriesList,
   useGradeRevisions,
   useLessonJournal,
-  useMarkAllPresent,
   useSaveAttendance,
   useSaveGrade,
   useUpdateJournalGrade,
 } from '../lib/journal-queries';
 
 /**
- * Журнал урока: оценки и посещаемость (Этап 4, шаг 1).
+ * Журнал урока: оценки и посещаемость (Этап 4).
  *
- * Экран рассчитан на работу **на уроке**: преподаватель открывает занятие, отмечает
- * посещаемость и ставит оценки. Поэтому оценка ставится одним нажатием по кнопке —
- * выбор ученика, выбор оценки и сохранение не разводятся по шагам: это и есть
- * требование «не более трёх действий».
+ * Работает «на уроке»: преподаватель открывает занятие и отмечает учеников. Оценка
+ * ставится в два шага — нажали цифру, выбрали причину. Причина обязательна: она
+ * объясняет оценку и задаёт её вес в аналитике.
  *
- * Отметки ссылаются на урок (ADR-006), поэтому замена, отмена и перенос видны
- * здесь же; на отменённом уроке отметки не ставятся, и сервер это тоже проверяет.
+ * Отметок за урок может быть несколько: за один урок ставят и оценку за ответ, и
+ * оценку за контрольную. Если отметка с такой же причиной уже есть, интерфейс
+ * спрашивает подтверждение замены — случайный дубль не создаётся.
  */
 
 const VALUES = ['5', '4', '3', '2'] as const;
@@ -39,18 +41,76 @@ const SIGNS: { sign: 'plus' | 'dot'; label: string; hint: string }[] = [
   { sign: 'dot', label: '·', hint: 'Точка: накапливается и по правилу даёт оценку' },
 ];
 
-const ATTENDANCE_ORDER = ['present', 'late', 'excused', 'sick', 'absent'] as const;
+/** Буквы журнала: П, Н, Б, О. «У» — это «Н» с уважительной причиной. */
+const ATTENDANCE_CHOICES: AttendanceStatusDto[] = ['present', 'not_present', 'sick', 'late'];
 
 const selectClass = 'w-full rounded-md border border-slate-300 px-3 py-2 text-sm';
 
-/** Что именно правим у ученика: оценку или посещаемость. */
+/** Что ставим: цифру или знак. */
+type PendingMark = { kind: 'value'; value: string } | { kind: 'sign'; sign: 'plus' | 'dot' };
+
+/** Выбор причины отметки: один шаг после нажатия цифры или знака. */
+function ReasonPicker({
+  reasons,
+  pending,
+  busy,
+  onCancel,
+  onPick,
+}: {
+  reasons: GradeCategoryDto[];
+  pending: PendingMark;
+  busy: boolean;
+  onCancel: () => void;
+  onPick: (categoryId: string) => void;
+}) {
+  const [categoryId, setCategoryId] = useState(reasons[0]?.id ?? '');
+
+  return (
+    <div className="mt-2 flex flex-wrap items-end gap-2 rounded-md border border-sky-200 bg-sky-50 p-3">
+      <div className="text-sm text-slate-700">
+        Отметка:{' '}
+        <span className="font-semibold">
+          {pending.kind === 'value' ? pending.value : pending.sign === 'plus' ? '+' : '·'}
+        </span>
+      </div>
+
+      <div className="min-w-56 flex-1">
+        <Field label="Причина">
+          <select
+            name="categoryId"
+            className={selectClass}
+            value={categoryId}
+            onChange={(event) => setCategoryId(event.target.value)}
+          >
+            {reasons.map((reason) => (
+              <option key={reason.id} value={reason.id}>
+                {reason.code} — {reason.title}
+              </option>
+            ))}
+          </select>
+        </Field>
+      </div>
+
+      <Button type="button" disabled={busy || categoryId === ''} onClick={() => onPick(categoryId)}>
+        Поставить
+      </Button>
+      <Button tone="ghost" type="button" onClick={onCancel}>
+        Отмена
+      </Button>
+    </div>
+  );
+}
+
+/** Правка отметки: новая оценка, причина правки и история. */
 function EditPanel({
   gradeId,
   lessonId,
+  reasons,
   onClose,
 }: {
   gradeId: string;
   lessonId: string;
+  reasons: GradeCategoryDto[];
   onClose: () => void;
 }) {
   const update = useUpdateJournalGrade(lessonId);
@@ -58,6 +118,7 @@ function EditPanel({
   const revisions = useGradeRevisions(gradeId);
 
   const [value, setValue] = useState('');
+  const [categoryId, setCategoryId] = useState('');
   const [reason, setReason] = useState('');
   const [deleteReason, setDeleteReason] = useState('');
 
@@ -79,10 +140,25 @@ function EditPanel({
             ))}
           </select>
         </Field>
+        <Field label="Причина отметки">
+          <select
+            name="gradeReason"
+            className={selectClass}
+            value={categoryId}
+            onChange={(event) => setCategoryId(event.target.value)}
+          >
+            <option value="">— не менять —</option>
+            {reasons.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.code} — {item.title}
+              </option>
+            ))}
+          </select>
+        </Field>
         <div className="flex-1">
           <Field label="Причина правки" hint="Без причины история правок бесполезна">
             <TextInput
-              name="gradeReason"
+              name="editReason"
               value={reason}
               onChange={(event) => setReason(event.target.value)}
             />
@@ -96,11 +172,13 @@ function EditPanel({
               .mutateAsync({
                 gradeId,
                 ...(value === '' ? {} : { value }),
+                ...(categoryId === '' ? {} : { categoryId }),
                 reason,
               })
               .then(() => {
                 setReason('');
                 setValue('');
+                setCategoryId('');
               })
               .catch(() => undefined)
           }
@@ -165,19 +243,29 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
   const navigate = useNavigate();
 
   const journal = useLessonJournal(lessonId);
+  const reasons = useGradeCategoriesList();
   const appearance = useAppearanceSettings();
   const saveGrade = useSaveGrade(lessonId ?? '');
   const saveAttendance = useSaveAttendance(lessonId ?? '');
-  const markAll = useMarkAllPresent(lessonId ?? '');
 
-  /** Кого правим: идентификатор оценки в раскрытой панели. */
+  /** Для кого выбираем причину отметки: ученик и то, что ставим. */
+  const [pending, setPending] = useState<{ studentId: string; mark: PendingMark } | null>(null);
+  /** Для кого спрашиваем подтверждение замены: отметка с такой причиной уже есть. */
+  const [duplicate, setDuplicate] = useState<{
+    studentId: string;
+    mark: PendingMark;
+    categoryId: string;
+  } | null>(null);
+  /** Окно «Н»: отсутствие с необязательной уважительной причиной. */
+  const [absenceFor, setAbsenceFor] = useState<string | null>(null);
+  const [absenceExcused, setAbsenceExcused] = useState(false);
+  const [absenceReason, setAbsenceReason] = useState('');
+  /** Раскрытая правка отметки. */
   const [editingGradeId, setEditingGradeId] = useState<string | null>(null);
-  /** Для кого вводим причину отсутствия. */
-  const [reasonFor, setReasonFor] = useState<{ studentId: string; status: string } | null>(null);
-  const [reason, setReason] = useState('');
 
   const canWrite = session.permissions.some((grant) => grant.permission === 'grades:write');
   const canAttend = session.permissions.some((grant) => grant.permission === 'attendance:write');
+  const reasonList = reasons.data?.items ?? [];
 
   if (journal.isLoading) {
     return (
@@ -204,6 +292,50 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
 
   const { lesson, students, rules } = journal.data;
   const cancelled = lesson.status === 'cancelled';
+
+  /** Постановка отметки: цифра или знак, всегда с причиной. */
+  const putMark = async (
+    studentId: string,
+    mark: PendingMark,
+    categoryId: string,
+    replace = false,
+  ): Promise<void> => {
+    try {
+      await saveGrade.mutateAsync({
+        studentId,
+        categoryId,
+        ...(mark.kind === 'value' ? { value: mark.value } : { sign: mark.sign }),
+        ...(replace ? { replace: true } : {}),
+      });
+      setPending(null);
+      setDuplicate(null);
+    } catch (error) {
+      /**
+       * Сервер отвечает конфликтом, если отметка с такой же причиной за урок уже
+       * есть: спрашиваем подтверждение замены вместо молчаливой второй отметки.
+       */
+      const details =
+        typeof error === 'object' && error !== null && 'details' in error
+          ? ((error as { details?: { reason?: string } }).details ?? {})
+          : {};
+
+      if (details.reason === 'duplicate_grade') {
+        setDuplicate({ studentId, mark, categoryId });
+        return;
+      }
+
+      throw error;
+    }
+  };
+
+  const reasonTitleOf = (code: string | null, title: string | null): string =>
+    code === null ? (title ?? '') : title === null ? code : `${code} · ${title}`;
+
+  const openAbsence = (studentId: string): void => {
+    setAbsenceFor(studentId);
+    setAbsenceExcused(false);
+    setAbsenceReason('');
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -246,32 +378,13 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
             </Alert>
           </div>
         )}
-
-        {canAttend && !cancelled && (
-          <div className="mt-3 flex flex-wrap gap-2">
-            <Button
-              tone="secondary"
-              type="button"
-              disabled={markAll.isPending}
-              onClick={() => void markAll.mutateAsync({}).catch(() => undefined)}
-            >
-              Отметить всех присутствующими
-            </Button>
-            {markAll.isSuccess && (
-              <span className="self-center text-sm text-slate-600">
-                Отмечено: {markAll.data.marked}
-              </span>
-            )}
-            {markAll.isError && <Alert tone="error">{errorMessage(markAll.error)}</Alert>}
-          </div>
-        )}
       </Card>
 
       <Card
         title="Ученики"
         description={
           canWrite
-            ? 'Оценка ставится одним нажатием. «+» и «·» накапливаются и по правилу превращаются в оценку.'
+            ? 'Оценка ставится в два шага: цифра или знак, затем причина. Причина обязательна — она задаёт вес оценки в аналитике.'
             : 'Отметки ставит преподаватель или администратор: здесь только просмотр.'
         }
       >
@@ -283,7 +396,7 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
               <thead>
                 <tr className="border-b border-slate-200 text-left text-slate-500">
                   <th className="px-3 py-2 font-medium">Ученик</th>
-                  <th className="px-3 py-2 font-medium">Оценка</th>
+                  <th className="px-3 py-2 font-medium">Отметки за урок</th>
                   <th className="px-3 py-2 font-medium">Посещаемость</th>
                   <th className="px-3 py-2 font-medium">Знаки</th>
                 </tr>
@@ -291,89 +404,119 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
               <tbody>
                 {students.map((student) => (
                   <tr key={student.studentId} className="border-b border-slate-100 align-top">
-                    <td className="px-3 py-2 font-medium">
-                      {student.fullName}
-                      {editingGradeId !== null &&
-                        student.grade !== null &&
-                        editingGradeId === student.grade.id && (
-                          <span className="block text-xs text-slate-500">правка отметки</span>
-                        )}
-                    </td>
+                    <td className="px-3 py-2 font-medium">{student.fullName}</td>
 
                     <td className="px-3 py-2">
-                      {student.grade === null ? (
-                        canWrite && !cancelled ? (
-                          <span className="flex flex-wrap gap-1">
-                            {VALUES.map((value) => (
-                              <Button
-                                key={value}
-                                tone="secondary"
-                                type="button"
-                                disabled={saveGrade.isPending}
-                                onClick={() =>
-                                  void saveGrade
-                                    .mutateAsync({ studentId: student.studentId, value })
-                                    .catch(() => undefined)
-                                }
-                              >
-                                {value}
-                              </Button>
-                            ))}
-                            {SIGNS.map((item) => (
-                              <Button
-                                key={item.sign}
-                                tone="ghost"
-                                type="button"
-                                title={item.hint}
-                                disabled={saveGrade.isPending}
-                                onClick={() =>
-                                  void saveGrade
-                                    .mutateAsync({ studentId: student.studentId, sign: item.sign })
-                                    .catch(() => undefined)
-                                }
-                              >
-                                {item.label}
-                              </Button>
-                            ))}
-                          </span>
-                        ) : (
-                          <span className="text-slate-400">—</span>
-                        )
+                      {student.grades.length === 0 ? (
+                        <span className="text-slate-400">—</span>
                       ) : (
-                        <span className="flex flex-wrap items-center gap-2">
-                          <span className="text-base font-semibold">
-                            {student.grade.value ?? (student.grade.sign === 'plus' ? '+' : '·')}
-                          </span>
-                          {student.grade.categoryTitle !== null && (
-                            <span className="text-xs text-slate-500">
-                              {student.grade.categoryTitle}
-                            </span>
-                          )}
-                          {canWrite && !cancelled && (
+                        <ul className="flex flex-col gap-1">
+                          {student.grades.map((grade: GradeEntryDto) => (
+                            <li key={grade.id} className="flex flex-wrap items-center gap-2">
+                              <span className="text-base font-semibold">
+                                {grade.value ?? (grade.sign === 'plus' ? '+' : '·')}
+                              </span>
+                              <span className="text-xs text-slate-500">
+                                {reasonTitleOf(grade.categoryCode, grade.categoryTitle)}
+                              </span>
+                              {canWrite && !cancelled && (
+                                <Button
+                                  tone="ghost"
+                                  type="button"
+                                  onClick={() =>
+                                    setEditingGradeId(editingGradeId === grade.id ? null : grade.id)
+                                  }
+                                >
+                                  Править
+                                </Button>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+
+                      {canWrite && !cancelled && reasonList.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {VALUES.map((value) => (
                             <Button
-                              tone="ghost"
+                              key={value}
+                              tone="secondary"
                               type="button"
+                              disabled={saveGrade.isPending}
                               onClick={() =>
-                                setEditingGradeId(
-                                  editingGradeId === student.grade?.id
-                                    ? null
-                                    : (student.grade?.id ?? null),
-                                )
+                                setPending({
+                                  studentId: student.studentId,
+                                  mark: { kind: 'value', value },
+                                })
                               }
                             >
-                              Править
+                              {value}
                             </Button>
-                          )}
-                        </span>
+                          ))}
+                          {SIGNS.map((item) => (
+                            <Button
+                              key={item.sign}
+                              tone="ghost"
+                              type="button"
+                              title={item.hint}
+                              disabled={saveGrade.isPending}
+                              onClick={() =>
+                                setPending({
+                                  studentId: student.studentId,
+                                  mark: { kind: 'sign', sign: item.sign },
+                                })
+                              }
+                            >
+                              {item.label}
+                            </Button>
+                          ))}
+                        </div>
+                      )}
+
+                      {pending !== null && pending.studentId === student.studentId && (
+                        <ReasonPicker
+                          reasons={reasonList}
+                          pending={pending.mark}
+                          busy={saveGrade.isPending}
+                          onCancel={() => setPending(null)}
+                          onPick={(categoryId) =>
+                            void putMark(student.studentId, pending.mark, categoryId).catch(
+                              () => undefined,
+                            )
+                          }
+                        />
+                      )}
+
+                      {duplicate !== null && duplicate.studentId === student.studentId && (
+                        <div className="mt-2 flex flex-wrap items-center gap-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm">
+                          <span>Уже есть отметка с этой причиной за урок — заменить её новой?</span>
+                          <Button
+                            type="button"
+                            disabled={saveGrade.isPending}
+                            onClick={() =>
+                              void putMark(
+                                duplicate.studentId,
+                                duplicate.mark,
+                                duplicate.categoryId,
+                                true,
+                              ).catch(() => undefined)
+                            }
+                          >
+                            Заменить
+                          </Button>
+                          <Button tone="ghost" type="button" onClick={() => setDuplicate(null)}>
+                            Отмена
+                          </Button>
+                        </div>
                       )}
 
                       {editingGradeId !== null &&
-                        student.grade !== null &&
-                        editingGradeId === student.grade.id &&
+                        student.grades.some((grade) => grade.id === editingGradeId) &&
                         lessonId !== null && (
                           <EditPanel
-                            gradeId={student.grade.id}
+                            gradeId={editingGradeId}
                             lessonId={lessonId}
+                            reasons={reasonList}
                             onClose={() => setEditingGradeId(null)}
                           />
                         )}
@@ -383,7 +526,7 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
                       {student.attendance === null ? (
                         canAttend && !cancelled ? (
                           <span className="flex flex-wrap gap-1">
-                            {ATTENDANCE_ORDER.map((status) => (
+                            {ATTENDANCE_CHOICES.map((status) => (
                               <Button
                                 key={status}
                                 tone="secondary"
@@ -391,14 +534,10 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
                                 title={ATTENDANCE_LABELS[status]}
                                 disabled={saveAttendance.isPending}
                                 onClick={() => {
-                                  /**
-                                   * Для прогула и уважительной причина обязательна:
-                                   * сервер отклонит такую отметку, поэтому спрашиваем
-                                   * сразу, а не после отказа.
-                                   */
-                                  if (status === 'absent' || status === 'excused') {
-                                    setReasonFor({ studentId: student.studentId, status });
-                                    setReason('');
+                                  // «Н» открывает окно: там можно поставить галочку
+                                  // уважительной причины и ввести её текст.
+                                  if (status === 'not_present') {
+                                    openAbsence(student.studentId);
                                     return;
                                   }
 
@@ -407,7 +546,7 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
                                     .catch(() => undefined);
                                 }}
                               >
-                                {ATTENDANCE_SHORT[status]}
+                                {attendanceLetter(status)}
                               </Button>
                             ))}
                           </span>
@@ -420,12 +559,16 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
                             tone={
                               student.attendance.status === 'present'
                                 ? 'success'
-                                : student.attendance.status === 'absent'
-                                  ? 'danger'
-                                  : 'warning'
+                                : student.attendance.isExcused
+                                  ? 'warning'
+                                  : 'danger'
                             }
                           >
-                            {ATTENDANCE_LABELS[student.attendance.status]}
+                            {attendanceLetter(
+                              student.attendance.status as AttendanceStatusDto,
+                              student.attendance.isExcused,
+                            )}{' '}
+                            · {ATTENDANCE_LABELS[student.attendance.status as AttendanceStatusDto]}
                           </Badge>
                           {student.attendance.reason !== null && (
                             <span className="text-xs text-slate-500">
@@ -434,9 +577,7 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
                           )}
                           {canAttend && !cancelled && (
                             <span className="flex flex-wrap gap-1">
-                              {ATTENDANCE_ORDER.filter(
-                                (status) => status !== student.attendance?.status,
-                              ).map((status) => (
+                              {ATTENDANCE_CHOICES.map((status) => (
                                 <Button
                                   key={status}
                                   tone="ghost"
@@ -444,9 +585,8 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
                                   title={`Изменить на «${ATTENDANCE_LABELS[status]}»`}
                                   disabled={saveAttendance.isPending}
                                   onClick={() => {
-                                    if (status === 'absent' || status === 'excused') {
-                                      setReasonFor({ studentId: student.studentId, status });
-                                      setReason('');
+                                    if (status === 'not_present') {
+                                      openAbsence(student.studentId);
                                       return;
                                     }
 
@@ -455,7 +595,7 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
                                       .catch(() => undefined);
                                   }}
                                 >
-                                  {ATTENDANCE_SHORT[status]}
+                                  {attendanceLetter(status)}
                                 </Button>
                               ))}
                             </span>
@@ -463,41 +603,54 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
                         </span>
                       )}
 
-                      {reasonFor !== null && reasonFor.studentId === student.studentId && (
-                        <div className="mt-2 flex flex-wrap items-end gap-2 rounded-md border border-slate-200 bg-slate-50 p-2">
-                          <div className="flex-1">
-                            <Field
-                              label={`Причина: ${ATTENDANCE_LABELS[reasonFor.status as AttendanceStatusDto]}`}
-                            >
+                      {absenceFor !== null && absenceFor === student.studentId && (
+                        <div className="mt-2 flex flex-col gap-2 rounded-md border border-slate-200 bg-slate-50 p-3">
+                          <div className="text-sm text-slate-700">
+                            «Н» — не был. Отметьте уважительную причину, если она есть.
+                          </div>
+                          <label className="flex items-center gap-2 text-sm">
+                            <input
+                              type="checkbox"
+                              name="isExcused"
+                              checked={absenceExcused}
+                              onChange={(event) => setAbsenceExcused(event.target.checked)}
+                            />
+                            У — уважительная
+                          </label>
+                          {absenceExcused && (
+                            <Field label="Причина">
                               <TextInput
-                                name="attendanceReason"
-                                value={reason}
-                                onChange={(event) => setReason(event.target.value)}
+                                name="excuseReason"
+                                value={absenceReason}
+                                onChange={(event) => setAbsenceReason(event.target.value)}
                               />
                             </Field>
+                          )}
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              disabled={
+                                saveAttendance.isPending ||
+                                (absenceExcused && absenceReason.trim().length < 3)
+                              }
+                              onClick={() =>
+                                void saveAttendance
+                                  .mutateAsync({
+                                    studentId: student.studentId,
+                                    status: 'not_present',
+                                    isExcused: absenceExcused,
+                                    ...(absenceExcused ? { reason: absenceReason } : {}),
+                                  })
+                                  .then(() => setAbsenceFor(null))
+                                  .catch(() => undefined)
+                              }
+                            >
+                              Ок
+                            </Button>
+                            <Button tone="ghost" type="button" onClick={() => setAbsenceFor(null)}>
+                              Отмена
+                            </Button>
                           </div>
-                          <Button
-                            type="button"
-                            disabled={saveAttendance.isPending || reason.trim().length < 3}
-                            onClick={() =>
-                              void saveAttendance
-                                .mutateAsync({
-                                  studentId: student.studentId,
-                                  status: reasonFor.status,
-                                  reason,
-                                })
-                                .then(() => {
-                                  setReasonFor(null);
-                                  setReason('');
-                                })
-                                .catch(() => undefined)
-                            }
-                          >
-                            Сохранить
-                          </Button>
-                          <Button tone="ghost" type="button" onClick={() => setReasonFor(null)}>
-                            Отмена
-                          </Button>
                         </div>
                       )}
                     </td>
@@ -515,8 +668,11 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
           </div>
         )}
 
-        {saveGrade.isError && <Alert tone="error">{errorMessage(saveGrade.error)}</Alert>}
+        {saveGrade.isError && duplicate === null && (
+          <Alert tone="error">{errorMessage(saveGrade.error)}</Alert>
+        )}
         {saveAttendance.isError && <Alert tone="error">{errorMessage(saveAttendance.error)}</Alert>}
+        {reasons.isError && <Alert tone="error">{errorMessage(reasons.error)}</Alert>}
       </Card>
     </div>
   );

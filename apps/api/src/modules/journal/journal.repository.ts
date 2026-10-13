@@ -25,6 +25,7 @@ export interface GradeRecord {
   value: string | null;
   sign: string | null;
   categoryId: string | null;
+  categoryCode: string | null;
   categoryTitle: string | null;
   categoryWeight: number | null;
   comment: string | null;
@@ -36,6 +37,7 @@ export interface AttendanceRecord {
   lessonId: string;
   studentId: string;
   status: string;
+  isExcused: boolean;
   reason: string | null;
   createdAt: Date;
 }
@@ -102,6 +104,11 @@ export interface JournalRepository {
   ): Promise<AttendanceRecord[]>;
 
   findGrade(id: string, executor?: Executor): Promise<GradeRecord | null>;
+  /** Причина оценки: проверка существования и веса при выставлении. */
+  findGradeCategory(
+    id: string,
+    executor?: Executor,
+  ): Promise<{ id: string; code: string; title: string; weight: number } | null>;
   /** Активная оценка ученика в уроке: заменяется при повторной записи. */
   findGradeForSlot(
     lessonId: string,
@@ -163,6 +170,7 @@ export interface JournalRepository {
       lessonId: string;
       studentId: string;
       status: string;
+      isExcused: boolean;
       reason: string | null;
       createdBy: string | null;
     },
@@ -170,7 +178,7 @@ export interface JournalRepository {
   ): Promise<AttendanceRecord>;
   updateAttendance(
     id: string,
-    input: { status?: string; reason?: string | null },
+    input: { status?: string; isExcused?: boolean; reason?: string | null },
     executor?: Executor,
   ): Promise<AttendanceRecord | null>;
   recordAttendanceRevision(
@@ -220,6 +228,7 @@ const GRADE_SELECTION = {
   value: gradeEntry.value,
   sign: gradeEntry.sign,
   categoryId: gradeEntry.categoryId,
+  categoryCode: gradeCategory.code,
   categoryTitle: gradeCategory.title,
   categoryWeight: gradeCategory.weight,
   comment: gradeEntry.comment,
@@ -247,6 +256,7 @@ export function createJournalRepository(db: Database): JournalRepository {
           lessonId: attendanceEntry.lessonId,
           studentId: attendanceEntry.studentId,
           status: attendanceEntry.status,
+          isExcused: attendanceEntry.isExcused,
           reason: attendanceEntry.reason,
           createdAt: attendanceEntry.createdAt,
         })
@@ -361,6 +371,7 @@ export function createJournalRepository(db: Database): JournalRepository {
           lessonId: attendanceEntry.lessonId,
           studentId: attendanceEntry.studentId,
           status: attendanceEntry.status,
+          isExcused: attendanceEntry.isExcused,
           reason: attendanceEntry.reason,
           createdAt: attendanceEntry.createdAt,
         })
@@ -370,6 +381,21 @@ export function createJournalRepository(db: Database): JournalRepository {
 
     async findGrade(id, executor: Executor = db.orm) {
       const rows = await queryGrades(executor).where(eq(gradeEntry.id, id)).limit(1);
+      return rows[0] ?? null;
+    },
+
+    async findGradeCategory(id, executor: Executor = db.orm) {
+      const rows = await executor
+        .select({
+          id: gradeCategory.id,
+          code: gradeCategory.code,
+          title: gradeCategory.title,
+          weight: gradeCategory.weight,
+        })
+        .from(gradeCategory)
+        .where(eq(gradeCategory.id, id))
+        .limit(1);
+
       return rows[0] ?? null;
     },
 
@@ -478,6 +504,7 @@ export function createJournalRepository(db: Database): JournalRepository {
           lessonId: attendanceEntry.lessonId,
           studentId: attendanceEntry.studentId,
           status: attendanceEntry.status,
+          isExcused: attendanceEntry.isExcused,
           reason: attendanceEntry.reason,
           createdAt: attendanceEntry.createdAt,
         })
@@ -522,6 +549,7 @@ export function createJournalRepository(db: Database): JournalRepository {
           lessonId: attendanceEntry.lessonId,
           studentId: attendanceEntry.studentId,
           status: attendanceEntry.status,
+          isExcused: attendanceEntry.isExcused,
           reason: attendanceEntry.reason,
           createdAt: attendanceEntry.createdAt,
         })

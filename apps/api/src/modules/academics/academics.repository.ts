@@ -254,7 +254,9 @@ export interface AcademicsRepository {
   ): Promise<RoomRecord | null>;
   deleteRoom(id: string, executor?: Executor): Promise<boolean>;
 
-  listGradeCategories(): Promise<GradeCategoryRecord[]>;
+  listGradeCategories(executor?: Executor): Promise<GradeCategoryRecord[]>;
+  /** Поиск причины по коду: нужен синхронизации справочника «из коробки». */
+  findGradeCategoryByCode(code: string, executor?: Executor): Promise<GradeCategoryRecord | null>;
   findGradeCategory(id: string, executor?: Executor): Promise<GradeCategoryRecord | null>;
   insertGradeCategory(
     input: {
@@ -754,11 +756,21 @@ export function createAcademicsRepository(db: Database): AcademicsRepository {
       return rows.length > 0;
     },
 
-    async listGradeCategories(): Promise<GradeCategoryRecord[]> {
-      return db.orm
+    async listGradeCategories(executor: Executor = db.orm): Promise<GradeCategoryRecord[]> {
+      return executor
         .select()
         .from(gradeCategory)
         .orderBy(desc(gradeCategory.isDefault), asc(gradeCategory.title));
+    },
+
+    async findGradeCategoryByCode(code, executor: Executor = db.orm) {
+      const rows = await executor
+        .select()
+        .from(gradeCategory)
+        .where(eq(gradeCategory.code, code))
+        .limit(1);
+
+      return rows[0] ?? null;
     },
 
     async findGradeCategory(

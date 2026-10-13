@@ -207,7 +207,7 @@ describeWithDatabase('брендинг и аудит изменений', () => 
       method: 'POST',
       url: '/api/grade-categories',
       headers: auth(),
-      payload: { code: 'test55', title: 'Проверочная', weight: 2 },
+      payload: { code: 'Пв', title: 'Проверочная', weight: 2 },
     });
 
     const audit = await testApp.app.inject({

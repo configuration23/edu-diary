@@ -4,8 +4,8 @@ import { expect, test, type Page } from '@playwright/test';
  * Этап 4: журнал урока — оценки и посещаемость.
  *
  * Сквозной сценарий повторяет работу на уроке: администратор готовит данные,
- * преподаватель открывает журнал, ставит оценку одним нажатием, отмечает
- * посещаемость, «отмечает всех присутствующими» и правит оценку с причиной.
+ * преподаватель открывает журнал, ставит оценки с причинами, отмечает
+ * посещаемость («Н» с необязательной уважительной причиной) и правит оценку.
  * Ученик видит только свои отметки.
  *
  * Учебный год и период строятся вокруг **сегодняшней** даты: журнал работает по
@@ -69,7 +69,7 @@ async function bodyOf<T>(
   return (await response.json()) as T;
 }
 
-test('Этап 4: журнал урока — оценка, посещаемость, «все присутствуют»', async ({ page }) => {
+test('Этап 4: журнал урока — оценки с причинами, посещаемость с уважительной', async ({ page }) => {
   await page.goto('/');
   await login(page, ADMIN.username, ADMIN.password);
   // Ждём, пока сессия установлена: иначе запросы к API уйдут без cookie.
@@ -197,16 +197,39 @@ test('Этап 4: журнал урока — оценка, посещаемос
   const studentRow = page.getByRole('row', { name: new RegExp(STUDENT_NAME) });
   await expect(studentRow).toBeVisible();
 
-  // Оценка ставится одним нажатием: кнопка «5» рядом с учеником.
+  // Оценка ставится в два шага: цифра, затем причина (она обязательна).
   await page.getByRole('button', { name: '5', exact: true }).click();
+  await page.getByLabel('Причина').selectOption({ label: 'Д — Домашнее задание' });
+  await page.getByRole('button', { name: 'Поставить' }).click();
   await expect(page.getByText('5', { exact: true }).first()).toBeVisible();
 
-  // Посещаемость: «все присутствующими» одной кнопкой.
-  await page.getByRole('button', { name: 'Отметить всех присутствующими' }).click();
-  await expect(page.getByText('Был').first()).toBeVisible();
+  // Вторая оценка за тот же урок с другой причиной: их может быть несколько.
+  await page.getByRole('button', { name: '4', exact: true }).click();
+  await page.getByLabel('Причина').selectOption({ label: 'К — Контрольная работа' });
+  await page.getByRole('button', { name: 'Поставить' }).click();
+  await expect(page.getByText('К · Контрольная работа')).toBeVisible();
+
+  // Дубль с той же причиной: сервер отказывает, интерфейс предлагает замену.
+  await page.getByRole('button', { name: '3', exact: true }).click();
+  await page.getByLabel('Причина').selectOption({ label: 'Д — Домашнее задание' });
+  await page.getByRole('button', { name: 'Поставить' }).click();
+  await expect(
+    page.getByText('Уже есть отметка с этой причиной за урок — заменить её новой?'),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Заменить' }).click();
+  await expect(page.getByText('3', { exact: true }).first()).toBeVisible();
+
+  // Посещаемость: «Н» открывает окно с необязательной уважительной причиной.
+  await page.getByRole('button', { name: 'Н', exact: true }).first().click();
+  await expect(
+    page.getByText('«Н» — не был. Отметьте уважительную причину, если она есть.'),
+  ).toBeVisible();
+  // Точное имя: без него «Ок» совпадает и с кнопками подтверждения в других окнах.
+  await page.getByRole('button', { name: 'Ок', exact: true }).click();
+  await expect(page.getByText('Н · Не был').first()).toBeVisible();
 
   // Правка оценки: причина обязательна, иначе кнопка неактивна.
-  await page.getByRole('button', { name: 'Править' }).click();
+  await page.getByRole('button', { name: 'Править' }).first().click();
   const saveEdit = page.getByRole('button', { name: 'Сохранить правку' });
   await expect(saveEdit).toBeDisabled();
 

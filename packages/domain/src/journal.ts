@@ -38,44 +38,56 @@ export const SIGN_LABELS: Record<MarkSign, string> = {
  * Коды английские, потому что попадают в БД и в выгрузки; русские буквы — это
  * подписи для интерфейса.
  */
-export const ATTENDANCE_STATUSES = ['present', 'absent', 'excused', 'sick', 'late'] as const;
+export const ATTENDANCE_STATUSES = ['present', 'not_present', 'sick', 'late', 'excused'] as const;
 export type AttendanceStatus = (typeof ATTENDANCE_STATUSES)[number];
 
+/** Статусы, которые преподаватель ставит в журнале: «уважительная» — не статус. */
+export const ATTENDANCE_CHOICES = ['present', 'not_present', 'sick', 'late'] as const;
+
 export const ATTENDANCE_LABELS: Record<AttendanceStatus, string> = {
-  present: 'Был',
-  absent: 'Прогул',
-  excused: 'Уважительная',
+  present: 'Присутствовал',
+  not_present: 'Не был',
   sick: 'Болел',
   late: 'Опоздал',
+  excused: 'Уважительная',
 };
 
 /** Короткие буквы для журнала: как в бумажном журнале. */
 export const ATTENDANCE_SHORT: Record<AttendanceStatus, string> = {
   present: 'П',
-  absent: 'О',
-  excused: 'У',
+  not_present: 'Н',
   sick: 'Б',
-  late: 'Н',
+  late: 'О',
+  excused: 'У',
 };
+
+/** Буква отметки: отсутствие с уважительной причиной показывается как «У». */
+export function attendanceLetter(status: AttendanceStatus, isExcused = false): string {
+  if (status === 'not_present' && isExcused) return 'У';
+  return ATTENDANCE_SHORT[status];
+}
 
 export function isAttendanceStatus(value: string): value is AttendanceStatus {
   return (ATTENDANCE_STATUSES as readonly string[]).includes(value);
 }
 
-/** Отметка посещаемости для расчёта: статус и причина (у прогула и уважительной). */
+/** Отметка посещаемости для расчёта: статус и признак уважительной причины. */
 export interface AttendanceMark {
   status: AttendanceStatus;
+  isExcused?: boolean;
 }
 
 /**
  * Посещаемость по всем статусам.
  *
  * Возвращаем и проценты каждого статуса (для круговой диаграммы), и итоговый
- * процент: «был» от всех отмеченных занятий. Так интерфейс показывает и разбивку,
- * и одну цифру, не считая одно через другое по-разному в разных местах.
+ * процент: «был» от всех отмеченных занятий. Уважительная причина считается
+ * отдельно — по ней видно, сколько отсутствий было по делу.
  */
 export function attendanceBreakdown(marks: readonly AttendanceMark[]): {
   total: number;
+  present: number;
+  excused: number;
   percent: number;
   byStatus: Record<AttendanceStatus, { count: number; percent: number }>;
 } {
@@ -84,7 +96,11 @@ export function attendanceBreakdown(marks: readonly AttendanceMark[]): {
     number
   >;
 
-  for (const mark of marks) counts[mark.status] += 1;
+  let excused = 0;
+  for (const mark of marks) {
+    counts[mark.status] += 1;
+    if (mark.status === 'not_present' && mark.isExcused === true) excused += 1;
+  }
 
   const total = marks.length;
   const percentOf = (count: number): number =>
@@ -92,6 +108,8 @@ export function attendanceBreakdown(marks: readonly AttendanceMark[]): {
 
   return {
     total,
+    present: counts.present,
+    excused,
     percent: percentOf(counts.present),
     byStatus: Object.fromEntries(
       ATTENDANCE_STATUSES.map((status) => [

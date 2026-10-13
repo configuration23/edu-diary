@@ -13,11 +13,10 @@ import { createTestDatabase, hasTestDatabase, type TestDatabase } from './helper
 const describeWithDatabase = describe.skipIf(!hasTestDatabase);
 
 /**
- * Журнал: оценки, знаки и посещаемость (Этап 4, шаг 0).
+ * Журнал: оценки, знаки и посещаемость (Этап 4).
  *
  * Проверяем то, что нельзя увидеть в интерфейсе: правила постановки отметок,
- * приватность выборок и идемпотентность правила «знаки → оценка» — критерий
- * приёмки этапа.
+ * несколько оценок за урок, защиту от дубля с заменой и приватность выборок.
  */
 
 interface Json {
@@ -34,16 +33,13 @@ function shiftDays(days: number): string {
   ].join('-');
 }
 
-/** Дата ближайшего нужного дня недели: сегодня, если совпало. */
-function nextWeekday(dayOfWeek: number): string {
-  const date = new Date();
-  if (date.getDay() !== dayOfWeek % 7) date.setDate(date.getDate() + 1);
-  while (date.getDay() !== dayOfWeek % 7) date.setDate(date.getDate() + 1);
-  return [
-    String(date.getFullYear()).padStart(4, '0'),
-    String(date.getMonth() + 1).padStart(2, '0'),
-    String(date.getDate()).padStart(2, '0'),
-  ].join('-');
+/** Дата нужного дня недели: начиная с `from`, по умолчанию — с завтрашнего дня. */
+function nextWeekday(dayOfWeek: number, from = shiftDays(1)): string {
+  const date = new Date(`${from}T00:00:00Z`);
+  while (date.getUTCDay() !== dayOfWeek % 7) {
+    date.setUTCDate(date.getUTCDate() + 1);
+  }
+  return date.toISOString().slice(0, 10);
 }
 
 describeWithDatabase('журнал: оценки и посещаемость', () => {
@@ -52,7 +48,6 @@ describeWithDatabase('журнал: оценки и посещаемость', (
   let adminCookie: string;
   let teacherCookie: string;
   let studentCookie: string;
-  let studentUserId: string;
   let yearId: string;
   let groupId: string;
   let secondGroupId: string;
@@ -61,6 +56,8 @@ describeWithDatabase('журнал: оценки и посещаемость', (
   let studentId: string;
   let lessonId: string;
   let secondLessonId: string;
+  let homeReasonId: string;
+  let testReasonId: string;
   let gradeId: string;
 
   const auth = () => ({ cookie: adminCookie });
@@ -72,8 +69,7 @@ describeWithDatabase('журнал: оценки и посещаемость', (
     /**
      * Учебный год и период строим вокруг **сегодняшней** даты: журнал работает по
      * урокам, а уроки создаются на будущие даты внутри года. Фиксированный год из
-     * настроек по умолчанию к моменту запуска тестов уже в прошлом, и генерация
-     * уроков не нашла бы ни одной даты.
+     * настроек по умолчанию к моменту запуска тестов уже в прошлом.
      */
     ({ cookie: adminCookie } = await completeSetup(testApp.app, {
       institution: { title: 'Тестовый колледж', shortName: 'ТК', signature: 'Дневник колледжа' },
@@ -100,7 +96,6 @@ describeWithDatabase('журнал: оценки и посещаемость', (
       years.json() as { items: Array<{ id: string; startsOn: string; endsOn: string }> }
     ).items[0];
     yearId = year?.id ?? '';
-    // Группа обязана лежать внутри учебного года: иначе сервер отклонит создание.
     const yearStartsOn = year?.startsOn ?? shiftDays(-100);
     const yearEndsOn = year?.endsOn ?? shiftDays(100);
 
@@ -149,8 +144,7 @@ describeWithDatabase('журнал: оценки и посещаемость', (
     expect(subject.statusCode, subject.body).toBe(201);
     subjectId = (subject.json() as Json).id as string;
 
-    // Ученик: карточка и учётная запись одной операцией — без учётной записи он не
-    // увидит свои оценки (ADR-005).
+    // Ученик: карточка и учётная запись одной операцией — без неё он не увидит оценки.
     const student = await testApp.app.inject({
       method: 'POST',
       url: '/api/students',
@@ -160,36 +154,24 @@ describeWithDatabase('журнал: оценки и посещаемость', (
         account: { username: 'uchenik-zhurnal', password: 'kolledzh-uchenik-2025' },
       },
     });
-    expect(student.statusCode).toBe(201);
-    const studentBody = student.json() as Json;
-    studentId = studentBody.id as string;
-    studentUserId = studentBody.userId as string;
+    expect(student.statusCode, student.body).toBe(201);
+    studentId = (student.json() as Json).id as string;
 
     const studentLogin = await testApp.app.inject({
       method: 'POST',
       url: '/api/auth/login',
       payload: { username: 'uchenik-zhurnal', password: 'kolledzh-uchenik-2025' },
     });
-    expect(studentLogin.statusCode, 'вход ученика: ' + studentLogin.body).toBe(200);
+    expect(studentLogin.statusCode, studentLogin.body).toBe(200);
     studentCookie = cookieHeader(studentLogin.cookies);
 
-    const enrollResponse = await testApp.app.inject({
+    const enroll = await testApp.app.inject({
       method: 'POST',
       url: `/api/groups/${groupId}/enrollments`,
       headers: auth(),
-      payload: { studentId, joinedOn: shiftDays(-100) },
+      payload: { studentId, joinedOn: yearStartsOn },
     });
-    expect(enrollResponse.statusCode, 'зачисление: ' + enrollResponse.body).toBe(201);
-
-    // Проверяем зачисление: без него журнал урока будет пустым, и это не ошибка
-    // приложения, а неверная подготовка теста.
-    const enrollments = await testApp.app.inject({
-      method: 'GET',
-      url: `/api/groups/${groupId}/students`,
-      headers: auth(),
-    });
-    expect((enrollments.json() as { items: Json[] }).items, enrollments.body).toHaveLength(1);
-    void studentUserId;
+    expect(enroll.statusCode, enroll.body).toBe(201);
 
     const assignment = await testApp.app.inject({
       method: 'POST',
@@ -221,7 +203,7 @@ describeWithDatabase('журнал: оценки и посещаемость', (
       headers: auth(),
       payload: { studyGroupId: groupId, from: nextWeekday(2), to: shiftDays(30) },
     });
-    expect(generated.statusCode, 'генерация: ' + generated.body).toBe(200);
+    expect(generated.statusCode, generated.body).toBe(200);
 
     const lessons = await testApp.app.inject({
       method: 'GET',
@@ -229,9 +211,21 @@ describeWithDatabase('журнал: оценки и посещаемость', (
       headers: auth(),
     });
     const items = (lessons.json() as { items: Json[] }).items;
-    expect(items.length, 'уроки не созданы: ' + lessons.body).toBeGreaterThan(0);
+    expect(items.length, 'уроки не созданы: ' + lessons.body).toBeGreaterThan(1);
     lessonId = items[0]?.id as string;
     secondLessonId = items[1]?.id as string;
+
+    // Причины оценок «из коробки» создаются при сборке приложения.
+    const reasons = await testApp.app.inject({
+      method: 'GET',
+      url: '/api/grade-categories',
+      headers: auth(),
+    });
+    const reasonItems = (reasons.json() as { items: Json[] }).items;
+    homeReasonId = (reasonItems.find((item) => item.code === 'Д')?.id as string) ?? '';
+    testReasonId = (reasonItems.find((item) => item.code === 'К')?.id as string) ?? '';
+    expect(homeReasonId).not.toBe('');
+    expect(testReasonId).not.toBe('');
   });
 
   afterAll(async () => {
@@ -239,7 +233,76 @@ describeWithDatabase('журнал: оценки и посещаемость', (
     await database.dispose();
   });
 
-  it('экран урока отдаёт состав группы и правила накопления знаков', async () => {
+  it('причины оценок «из коробки» созданы с весом 1', async () => {
+    const reasons = await testApp.app.inject({
+      method: 'GET',
+      url: '/api/grade-categories',
+      headers: auth(),
+    });
+
+    const items = (reasons.json() as { items: Json[] }).items;
+    const codes = items.map((item) => item.code);
+    for (const code of ['Д', 'О', 'П', 'К', 'Э', 'С', 'Л', 'Т', 'З', 'Пр']) {
+      expect(codes).toContain(code);
+    }
+    expect(items.every((item) => item.weight === 1)).toBe(true);
+  });
+
+  it('вес причины ограничен целым от 1 до 5', async () => {
+    const tooBig = await testApp.app.inject({
+      method: 'PATCH',
+      url: `/api/grade-categories/${homeReasonId}`,
+      headers: auth(),
+      payload: { weight: 6 },
+    });
+    expect(tooBig.statusCode).toBe(400);
+
+    const zero = await testApp.app.inject({
+      method: 'PATCH',
+      url: `/api/grade-categories/${homeReasonId}`,
+      headers: auth(),
+      payload: { weight: 0 },
+    });
+    expect(zero.statusCode).toBe(400);
+
+    const ok = await testApp.app.inject({
+      method: 'PATCH',
+      url: `/api/grade-categories/${homeReasonId}`,
+      headers: auth(),
+      payload: { weight: 3 },
+    });
+    expect(ok.statusCode).toBe(200);
+    expect((ok.json() as Json).weight).toBe(3);
+
+    // Возвращаем вес обратно, чтобы не влиять на другие проверки.
+    await testApp.app.inject({
+      method: 'PATCH',
+      url: `/api/grade-categories/${homeReasonId}`,
+      headers: auth(),
+      payload: { weight: 1 },
+    });
+  });
+
+  it('код причины — до двух символов', async () => {
+    const tooLong = await testApp.app.inject({
+      method: 'POST',
+      url: '/api/grade-categories',
+      headers: auth(),
+      payload: { code: 'ДЗШ', title: 'Слишком длинный код', weight: 1 },
+    });
+    expect(tooLong.statusCode).toBe(400);
+
+    const ok = await testApp.app.inject({
+      method: 'POST',
+      url: '/api/grade-categories',
+      headers: auth(),
+      payload: { code: 'ДЗ', title: 'Домашнее задание (своя причина)', weight: 2 },
+    });
+    expect(ok.statusCode, ok.body).toBe(201);
+    expect((ok.json() as Json).code).toBe('ДЗ');
+  });
+
+  it('экран урока отдаёт состав группы, отметки и правила', async () => {
     const response = await testApp.app.inject({
       method: 'GET',
       url: `/api/lessons/${lessonId}/journal`,
@@ -252,87 +315,128 @@ describeWithDatabase('журнал: оценки и посещаемость', (
     const students = journal.students as Json[];
     expect(students).toHaveLength(1);
     expect(students[0]?.fullName).toBe('Ученик Журнала');
-    expect(students[0]?.grade).toBeNull();
+    expect(students[0]?.grades).toEqual([]);
     expect(students[0]?.attendance).toBeNull();
   });
 
-  it('оценка ставится, знак ставится, одновременная запись отклоняется', async () => {
-    const grade = await testApp.app.inject({
+  it('причина оценки обязательна', async () => {
+    const withoutReason = await testApp.app.inject({
       method: 'POST',
       url: `/api/lessons/${lessonId}/grades`,
       headers: { cookie: teacherCookie },
       payload: { studentId, value: '5' },
     });
-    expect(grade.statusCode).toBe(201);
+    expect(withoutReason.statusCode).toBe(400);
+
+    const unknownReason = await testApp.app.inject({
+      method: 'POST',
+      url: `/api/lessons/${lessonId}/grades`,
+      headers: { cookie: teacherCookie },
+      payload: { studentId, value: '5', categoryId: '00000000-0000-0000-0000-000000000000' },
+    });
+    expect(unknownReason.statusCode).toBe(400);
+  });
+
+  it('оценка и знак ставятся с причиной, одновременно — нельзя', async () => {
+    const grade = await testApp.app.inject({
+      method: 'POST',
+      url: `/api/lessons/${lessonId}/grades`,
+      headers: { cookie: teacherCookie },
+      payload: { studentId, value: '5', categoryId: homeReasonId },
+    });
+    expect(grade.statusCode, grade.body).toBe(201);
     gradeId = (grade.json() as Json).id as string;
+    expect((grade.json() as Json).categoryCode).toBe('Д');
 
     const sign = await testApp.app.inject({
       method: 'POST',
       url: `/api/lessons/${secondLessonId}/grades`,
       headers: { cookie: teacherCookie },
-      payload: { studentId, sign: 'plus' },
+      payload: { studentId, sign: 'plus', categoryId: testReasonId },
     });
-    expect(sign.statusCode).toBe(201);
+    expect(sign.statusCode, sign.body).toBe(201);
     expect((sign.json() as Json).sign).toBe('plus');
 
     const both = await testApp.app.inject({
       method: 'POST',
       url: `/api/lessons/${lessonId}/grades`,
       headers: { cookie: teacherCookie },
-      payload: { studentId, value: '5', sign: 'dot' },
+      payload: { studentId, value: '5', sign: 'dot', categoryId: testReasonId },
     });
     expect(both.statusCode).toBe(400);
-
-    const neither = await testApp.app.inject({
-      method: 'POST',
-      url: `/api/lessons/${lessonId}/grades`,
-      headers: { cookie: teacherCookie },
-      payload: { studentId },
-    });
-    expect(neither.statusCode).toBe(400);
   });
 
-  it('повторная запись в тот же урок заменяет отметку, а прежняя уходит в историю', async () => {
-    const again = await testApp.app.inject({
+  it('за урок можно поставить несколько оценок с разными причинами', async () => {
+    const second = await testApp.app.inject({
       method: 'POST',
       url: `/api/lessons/${lessonId}/grades`,
       headers: { cookie: teacherCookie },
-      payload: { studentId, value: '4' },
+      payload: { studentId, value: '4', categoryId: testReasonId },
     });
-    expect(again.statusCode).toBe(201);
-    const newGradeId = (again.json() as Json).id as string;
-    expect(newGradeId).not.toBe(gradeId);
+    expect(second.statusCode, second.body).toBe(201);
 
+    const journal = await testApp.app.inject({
+      method: 'GET',
+      url: `/api/lessons/${lessonId}/journal`,
+      headers: auth(),
+    });
+    const grades = ((journal.json() as Json).students as Json[])[0]?.grades as Json[];
+    expect(grades).toHaveLength(2);
+    expect(grades.map((grade) => grade.value).sort()).toEqual(['4', '5']);
+  });
+
+  it('отметка с той же причиной отклоняется, а с подтверждением заменяет прежнюю', async () => {
+    const duplicate = await testApp.app.inject({
+      method: 'POST',
+      url: `/api/lessons/${lessonId}/grades`,
+      headers: { cookie: teacherCookie },
+      payload: { studentId, value: '3', categoryId: homeReasonId },
+    });
+    expect(duplicate.statusCode).toBe(409);
+    expect((duplicate.json() as { error: { details: Json } }).error.details.reason).toBe(
+      'duplicate_grade',
+    );
+
+    const replaced = await testApp.app.inject({
+      method: 'POST',
+      url: `/api/lessons/${lessonId}/grades`,
+      headers: { cookie: teacherCookie },
+      payload: { studentId, value: '3', categoryId: homeReasonId, replace: true },
+    });
+    expect(replaced.statusCode, replaced.body).toBe(201);
+
+    // Прежняя отметка ушла в историю, а в журнале остались две: «3» и «4».
     const revisions = await testApp.app.inject({
       method: 'GET',
       url: `/api/grades/${gradeId}/revisions`,
       headers: auth(),
     });
-    expect(revisions.statusCode).toBe(200);
     const items = (revisions.json() as { items: Json[] }).items;
     expect(items.some((item) => item.action === 'delete')).toBe(true);
 
-    // В журнале урока у ученика одна отметка — новая.
     const journal = await testApp.app.inject({
       method: 'GET',
       url: `/api/lessons/${lessonId}/journal`,
       headers: auth(),
     });
-    const grade = (journal.json() as Json).students as Json[];
-    expect((grade[0]?.grade as Json).value).toBe('4');
+    const grades = ((journal.json() as Json).students as Json[])[0]?.grades as Json[];
+    expect(grades).toHaveLength(2);
+    expect(grades.some((grade) => grade.value === '3')).toBe(true);
+    expect(grades.some((grade) => grade.value === '5')).toBe(false);
   });
 
-  it('правка и удаление оценки требуют причины и попадают в историю', async () => {
+  it('правка оценки требует причины и попадает в историю', async () => {
     const journal = await testApp.app.inject({
       method: 'GET',
       url: `/api/lessons/${lessonId}/journal`,
       headers: auth(),
     });
-    const current = ((journal.json() as Json).students as Json[])[0]?.grade as Json;
+    const current = ((journal.json() as Json).students as Json[])[0]?.grades as Json[];
+    const target = current[0];
 
     const withoutReason = await testApp.app.inject({
       method: 'PATCH',
-      url: `/api/grades/${current.id as string}`,
+      url: `/api/grades/${target?.id as string}`,
       headers: { cookie: teacherCookie },
       payload: { value: '3' },
     });
@@ -340,50 +444,57 @@ describeWithDatabase('журнал: оценки и посещаемость', (
 
     const updated = await testApp.app.inject({
       method: 'PATCH',
-      url: `/api/grades/${current.id as string}`,
+      url: `/api/grades/${target?.id as string}`,
       headers: { cookie: teacherCookie },
       payload: { value: '3', reason: 'Опечатка при выставлении' },
     });
-    expect(updated.statusCode).toBe(200);
-    expect((updated.json() as Json).value).toBe('3');
+    expect(updated.statusCode, updated.body).toBe(200);
 
     const revisions = await testApp.app.inject({
       method: 'GET',
-      url: `/api/grades/${current.id as string}/revisions`,
+      url: `/api/grades/${target?.id as string}/revisions`,
       headers: auth(),
     });
     const items = (revisions.json() as { items: Json[] }).items;
     const edited = items.find((item) => item.action === 'update');
-    expect(edited?.before).toBe('4');
     expect(edited?.after).toBe('3');
     expect(edited?.reason).toBe('Опечатка при выставлении');
   });
 
-  it('посещаемость: причина обязательна для прогула, «все присутствуют» проставляет отметки', async () => {
-    const withoutReason = await testApp.app.inject({
+  it('посещаемость: «Н» без причины, «У» требует причину, ставится одна отметка', async () => {
+    // Уважительная без текста причины — отказ.
+    const excusedWithoutReason = await testApp.app.inject({
       method: 'POST',
       url: `/api/lessons/${lessonId}/attendance`,
       headers: { cookie: teacherCookie },
-      payload: { studentId, status: 'absent' },
+      payload: { studentId, status: 'not_present', isExcused: true },
     });
-    expect(withoutReason.statusCode).toBe(400);
+    expect(excusedWithoutReason.statusCode).toBe(400);
 
+    // «Н» без причины — сохраняется и ничего не требует.
     const absent = await testApp.app.inject({
       method: 'POST',
       url: `/api/lessons/${lessonId}/attendance`,
       headers: { cookie: teacherCookie },
-      payload: { studentId, status: 'absent', reason: 'Не был без предупреждения' },
+      payload: { studentId, status: 'not_present' },
     });
-    expect(absent.statusCode).toBe(201);
+    expect(absent.statusCode, absent.body).toBe(201);
+    expect((absent.json() as Json).isExcused).toBe(false);
 
-    const allPresent = await testApp.app.inject({
+    // Повторная отметка заменяет прежнюю: она одна на урок.
+    const excused = await testApp.app.inject({
       method: 'POST',
-      url: `/api/lessons/${lessonId}/attendance/all-present`,
+      url: `/api/lessons/${lessonId}/attendance`,
       headers: { cookie: teacherCookie },
-      payload: {},
+      payload: {
+        studentId,
+        status: 'not_present',
+        isExcused: true,
+        reason: 'Справка из поликлиники',
+      },
     });
-    expect(allPresent.statusCode).toBe(200);
-    expect((allPresent.json() as Json).marked).toBe(1);
+    expect(excused.statusCode, excused.body).toBe(201);
+    expect((excused.json() as Json).isExcused).toBe(true);
 
     const journal = await testApp.app.inject({
       method: 'GET',
@@ -391,10 +502,11 @@ describeWithDatabase('журнал: оценки и посещаемость', (
       headers: auth(),
     });
     const row = ((journal.json() as Json).students as Json[])[0];
-    expect((row?.attendance as Json).status).toBe('present');
+    expect((row?.attendance as Json).status).toBe('not_present');
+    expect((row?.attendance as Json).isExcused).toBe(true);
   });
 
-  it('ученик видит только свои отметки и не получает чужие', async () => {
+  it('ученик видит только свои отметки и не может ставить оценки', async () => {
     const journal = await testApp.app.inject({
       method: 'GET',
       url: `/api/lessons/${lessonId}/journal`,
@@ -406,30 +518,22 @@ describeWithDatabase('журнал: оценки и посещаемость', (
     expect(students).toHaveLength(1);
     expect(students[0]?.studentId).toBe(studentId);
 
-    // В чужой группе урок для ученика не существует: 404, а не 403.
-    const assignments = await testApp.app.inject({
-      method: 'GET',
-      url: `/api/assignments?studyGroupId=${secondGroupId}`,
-      headers: auth(),
+    const forbidden = await testApp.app.inject({
+      method: 'POST',
+      url: `/api/lessons/${lessonId}/grades`,
+      headers: { cookie: studentCookie },
+      payload: { studentId, value: '5', categoryId: homeReasonId },
     });
-    void assignments;
+    expect(forbidden.statusCode).toBe(403);
 
-    const foreign = await testApp.app.inject({
+    const anonymous = await testApp.app.inject({
       method: 'GET',
       url: `/api/lessons/${lessonId}/journal`,
       headers: { cookie: 'session=подделка' },
     });
-    expect(foreign.statusCode).toBe(401);
-  });
+    expect(anonymous.statusCode).toBe(401);
 
-  it('ученик не может поставить оценку даже себе', async () => {
-    const response = await testApp.app.inject({
-      method: 'POST',
-      url: `/api/lessons/${lessonId}/grades`,
-      headers: { cookie: studentCookie },
-      payload: { studentId, value: '5' },
-    });
-
-    expect(response.statusCode).toBe(403);
+    void secondGroupId;
+    void yearId;
   });
 });

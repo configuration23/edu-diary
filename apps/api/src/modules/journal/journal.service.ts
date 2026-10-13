@@ -78,7 +78,8 @@ export interface JournalService {
     students: {
       studentId: string;
       fullName: string;
-      grade: GradeRecord | null;
+      /** Все отметки за урок: их может быть несколько, каждая со своей причиной. */
+      grades: GradeRecord[];
       attendance: AttendanceRecord | null;
       signs: { plus: number; dot: number; plusRemaining: number; dotRemaining: number };
     }[];
@@ -90,8 +91,11 @@ export interface JournalService {
       studentId: string;
       value?: string | null;
       sign?: string | null;
-      categoryId?: string | null;
+      /** Причина обязательна: она объясняет оценку и задаёт вес. */
+      categoryId: string;
       comment?: string | null;
+      /** Заменить отметку с той же причиной (подтверждение из интерфейса). */
+      replace?: boolean | undefined;
     },
     options: MutationOptions,
   ): Promise<GradeRecord>;
@@ -120,7 +124,13 @@ export interface JournalService {
   >;
   saveAttendance(
     lessonId: string,
-    input: { studentId: string; status: string; reason?: string | null },
+    input: {
+      studentId: string;
+      status: string;
+      /** Галочка «уважительная»: требует текста причины. */
+      isExcused?: boolean | undefined;
+      reason?: string | null;
+    },
     options: MutationOptions,
   ): Promise<AttendanceRecord>;
   markAllPresent(
@@ -217,13 +227,13 @@ export function createJournalService(dependencies: JournalServiceDependencies): 
     }
   };
 
-  /** Причина обязательна для отсутствия: «прогул» без причины — не запись. */
-  const assertReason = (status: AttendanceStatus, reason: string | null): void => {
-    if (
-      (status === 'absent' || status === 'excused') &&
-      (reason === null || reason.trim() === '')
-    ) {
-      throw new AppError('VALIDATION_FAILED', 'Для прогула и уважительной причины нужна причина', {
+  /**
+   * Причина нужна только для «уважительной»: отсутствие без уважительной причины
+   * отмечается буквой «Н» и ничего не требует.
+   */
+  const assertReason = (isExcused: boolean, reason: string | null): void => {
+    if (isExcused && (reason === null || reason.trim().length < 3)) {
+      throw new AppError('VALIDATION_FAILED', 'Для уважительной причины нужен текст', {
         details: { reason: 'reason_required' },
       });
     }
@@ -247,7 +257,6 @@ export function createJournalService(dependencies: JournalServiceDependencies): 
       ]);
 
       const period = await journal.findPeriodForDate(lesson.lessonDate);
-      const gradeByStudent = new Map(grades.map((grade) => [grade.studentId, grade]));
       const attendanceByStudent = new Map(attendance.map((mark) => [mark.studentId, mark]));
 
       /**
@@ -269,7 +278,11 @@ export function createJournalService(dependencies: JournalServiceDependencies): 
         result.push({
           studentId: student.studentId,
           fullName: student.fullName,
-          grade: gradeByStudent.get(student.studentId) ?? null,
+          /**
+           * Отметки за урок списком: их может быть несколько — например, оценка за
+           * ответ и оценка за контрольную, каждая со своей причиной.
+           */
+          grades: grades.filter((grade) => grade.studentId === student.studentId),
           attendance: attendanceByStudent.get(student.studentId) ?? null,
           signs: {
             plus: counts.plus,
@@ -315,25 +328,49 @@ export function createJournalService(dependencies: JournalServiceDependencies): 
       const sign = input.sign ?? null;
       assertSignOrValue(value, sign);
 
-      return withTransaction(db, options.executor, async (tx) => {
-        const existing = await journal.findGradeForSlot(lessonId, input.studentId, tx);
+      /**
+       * Причина обязательна: она объясняет оценку и задаёт вес в аналитике. Без неё
+       * «5» неизвестно за что, и средний балл считается наугад.
+       */
+      const category = await journal.findGradeCategory(input.categoryId);
+      if (category === null) {
+        throw new AppError('VALIDATION_FAILED', 'Причина оценки не найдена', {
+          details: { reason: 'category_not_found' },
+        });
+      }
 
+      return withTransaction(db, options.executor, async (tx) => {
         /**
-         * Повторная запись в тот же слот заменяет прежнюю отметку: в журнале урока
-         * у ученика должна быть одна оценка. Прежняя уходит в мягкое удаление, а в
-         * историю пишется причина замены — иначе след теряется.
+         * Отметок за урок может быть несколько, поэтому «занять слот» нельзя.
+         * Но повторную отметку **с той же причиной** считаем случайным дублем:
+         * без подтверждения отвечаем конфликтом, чтобы второе нажатие не создавало
+         * вторую оценку «за тот же ответ».
          */
-        if (existing !== null) {
+        const sameReason = (await journal.listGradesForLesson(lessonId, tx)).find(
+          (grade) => grade.studentId === input.studentId && grade.categoryId === input.categoryId,
+        );
+
+        if (sameReason !== undefined && input.replace !== true) {
+          throw new AppError('CONFLICT', 'Такая отметка за урок уже есть', {
+            details: {
+              reason: 'duplicate_grade',
+              gradeId: sameReason.id,
+              categoryTitle: sameReason.categoryTitle,
+            },
+          });
+        }
+
+        if (sameReason !== undefined) {
           await journal.softDeleteGrade(
-            existing.id,
-            { reason: 'Заменено новой отметкой', actorId: options.actor.userId },
+            sameReason.id,
+            { reason: 'Заменено новой отметкой с той же причиной', actorId: options.actor.userId },
             tx,
           );
           await journal.recordGradeRevision(
             {
-              gradeEntryId: existing.id,
+              gradeEntryId: sameReason.id,
               action: 'delete',
-              before: describeMark(existing.value, existing.sign),
+              before: describeMark(sameReason.value, sameReason.sign),
               after: null,
               reason: 'Заменено новой отметкой',
               actorId: options.actor.userId,
@@ -348,7 +385,7 @@ export function createJournalService(dependencies: JournalServiceDependencies): 
             studentId: input.studentId,
             value,
             sign,
-            categoryId: input.categoryId ?? null,
+            categoryId: input.categoryId,
             comment: input.comment ?? null,
             createdBy: options.actor.userId,
           },
@@ -525,8 +562,13 @@ export function createJournalService(dependencies: JournalServiceDependencies): 
         throw new AppError('VALIDATION_FAILED', 'Неизвестный статус посещаемости');
       }
 
-      const reason = input.reason ?? null;
-      assertReason(input.status, reason);
+      /**
+       * Причину заполняем только для уважительной: «Н» без галочки — просто «не
+       * был», и ничего вводить не нужно.
+       */
+      const isExcused = input.isExcused === true;
+      const reason = isExcused ? (input.reason ?? null) : null;
+      assertReason(isExcused, reason);
 
       return withTransaction(db, options.executor, async (tx) => {
         const existing = await journal.findAttendanceForSlot(lessonId, input.studentId, tx);
@@ -534,7 +576,7 @@ export function createJournalService(dependencies: JournalServiceDependencies): 
         if (existing !== null) {
           const updated = await journal.updateAttendance(
             existing.id,
-            { status: input.status, reason },
+            { status: input.status, isExcused, reason },
             tx,
           );
           if (updated === null) throw new AppError('NOT_FOUND', 'Отметка не найдена');
@@ -557,7 +599,7 @@ export function createJournalService(dependencies: JournalServiceDependencies): 
               entityKind: 'attendance_entry',
               entityId: existing.id,
               before: { status: existing.status },
-              after: { status: input.status, reason },
+              after: { status: input.status, isExcused, reason },
             },
             options.actor,
             tx,
@@ -571,6 +613,7 @@ export function createJournalService(dependencies: JournalServiceDependencies): 
             lessonId,
             studentId: input.studentId,
             status: input.status,
+            isExcused,
             reason,
             createdBy: options.actor.userId,
           },

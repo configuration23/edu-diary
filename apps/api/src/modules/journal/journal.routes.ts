@@ -79,10 +79,11 @@ export function registerJournalRoutes(
         ...data,
         students: data.students.map((student) => ({
           ...student,
-          grade:
-            student.grade === null
-              ? null
-              : { ...student.grade, createdAt: student.grade.createdAt.toISOString() },
+          // Отметок за урок может быть несколько: даты приводим у каждой.
+          grades: student.grades.map((grade) => ({
+            ...grade,
+            createdAt: grade.createdAt.toISOString(),
+          })),
           attendance:
             student.attendance === null
               ? null

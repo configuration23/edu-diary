@@ -165,26 +165,47 @@ describe('назначения', () => {
 });
 
 describe('createGradeCategoryRequestSchema', () => {
-  it('подставляет вес 1 и проверяет код', () => {
+  it('подставляет вес 1 и требует код до двух символов', () => {
     const parsed = createGradeCategoryRequestSchema.parse({
-      code: 'project',
+      code: 'Пр',
       title: 'Проект',
     });
     expect(parsed.weight).toBe(1);
 
+    // Код длиннее двух символов не влезет в журнал рядом с оценкой.
     expect(
       createGradeCategoryRequestSchema.safeParse({ code: 'Проект', title: 'Проект' }).success,
     ).toBe(false);
     expect(
-      createGradeCategoryRequestSchema.safeParse({ code: '2project', title: 'Проект' }).success,
+      createGradeCategoryRequestSchema.safeParse({ code: 'ДЗШ', title: 'Домашнее задание' })
+        .success,
+    ).toBe(false);
+    // Один символ и цифры допустимы: «К», «1».
+    expect(
+      createGradeCategoryRequestSchema.safeParse({ code: 'К', title: 'Контрольная' }).success,
+    ).toBe(true);
+    expect(createGradeCategoryRequestSchema.safeParse({ code: '1', title: 'Первый' }).success).toBe(
+      true,
+    );
+    // Пробелы и знаки препинания в коде не нужны.
+    expect(
+      createGradeCategoryRequestSchema.safeParse({ code: 'Д З', title: 'Домашнее' }).success,
     ).toBe(false);
   });
 
-  it('ограничивает вес среднего балла', () => {
+  it('ограничивает вес среднего балла целым от 1 до 5', () => {
     expect(
-      createGradeCategoryRequestSchema.safeParse({ code: 'test', title: 'Тест', weight: 11 })
-        .success,
+      createGradeCategoryRequestSchema.safeParse({ code: 'Т', title: 'Тест', weight: 6 }).success,
     ).toBe(false);
+    expect(
+      createGradeCategoryRequestSchema.safeParse({ code: 'Т', title: 'Тест', weight: 0 }).success,
+    ).toBe(false);
+    expect(
+      createGradeCategoryRequestSchema.safeParse({ code: 'Т', title: 'Тест', weight: 2.5 }).success,
+    ).toBe(false);
+    expect(
+      createGradeCategoryRequestSchema.safeParse({ code: 'Т', title: 'Тест', weight: 5 }).success,
+    ).toBe(true);
   });
 });
 
