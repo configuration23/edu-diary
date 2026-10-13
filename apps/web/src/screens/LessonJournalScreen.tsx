@@ -446,9 +446,14 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
                         {student.grades.length === 0 ? (
                           <span className="text-slate-400">—</span>
                         ) : (
-                          <ul className="flex flex-col gap-1">
+                          /*
+                            Отметки идут в строку, а не столбцом: они компактные, и так
+                            за урок видно всё сразу. Ширина ограничена пятью отметками —
+                            шестая переносится на следующую строку (утилита `marks-row`).
+                          */
+                          <ul className="marks-row">
                             {student.grades.map((grade: GradeEntryDto) => (
-                              <li key={grade.id}>
+                              <li key={grade.id} className="flex items-center">
                                 {/*
                                   Отметка читается как «5₁д»: сама оценка, вес —
                                   подстрочно (кроме веса 1: он по умолчанию и только

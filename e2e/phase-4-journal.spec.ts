@@ -211,6 +211,36 @@ test('Этап 4: журнал урока — оценки с причинами
   await page.getByRole('button', { name: 'Поставить' }).click();
   await expect(page.getByRole('button', { name: '4, Контрольная работа' })).toBeVisible();
 
+  // Добираем отметки до шести: проверяем, что в строку помещается не больше пяти.
+  for (const [value, reason] of [
+    ['4', 'О — Ответ на уроке'],
+    ['3', 'П — Поведение'],
+    ['5', 'С — Самостоятельная работа'],
+    ['2', 'Т — Тест'],
+  ] as const) {
+    await page.getByRole('button', { name: value, exact: true }).click();
+    await page.getByLabel('Причина').selectOption({ label: reason });
+    await page.getByRole('button', { name: 'Поставить' }).click();
+  }
+
+  /**
+   * Проверяем перенос по порядку отметок в ряду, а не по подписям: отметки
+   * добавлялись в разном порядке, и «шестая» по счёту — не то же самое, что
+   * шестая по подписи. Берём только кнопки отметок: в тех же ячейках живут
+   * кнопки выбора причины и панель правки.
+   */
+  const marks = studentRow.locator('ul.marks-row > li > button[aria-label]');
+  await expect(marks).toHaveCount(6);
+
+  const boxes = await marks.evaluateAll((nodes) =>
+    nodes.map((node) => Math.round(node.getBoundingClientRect().top)),
+  );
+
+  // В первой строке ровно пять отметок, шестая ушла на следующую.
+  const firstLine = boxes.filter((top) => top === boxes[0]).length;
+  expect(firstLine).toBe(5);
+  expect(boxes[5]).toBeGreaterThan(boxes[0] ?? 0);
+
   // Дубль с той же причиной: сервер отказывает, интерфейс предлагает замену.
   await page.getByRole('button', { name: '3', exact: true }).click();
   await page.getByLabel('Причина').selectOption({ label: 'Д — Домашнее задание' });
