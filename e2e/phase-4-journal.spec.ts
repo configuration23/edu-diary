@@ -273,6 +273,22 @@ test('Этап 4: журнал урока — оценки с причинами
   const saveEdit = page.getByRole('button', { name: 'Сохранить правку' });
   await expect(saveEdit).toBeDisabled();
 
+  /**
+   * Панель правки — отдельная строка под строкой ученика во всю ширину таблицы.
+   * Раньше она попадала между отметками и посещаемостью и выглядела лишним
+   * столбцом, поэтому проверяем положение, а не только наличие панели.
+   */
+  const panelRow = page.locator('tr', { has: saveEdit });
+  const studentRowBox = await studentRow.boundingBox();
+  const panelBox = await panelRow.boundingBox();
+  const tableBox = await page.locator('table').boundingBox();
+
+  expect(panelBox).not.toBeNull();
+  expect(studentRowBox).not.toBeNull();
+  expect(tableBox).not.toBeNull();
+  expect(panelBox?.y).toBeGreaterThan(studentRowBox?.y ?? 0);
+  expect(panelBox?.width).toBe(tableBox?.width);
+
   await page.getByLabel('Новая оценка').selectOption('2');
   await page.getByLabel('Причина правки').fill('Опечатка при выставлении');
   await saveEdit.click();

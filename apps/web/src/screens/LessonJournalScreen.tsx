@@ -573,25 +573,6 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
                         )}
                       </td>
 
-                      {/*
-                      Панель правки занимает отдельную строку во всю ширину таблицы:
-                      в ячейке отметок она была бы зажата в узкую колонку.
-                    */}
-                      {editingGradeId !== null &&
-                        student.grades.some((grade) => grade.id === editingGradeId) &&
-                        lessonId !== null && (
-                          <tr className="border-b border-slate-100">
-                            <td colSpan={4} className="px-3 pt-0 pb-3">
-                              <EditPanel
-                                gradeId={editingGradeId}
-                                lessonId={lessonId}
-                                reasons={reasonList}
-                                onClose={() => setEditingGradeId(null)}
-                              />
-                            </td>
-                          </tr>
-                        )}
-
                       <td className="px-3 py-2">
                         {student.attendance === null ? (
                           canAttend && !cancelled ? (
@@ -743,7 +724,34 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
                           <span className="block">до оценки: {student.signs.plusRemaining}</span>
                         )}
                       </td>
+
+                      {/*
+                      Панель правки — отдельная временная строка под строкой ученика,
+                      во всю ширину таблицы: в колонке отметок она была бы зажата, а
+                      между отметками и посещаемостью выглядела лишним столбцом.
+                    */}
                     </tr>
+
+                    {/*
+                      Панель правки — временная строка под всей строкой ученика:
+                      во всю ширину таблицы и под всеми колонками. В ячейке отметок
+                      она была бы зажата, а между отметками и посещаемостью
+                      выглядела бы лишним столбцом.
+                    */}
+                    {editingGradeId !== null &&
+                      student.grades.some((grade) => grade.id === editingGradeId) &&
+                      lessonId !== null && (
+                        <tr className="border-b border-slate-100">
+                          <td colSpan={4} className="px-3 pt-0 pb-3">
+                            <EditPanel
+                              gradeId={editingGradeId}
+                              lessonId={lessonId}
+                              reasons={reasonList}
+                              onClose={() => setEditingGradeId(null)}
+                            />
+                          </td>
+                        </tr>
+                      )}
                   </Fragment>
                 ))}
               </tbody>
