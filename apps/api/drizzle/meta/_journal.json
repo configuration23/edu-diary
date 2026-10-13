@@ -71,6 +71,13 @@
       "when": 1791901390672,
       "tag": "0009_grade_reasons",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791914149203,
+      "tag": "0010_sign_rules",
+      "breakpoints": true
     }
   ]
 }

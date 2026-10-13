@@ -337,6 +337,33 @@ export async function buildApp({
       },
       studentIdsOfGuardian: (userId) => guardiansRepository.studentIdsOfGuardian(userId),
     },
+    /**
+     * Пороги накопительных знаков ведёт учебный процесс, поэтому журнал спрашивает
+     * их через порт: прямых импортов между модулями нет.
+     *
+     * В базе знак лежит строкой, а журналу нужны только два известных значения:
+     * посторонние строки отбрасываем — они не знаки, а мусор в справочнике.
+     */
+    signRules: {
+      async listSignRules() {
+        const rules = await academics.listSignRules();
+
+        return rules.flatMap((rule) =>
+          rule.sign === 'plus' || rule.sign === 'dot'
+            ? [
+                {
+                  id: rule.id,
+                  sign: rule.sign,
+                  categoryId: rule.categoryId,
+                  categoryTitle: rule.categoryTitle,
+                  threshold: rule.threshold,
+                  isActive: rule.isActive,
+                },
+              ]
+            : [],
+        );
+      },
+    },
   });
 
   let authService: SessionRevokerPort | null = null;

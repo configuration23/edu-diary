@@ -2,6 +2,7 @@ import type { QueryClient } from '@tanstack/react-query';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import {
+  applySignRulesResponseSchema,
   attendanceEntrySchema,
   gradeEntrySchema,
   lessonJournalSchema,
@@ -160,5 +161,27 @@ export function useGradeCategoriesList() {
     queryKey: ['grade-categories'],
     queryFn: () => apiRequest('/api/grade-categories', listGradeCategoriesResponseSchema),
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+/**
+ * Пересчёт «плюсы и точки → оценка» за период группы.
+ *
+ * Запускается вручную: преподаватель должен понимать, откуда взялась оценка. После
+ * пересчёта обновляем и журнал урока, и аналитику: оценки могли появиться у всех
+ * учеников группы.
+ */
+export function useApplySignRules(lessonId: string | null) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { studyGroupId: string; from?: string; to?: string }) =>
+      apiRequest('/api/journal/apply-sign-rules', applySignRulesResponseSchema, {
+        method: 'POST',
+        body: input,
+      }),
+    onSuccess: () => {
+      if (lessonId !== null) invalidateJournal(client, lessonId);
+      void client.invalidateQueries({ queryKey: ['journal-stats'] });
+    },
   });
 }

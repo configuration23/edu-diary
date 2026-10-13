@@ -1,4 +1,6 @@
 import {
+  applySignRulesRequestSchema,
+  applySignRulesResponseSchema,
   attendanceEntrySchema,
   gradeEntrySchema,
   lessonJournalSchema,
@@ -254,6 +256,31 @@ export function registerJournalRoutes(
       void isOwnStudent;
 
       return { items: stats, total: stats.length };
+    },
+  );
+
+  /**
+   * Пересчёт «плюсы и точки → оценка» за период.
+   *
+   * Только администратор: операция меняет отметки сразу у всей группы, и запускать
+   * её «на всякий случай» преподавателю незачем. Повторный запуск ничего не делает:
+   * съеденные знаки уже помечены оплатившей оценкой (ADR-010).
+   */
+  app.post(
+    '/journal/apply-sign-rules',
+    { preHandler: requirePermission('grades:write', 'all') },
+    async (request) => {
+      const body = applySignRulesRequestSchema.parse(request.body);
+      const result = await journal.applyRules(
+        {
+          studyGroupId: body.studyGroupId,
+          ...(body.from === undefined ? {} : { from: body.from }),
+          ...(body.to === undefined ? {} : { to: body.to }),
+        },
+        mutationOptions(request),
+      );
+
+      return applySignRulesResponseSchema.parse(result);
     },
   );
 }

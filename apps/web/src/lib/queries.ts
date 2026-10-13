@@ -23,6 +23,8 @@ import {
   listConsentsResponseSchema,
   listEnrollmentsResponseSchema,
   listGradeCategoriesResponseSchema,
+  listSignRulesResponseSchema,
+  signRuleSchema,
   listGuardianLinksResponseSchema,
   listBellsResponseSchema,
   listGroupOptionsResponseSchema,
@@ -737,6 +739,38 @@ export function useCreateGradeCategory() {
     mutationFn: (input: { code: string; title: string; weight: number; color?: string | null }) =>
       apiRequest('/api/grade-categories', gradeCategorySchema, { method: 'POST', body: input }),
     onSuccess: () => invalidateAcademics(client),
+  });
+}
+
+/**
+ * Накопительные знаки: сколько плюсов и точек даёт оценку.
+ *
+ * Награда не настраивается — плюсы дают `5`, точки `2`; правятся только порог и
+ * выключатель пересчёта.
+ */
+export function useSignRules() {
+  return useQuery({
+    queryKey: ['sign-rules'],
+    queryFn: () => apiRequest('/api/sign-rules', listSignRulesResponseSchema),
+  });
+}
+
+export function useUpdateSignRule() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { sign: 'plus' | 'dot'; threshold?: number; isActive?: boolean }) =>
+      apiRequest(`/api/sign-rules/${input.sign}`, signRuleSchema, {
+        method: 'PATCH',
+        body: {
+          ...(input.threshold === undefined ? {} : { threshold: input.threshold }),
+          ...(input.isActive === undefined ? {} : { isActive: input.isActive }),
+        },
+      }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ['sign-rules'] });
+      // Порог виден и в журнале урока: там показывается «до оценки осталось N».
+      void client.invalidateQueries({ queryKey: ['journal'] });
+    },
   });
 }
 

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { isoDateSchema, paginationQuerySchema, pageSchema, uuidSchema } from './common';
+import { signRuleSchema } from './academics';
 
 /**
  * Журнал: оценки, знаки «+/·» и посещаемость (Этап 4).
@@ -119,17 +120,38 @@ export const lessonJournalSchema = z.object({
     status: z.string(),
   }),
   students: z.array(journalStudentSchema),
-  rules: z.array(
-    z.object({
-      sign: gradeSignSchema,
-      threshold: z.number().int().positive(),
-      reward: gradeValueSchema,
-      /** Срабатываний уже записано: видно, сколько оценок выдано правилом. */
-      applied: z.number().int().nonnegative(),
-    }),
-  ),
+  /**
+   * Пороги накопительных знаков: из них интерфейс показывает, сколько знаков
+   * осталось до оценки. Награда фиксирована: плюсы дают `5`, точки `2`.
+   */
+  signRules: z.array(signRuleSchema),
 });
 export type LessonJournalDto = z.infer<typeof lessonJournalSchema>;
+
+/**
+ * Пересчёт «плюсы и точки → оценка» за период.
+ *
+ * Запускается вручную из журнала: преподаватель должен понимать, откуда взялась
+ * оценка. Границы периода задаёт учебный период, а `from`/`to` позволяют сузить
+ * пересчёт до части периода.
+ */
+export const applySignRulesRequestSchema = z
+  .object({
+    studyGroupId: uuidSchema,
+    from: isoDateSchema.optional(),
+    to: isoDateSchema.optional(),
+  })
+  .refine((input) => input.from === undefined || input.to === undefined || input.from <= input.to, {
+    message: 'Начало периода позже конца',
+    path: ['to'],
+  });
+export type ApplySignRulesRequestDto = z.infer<typeof applySignRulesRequestSchema>;
+
+export const applySignRulesResponseSchema = z.object({
+  /** Сколько оценок выдано этим запуском. */
+  awarded: z.number().int().nonnegative(),
+});
+export type ApplySignRulesResponseDto = z.infer<typeof applySignRulesResponseSchema>;
 
 export const saveGradeRequestSchema = z
   .object({

@@ -8,6 +8,7 @@ import {
   createJournalService,
   type JournalService,
   type ScheduleLookupPort,
+  type SignRuleLookupPort,
 } from './journal.service';
 
 /**
@@ -23,7 +24,7 @@ export {
   type AttendanceRecord,
   type GradeRecord,
   type JournalRepository,
-  type RuleRecord,
+  type SignRecord,
 } from './journal.repository';
 export {
   createJournalService,
@@ -31,15 +32,9 @@ export {
   type JournalService,
   type MutationOptions,
   type ScheduleLookupPort,
+  type SignRuleLookupPort,
 } from './journal.service';
-export {
-  attendanceEntry,
-  attendanceRevision,
-  gradeEntry,
-  gradeRevision,
-  gradeRule,
-  gradeRuleApplication,
-} from './journal.schema';
+export { attendanceEntry, attendanceRevision, gradeEntry, gradeRevision } from './journal.schema';
 
 export function createJournalModule(dependencies: {
   db: Database;
@@ -58,6 +53,7 @@ export function buildJournalService(dependencies: {
   journal: JournalRepository;
   audit: AuditService;
   schedule: ScheduleLookupPort;
+  signRules: SignRuleLookupPort;
 }): JournalService {
   return createJournalService(dependencies);
 }

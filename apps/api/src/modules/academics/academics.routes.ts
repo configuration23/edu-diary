@@ -14,6 +14,9 @@ import {
   listAcademicYearsResponseSchema,
   listEnrollmentsResponseSchema,
   listGradeCategoriesResponseSchema,
+  listSignRulesResponseSchema,
+  signRuleSchema,
+  updateSignRuleRequestSchema,
   listGroupsQuerySchema,
   listGroupsResponseSchema,
   listPeriodsResponseSchema,
@@ -40,6 +43,7 @@ import {
   type GradeCategoryDto,
   type PeriodDto,
   type RoomDto,
+  type SignRuleDto,
   type StudentSummaryDto,
   type StudyGroupDto,
   type SubjectDto,
@@ -53,6 +57,7 @@ import type {
   AcademicYearRecord,
   EnrollmentRecord,
   GradeCategoryRecord,
+  SignRuleRecord,
   PeriodRecord,
   RoomRecord,
   StudentRecord,
@@ -153,6 +158,18 @@ function toCategoryDto(category: GradeCategoryRecord): GradeCategoryDto {
     weight: category.weight,
     color: category.color,
     isDefault: category.isDefault,
+  };
+}
+
+/** Накопительный знак для интерфейса справочника: подпись и порог. */
+function toSignRuleDto(rule: SignRuleRecord): SignRuleDto {
+  return {
+    id: rule.id,
+    sign: rule.sign === 'plus' ? 'plus' : 'dot',
+    categoryId: rule.categoryId,
+    categoryTitle: rule.categoryTitle,
+    threshold: rule.threshold,
+    isActive: rule.isActive,
   };
 }
 
@@ -643,6 +660,29 @@ export function registerAcademicsRoutes(
 
       reply.status(204);
       return null;
+    },
+  );
+
+  /**
+   * Накопительные знаки: пороги плюсов и точек.
+   *
+   * Награда здесь не настраивается — плюсы всегда дают `5`, точки всегда `2`.
+   * Заведение решает только, сколько знаков нужно и включён ли пересчёт.
+   */
+  app.get('/sign-rules', { preHandler: requirePermission('academics:read', 'all') }, async () => {
+    const items = await academics.listSignRules();
+    return listSignRulesResponseSchema.parse({ items: items.map(toSignRuleDto) });
+  });
+
+  app.patch(
+    '/sign-rules/:sign',
+    { preHandler: requirePermission('academics:write', 'all') },
+    async (request) => {
+      const { sign } = request.params as { sign: string };
+      const body = updateSignRuleRequestSchema.parse(request.body);
+      const updated = await academics.updateSignRule(sign, body, mutation(request));
+
+      return signRuleSchema.parse(toSignRuleDto(updated));
     },
   );
 }

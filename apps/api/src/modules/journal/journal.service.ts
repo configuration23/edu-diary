@@ -10,6 +10,7 @@ import {
   type EscalationRule,
   type MarkSign,
 } from '@edu-diary/domain';
+import type { SignRuleDto } from '@edu-diary/contracts';
 
 import type { AuditActor } from '../../shared/actor';
 import type { Database, Executor } from '../../shared/db/client';
@@ -20,8 +21,18 @@ import type {
   AttendanceRecord,
   GradeRecord,
   JournalRepository,
-  RuleRecord,
+  SignRecord,
 } from './journal.repository';
+
+/**
+ * Справочник накопительных знаков: сколько плюсов или точек даёт оценку.
+ *
+ * Порт, а не прямой импорт: справочник ведёт учебный процесс, и журнал только
+ * спрашивает у него пороги.
+ */
+export interface SignRuleLookupPort {
+  listSignRules(): Promise<SignRuleDto[]>;
+}
 
 /**
  * Журнал: оценки, знаки и посещаемость (Этап 4).
@@ -68,6 +79,15 @@ export interface ScheduleLookupPort {
   studentIdsOfGuardian(userId: string): Promise<string[]>;
 }
 
+/**
+ * Накопительный знак справочника: подпись живёт в общих контрактах, потому что тот
+ * же справочник правит учебный процесс. Журнал читает его через порт — прямых
+ * импортов между модулями нет.
+ */
+
+/** Знаки, которые дают оценку: награда фиксирована, меняется только порог. */
+export const SIGN_REWARDS: Record<'plus' | 'dot', '5' | '2'> = { plus: '5', dot: '2' };
+
 export interface JournalService {
   /** Экран урока: состав группы, отметки и накопление знаков. */
   lessonJournal(
@@ -83,7 +103,8 @@ export interface JournalService {
       attendance: AttendanceRecord | null;
       signs: { plus: number; dot: number; plusRemaining: number; dotRemaining: number };
     }[];
-    rules: { sign: string; threshold: number; reward: string; applied: number }[];
+    /** Пороги накопления: из них интерфейс считает «до оценки осталось N знаков». */
+    signRules: SignRuleDto[];
   }>;
   saveGrade(
     lessonId: string,
@@ -138,9 +159,15 @@ export interface JournalService {
     input: { exceptStudentIds?: string[] },
     options: MutationOptions,
   ): Promise<{ marked: number }>;
-  /** Пересчёт правил: возвращает, сколько оценок выдано этим запуском. */
+  /**
+   * Пересчёт «плюсы и точки → оценка» за период.
+   *
+   * Запускается вручную: преподаватель должен понимать, откуда взялась оценка.
+   * Съедает ровно по `threshold` знаков на оценку, ставит её датой последнего
+   * знака и возвращает, сколько оценок выдано этим запуском.
+   */
   applyRules(
-    filter: { studyGroupId?: string; subjectId?: string; from?: string; to?: string },
+    filter: { studyGroupId: string; from?: string; to?: string },
     options: MutationOptions,
   ): Promise<{ awarded: number }>;
   stats(filter: {
@@ -164,6 +191,8 @@ export interface JournalServiceDependencies {
   journal: JournalRepository;
   audit: AuditService;
   schedule: ScheduleLookupPort;
+  /** Пороги накопления знаков: справочник ведёт учебный процесс. */
+  signRules: SignRuleLookupPort;
 }
 
 /** Подпись отметки для истории правок: «5», «+», «.» или «—». */
@@ -174,8 +203,13 @@ function describeMark(value: string | null, sign: string | null): string {
   return '—';
 }
 
+/** Подпись знака для аудита: «+» или «·». */
+function signLabel(sign: 'plus' | 'dot'): string {
+  return sign === 'plus' ? '+' : '·';
+}
+
 export function createJournalService(dependencies: JournalServiceDependencies): JournalService {
-  const { db, journal, audit, schedule } = dependencies;
+  const { db, journal, audit, schedule, signRules } = dependencies;
 
   /** Урок с проверкой области действия: чужая группа отвечает `404`. */
   const requireLessonForViewer = async (
@@ -239,29 +273,30 @@ export function createJournalService(dependencies: JournalServiceDependencies): 
     }
   };
 
-  const ruleOf = (rule: RuleRecord): EscalationRule => ({
-    sign: rule.sign as MarkSign,
+  const ruleOf = (rule: SignRuleDto): EscalationRule => ({
+    sign: rule.sign,
     threshold: rule.threshold,
-    reward: rule.reward as EscalationRule['reward'],
+    reward: SIGN_REWARDS[rule.sign],
   });
 
   return {
     async lessonJournal(lessonId, viewer) {
       const lesson = await requireLessonForViewer(lessonId, viewer);
 
-      const [students, grades, attendance, rules] = await Promise.all([
+      const [students, grades, attendance] = await Promise.all([
         journal.listStudentsForGroup(lesson.studyGroupId, lesson.lessonDate),
         journal.listGradesForLesson(lessonId),
         journal.listAttendanceForLesson(lessonId),
-        journal.listRulesForSubject(lesson.subjectId),
       ]);
+      const rules = await signRules.listSignRules();
+      const bySign = new Map(rules.map((rule) => [rule.sign, rule]));
 
       const period = await journal.findPeriodForDate(lesson.lessonDate);
       const attendanceByStudent = new Map(attendance.map((mark) => [mark.studentId, mark]));
 
       /**
-       * Знаки считаем за учебный период (ADR-009): с новым периодом накопление
-       * начинается заново, «4 плюса» не растягиваются на весь год.
+       * Накопление считаем по **ещё не съеденным** знакам за учебный период
+       * (ADR-009): съеденные уже оплатили оценки, и повторно они не считаются.
        */
       const result = [];
       for (const student of students) {
@@ -270,10 +305,11 @@ export function createJournalService(dependencies: JournalServiceDependencies): 
           subjectId: lesson.subjectId,
           ...(period === null ? {} : { from: period.startsOn, to: period.endsOn }),
         });
-        const counts = countSigns(signs as { sign: MarkSign | null }[]);
+        const pending = signs.filter((sign) => sign.consumedByGradeId === null);
+        const counts = countSigns(pending as { sign: MarkSign | null }[]);
 
-        const plusRule = rules.find((rule) => rule.sign === 'plus');
-        const dotRule = rules.find((rule) => rule.sign === 'dot');
+        const plusRule = bySign.get('plus');
+        const dotRule = bySign.get('dot');
 
         result.push({
           studentId: student.studentId,
@@ -295,29 +331,7 @@ export function createJournalService(dependencies: JournalServiceDependencies): 
         });
       }
 
-      // Сколько раз правило уже сработало у каждого ученика: показываем в интерфейсе,
-      // чтобы преподаватель видел, что оценка выдана именно правилом (ADR-010).
-      const appliedRules = [];
-      for (const rule of rules) {
-        let applied = 0;
-        for (const student of students) {
-          applied += await journal.countApplications({
-            ruleId: rule.id,
-            studentId: student.studentId,
-            subjectId: lesson.subjectId,
-            periodId: period?.id ?? null,
-          });
-        }
-
-        appliedRules.push({
-          sign: rule.sign,
-          threshold: rule.threshold,
-          reward: rule.reward,
-          applied,
-        });
-      }
-
-      return { lesson, students: result, rules: appliedRules };
+      return { lesson, students: result, signRules: rules };
     },
 
     async saveGrade(lessonId, input, options) {
@@ -669,82 +683,124 @@ export function createJournalService(dependencies: JournalServiceDependencies): 
       return { marked };
     },
 
-    async applyRules(filter, _options) {
-      if (filter.studyGroupId === undefined) {
-        throw new AppError('VALIDATION_FAILED', 'Пересчёт правил выполняется по группе');
-      }
-
-      const rules = await journal.listRules();
+    async applyRules(filter, options) {
+      const rules = (await signRules.listSignRules()).filter((rule) => rule.isActive);
       if (rules.length === 0) return { awarded: 0 };
 
+      const bySign = new Map(rules.map((rule) => [rule.sign, rule]));
+
       /**
-       * Считаем по группе: одним запросом собираем все знаки, дальше группируем по
-       * ученику и предмету. Счётчик — внутри учебного периода (ADR-009), иначе
-       * «4 плюса» тянулись бы через весь год.
+       * Берём только **свободные** знаки: съеденные уже оплатили оценки, и без этого
+       * повторный пересчёт выдал бы их второй раз (главный критерий приёмки этапа).
        */
-      const signs = await journal.listSignsForGroup({
+      const signs = await journal.listPendingSignsForGroup({
         studyGroupId: filter.studyGroupId,
         ...(filter.from === undefined ? {} : { from: filter.from }),
         ...(filter.to === undefined ? {} : { to: filter.to }),
       });
+      if (signs.length === 0) return { awarded: 0 };
 
-      const grouped = new Map<
-        string,
-        { studentId: string; subjectId: string; plus: number; dot: number }
-      >();
+      /**
+       * Счётчик — на ученика, предмет и **знак**: точки Пети и точки Васи разные, и
+       * плюсы с точками не складываются. Учебный период задаёт границы счёта
+       * (ADR-009), поэтому знаки группируем ещё и по периоду.
+       */
+      const counters = new Map<string, SignRecord[]>();
       for (const sign of signs) {
-        const key = `${sign.studentId}:${sign.subjectId}`;
-        const current = grouped.get(key) ?? {
-          studentId: sign.studentId,
-          subjectId: sign.subjectId,
-          plus: 0,
-          dot: 0,
-        };
-
-        if (sign.sign === 'plus') current.plus += 1;
-        else current.dot += 1;
-
-        grouped.set(key, current);
+        const period = await journal.findPeriodForDate(sign.lessonDate);
+        const key = `${sign.studentId}:${sign.subjectId}:${sign.sign}:${period?.id ?? 'none'}`;
+        const list = counters.get(key) ?? [];
+        list.push(sign);
+        counters.set(key, list);
       }
 
       let awarded = 0;
 
-      for (const group of grouped.values()) {
-        if (filter.subjectId !== undefined && group.subjectId !== filter.subjectId) continue;
+      for (const group of counters.values()) {
+        const first = group[0];
+        if (first === undefined) continue;
 
-        for (const rule of rules) {
-          if (rule.subjectId !== null && rule.subjectId !== group.subjectId) continue;
-          if (rule.categoryId !== null) continue; // правило категории применяется своим шагом
+        const rule = bySign.get(first.sign as 'plus' | 'dot');
+        if (rule === undefined) continue;
 
-          const period = await journal.findPeriodForDate(
-            filter.from === undefined ? new Date().toISOString().slice(0, 10) : filter.from,
-          );
+        // Порядок по датам задаёт выборка: «первый знак» — тот, что поставлен раньше.
+        const sorted = [...group].sort((left, right) =>
+          left.lessonDate === right.lessonDate
+            ? left.id.localeCompare(right.id)
+            : left.lessonDate.localeCompare(right.lessonDate),
+        );
 
-          const state = escalationState({ plus: group.plus, dot: group.dot }, ruleOf(rule));
-          const applied = await journal.countApplications({
-            ruleId: rule.id,
-            studentId: group.studentId,
-            subjectId: group.subjectId,
-            periodId: period?.id ?? null,
-          });
+        // Набираем ровно порог знаков на оценку; остаток остаётся в журнале.
+        for (let offset = 0; offset + rule.threshold <= sorted.length; offset += rule.threshold) {
+          const consumed = sorted.slice(offset, offset + rule.threshold);
+          const last = consumed[consumed.length - 1];
+          if (last === undefined) continue;
 
-          /**
-           * Создаём только недостающие срабатывания. Номер срабатывания входит в
-           * уникальный ключ, поэтому одновременный запуск не создаст дубль
-           * (ADR-010): повторный пересчёт не меняет ничего.
-           */
-          for (let number = applied + 1; number <= state.applications; number += 1) {
-            await journal.insertApplication({
-              ruleId: rule.id,
-              studentId: group.studentId,
-              subjectId: group.subjectId,
-              periodId: period?.id ?? null,
-              applicationNumber: number,
-              counterValue: group[rule.sign as 'plus' | 'dot'],
-              gradeEntryId: null,
-            });
+          await withTransaction(db, options.executor, async (tx) => {
+            /**
+             * Оценка — обычная: дата берётся от урока последнего знака, причина —
+             * причина знака. Дальше её можно править и удалять как любую другую.
+             */
+            const created = await journal.insertGrade(
+              {
+                lessonId: last.lessonId,
+                studentId: last.studentId,
+                value: SIGN_REWARDS[rule.sign],
+                sign: null,
+                categoryId: rule.categoryId,
+                comment: null,
+                createdBy: options.actor.userId,
+              },
+              tx,
+            );
+
+            await journal.markSignsConsumed(
+              {
+                signIds: consumed.map((sign) => sign.id),
+                gradeId: created.id,
+                actorId: options.actor.userId,
+              },
+              tx,
+            );
+
+            await journal.recordGradeRevision(
+              {
+                gradeEntryId: created.id,
+                action: 'create',
+                before: null,
+                after: SIGN_REWARDS[rule.sign],
+                reason: `Пересчёт знаков: ${String(rule.threshold)} ${signLabel(rule.sign)}`,
+                actorId: options.actor.userId,
+              },
+              tx,
+            );
+
+            /**
+             * В аудите — состав съеденных знаков: видно, из чего сложилась оценка.
+             * Без этого «откуда взялась пятёрка» не восстановить.
+             */
+            await audit.record(
+              {
+                action: 'create',
+                entityKind: 'grade_entry',
+                entityId: created.id,
+                after: {
+                  studentId: last.studentId,
+                  value: SIGN_REWARDS[rule.sign],
+                  date: last.lessonDate,
+                  rule: `${String(rule.threshold)} ${signLabel(rule.sign)}`,
+                  consumedSigns: consumed.map(
+                    (sign) =>
+                      `${signLabel(rule.sign)} от ${sign.lessonDate} за ${sign.categoryTitle ?? 'без причины'}`,
+                  ),
+                },
+              },
+              options.actor,
+              tx,
+            );
+
             awarded += 1;
-          }
+          });
         }
       }
 

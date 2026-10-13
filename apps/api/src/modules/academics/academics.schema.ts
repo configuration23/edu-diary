@@ -170,6 +170,9 @@ export const room = pgTable('room', {
  * зависит вес в аналитике («контрольная» весомее «ответа на уроке»). Названия и веса
  * администратор правит сам; коды «из коробки» синхронизируются при старте, но
  * изменённые пользователем не перезаписываются.
+ *
+ * Строка со `sign` — не причина для ручной отметки, а **накопительный знак**: по
+ * ней видно, сколько плюсов или точек нужно для оценки, и включён ли пересчёт.
  */
 export const gradeCategory = pgTable(
   'grade_category',
@@ -187,6 +190,17 @@ export const gradeCategory = pgTable(
      */
     weight: integer('weight').notNull().default(1),
     color: text('color'),
+    /**
+     * Накопительный знак: `plus` или `dot`. У обычных причин — `null`.
+     *
+     * Награда жёстко привязана к знаку: плюсы дают `5`, точки — `2`. Настраивается
+     * только порог — сколько знаков нужно на одну оценку.
+     */
+    sign: text('sign'),
+    /** Сколько знаков нужно на одну оценку. `null` — если это не знак. */
+    signThreshold: integer('sign_threshold'),
+    /** Включён ли пересчёт знаков в оценки. По умолчанию выключен: решает заведение. */
+    signRuleActive: boolean('sign_rule_active').notNull().default(false),
     isDefault: boolean('is_default').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

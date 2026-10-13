@@ -304,3 +304,134 @@ test('Этап 4: журнал урока — оценки с причинами
   // Ставить оценки ученик не может: кнопок выставления нет.
   await expect(page.getByRole('button', { name: '5', exact: true })).toHaveCount(0);
 });
+
+test('Этап 4, шаг 2: пересчёт плюсов в оценку', async ({ page }) => {
+  await page.goto('/');
+  await login(page, ADMIN.username, ADMIN.password);
+  await expect(page.getByRole('link', { name: 'Учебный год' })).toBeVisible();
+
+  // Данные: год, группа, предмет, ученик, назначение и два урока.
+  const year = await bodyOf<{ id: string }>(
+    await page.request.post('/api/academic-years', {
+      data: {
+        title: `Год для пересчёта ${RUN}`,
+        startsOn: shiftDays(-100),
+        endsOn: shiftDays(200),
+        isActive: true,
+      },
+    }),
+    'учебный год',
+  );
+
+  const group = await bodyOf<{ id: string }>(
+    await page.request.post('/api/groups', {
+      data: {
+        academicYearId: year.id,
+        name: `ЗН-${RUN}`,
+        startsOn: shiftDays(-60),
+        endsOn: shiftDays(150),
+      },
+    }),
+    'группа',
+  );
+
+  const subject = await bodyOf<{ id: string }>(
+    await page.request.post('/api/subjects', {
+      data: { name: `Знаки (E2E ${RUN})`, shortName: 'ЗН', kind: 'mandatory' },
+    }),
+    'предмет',
+  );
+
+  const teacher = await bodyOf<{ id: string }>(
+    await page.request.post('/api/users', {
+      data: {
+        username: `e2e-prepod-znaki-${RUN}`,
+        fullName: `Преподаватель Знаков ${RUN}`,
+        password: 'kolledzh-znaki-prepod-2025',
+        roles: ['teacher'],
+      },
+    }),
+    'преподаватель',
+  );
+
+  await bodyOf(
+    await page.request.post('/api/assignments', {
+      data: {
+        teacherUserId: teacher.id,
+        subjectId: subject.id,
+        studyGroupId: group.id,
+        startsOn: shiftDays(-50),
+      },
+    }),
+    'назначение',
+  );
+
+  const student = await bodyOf<{ id: string }>(
+    await page.request.post('/api/students', {
+      data: {
+        fullName: `Ученик Знаков ${RUN}`,
+        account: { username: `e2e-uchenik-znaki-${RUN}`, password: 'kolledzh-znaki-uchenik-2025' },
+      },
+    }),
+    'ученик',
+  );
+
+  await page.request.post(`/api/groups/${group.id}/enrollments`, {
+    data: { studentId: student.id, joinedOn: shiftDays(-50) },
+  });
+
+  const reasons = await bodyOf<{ items: Array<{ id: string; code: string }> }>(
+    await page.request.get('/api/grade-categories'),
+    'причины оценок',
+  );
+  const homeReason = reasons.items.find((item) => item.code === 'Д');
+  expect(homeReason).toBeDefined();
+
+  // Порог: два плюса дают оценку. Пересчёт включаем осознанно — по умолчанию он выключен.
+  const rule = await bodyOf<{ threshold: number }>(
+    await page.request.patch('/api/sign-rules/plus', { data: { threshold: 2, isActive: true } }),
+    'правило знаков',
+  );
+  expect(rule.threshold).toBe(2);
+
+  const lessonIds: string[] = [];
+  for (const [index, date] of [shiftDays(-3), shiftDays(-2)].entries()) {
+    const lesson = await bodyOf<{ id: string }>(
+      await page.request.post('/api/lessons', {
+        data: {
+          studyGroupId: group.id,
+          subjectId: subject.id,
+          teacherUserId: teacher.id,
+          lessonDate: date,
+          pairNumber: index + 1,
+          timeStart: '08:30',
+          timeEnd: '10:00',
+        },
+      }),
+      'урок',
+    );
+    lessonIds.push(lesson.id);
+  }
+
+  // Два плюса: по одному на уроке — вместе они набирают порог.
+  for (const lessonId of lessonIds) {
+    await bodyOf(
+      await page.request.post(`/api/lessons/${lessonId}/grades`, {
+        data: { studentId: student.id, sign: 'plus', categoryId: homeReason?.id ?? '' },
+      }),
+      'знак',
+    );
+  }
+
+  // Пересчёт из журнала урока: кнопка доступна администратору.
+  await page.goto(`/lessons/${lessonIds[1] as string}`);
+  await page.getByRole('button', { name: 'Пересчитать + / ·' }).click();
+  await expect(page.getByText('Выдано оценок: 1')).toBeVisible();
+
+  // Оценка «5» появилась на уроке последнего знака.
+  await expect(page.locator('ul.marks-row > li > button[aria-label^="5,"]').first()).toBeVisible();
+
+  // Повторный пересчёт ничего не меняет: знаки уже оплачены оценкой.
+  await page.getByRole('button', { name: 'Пересчитать + / ·' }).click();
+  await expect(page.getByText('Знаков на оценку не набралось')).toBeVisible();
+});

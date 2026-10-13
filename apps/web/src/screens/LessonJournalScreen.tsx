@@ -14,6 +14,7 @@ import { Alert, Badge, Button, Card, EmptyState, Field, TextInput } from '../com
 import { SubjectDot } from '../lib/appearance';
 import { errorMessage } from '../lib/api-client';
 import {
+  useApplySignRules,
   useDeleteJournalGrade,
   useGradeCategoriesList,
   useGradeRevisions,
@@ -284,6 +285,7 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
   const appearance = useAppearanceSettings();
   const saveGrade = useSaveGrade(lessonId ?? '');
   const saveAttendance = useSaveAttendance(lessonId ?? '');
+  const applySignRules = useApplySignRules(lessonId);
 
   /** Для кого выбираем причину отметки: ученик и то, что ставим. */
   const [pending, setPending] = useState<{ studentId: string; mark: PendingMark } | null>(null);
@@ -327,8 +329,16 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
     );
   }
 
-  const { lesson, students, rules } = journal.data;
+  const { lesson, students, signRules } = journal.data;
   const cancelled = lesson.status === 'cancelled';
+  /** Включённые знаки: по ним пересчёт действительно выдаёт оценки. */
+  const activeSignRules = signRules.filter((rule) => rule.isActive);
+  /**
+   * Причины знаков: по ним видно, что оценка получена пересчётом «плюсы и точки».
+   * Отдельного признака у оценки нет, потому что оценка — обычная: её правят и
+   * удаляют как любую другую.
+   */
+  const signReasonIds = new Set(signRules.map((rule) => rule.categoryId));
 
   /** Постановка отметки: цифра или знак, всегда с причиной. */
   const putMark = async (
@@ -393,16 +403,46 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
           {lesson.topic !== null && <span className="text-slate-500">· тема: {lesson.topic}</span>}
         </div>
 
-        {rules.length > 0 && (
+        {signRules.length > 0 && (
           <p className="mt-2 text-sm text-slate-500">
-            Правило накопления знаков:{' '}
-            {rules
+            Оценка за знаки:{' '}
+            {signRules
               .map(
                 (rule) =>
-                  `${rule.threshold} ${rule.sign === 'plus' ? 'плюсов' : 'точек'} → ${rule.reward}`,
+                  `${String(rule.threshold)} ${rule.sign === 'plus' ? 'плюсов' : 'точек'} → ${rule.sign === 'plus' ? '5' : '2'}${
+                    rule.isActive ? '' : ' (выключено)'
+                  }`,
               )
               .join('; ')}
+            . Пересчёт запускается кнопкой и заменяет накопленные знаки оценкой.
           </p>
+        )}
+
+        {canWrite && !cancelled && activeSignRules.length > 0 && (
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <Button
+              tone="secondary"
+              type="button"
+              disabled={applySignRules.isPending}
+              onClick={() =>
+                void applySignRules
+                  .mutateAsync({ studyGroupId: lesson.studyGroupId })
+                  .catch(() => undefined)
+              }
+            >
+              Пересчитать + / ·
+            </Button>
+            {applySignRules.isSuccess && (
+              <span className="text-sm text-slate-600">
+                {applySignRules.data.awarded === 0
+                  ? 'Знаков на оценку не набралось'
+                  : `Выдано оценок: ${String(applySignRules.data.awarded)}`}
+              </span>
+            )}
+            {applySignRules.isError && (
+              <Alert tone="error">{errorMessage(applySignRules.error)}</Alert>
+            )}
+          </div>
         )}
 
         {cancelled && (
@@ -489,6 +529,16 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
                                       {grade.categoryCode}
                                     </sup>
                                   )}
+                                  {/* Оценка за накопленные знаки: так видно её происхождение. */}
+                                  {grade.categoryId !== null &&
+                                    signReasonIds.has(grade.categoryId) && (
+                                      <sup
+                                        className="ml-1 text-xs text-amber-600"
+                                        title="Оценка за накопленные знаки"
+                                      >
+                                        ★
+                                      </sup>
+                                    )}
                                 </button>
                               </li>
                             ))}
@@ -720,8 +770,15 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
 
                       <td className="px-3 py-2 text-xs text-slate-500">
                         {student.signs.plus} плюсов · {student.signs.dot} точек
-                        {rules.length > 0 && student.signs.plusRemaining > 0 && (
-                          <span className="block">до оценки: {student.signs.plusRemaining}</span>
+                        {student.signs.plusRemaining > 0 && (
+                          <span className="block">
+                            до оценки: {student.signs.plusRemaining} плюс(ов)
+                          </span>
+                        )}
+                        {student.signs.dotRemaining > 0 && (
+                          <span className="block">
+                            до оценки: {student.signs.dotRemaining} точ(ек)
+                          </span>
                         )}
                       </td>
 

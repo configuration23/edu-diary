@@ -2,14 +2,7 @@ import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 
 import type { Database, Executor } from '../../shared/db/client';
 import { gradeCategory } from '../academics';
-import {
-  attendanceEntry,
-  attendanceRevision,
-  gradeEntry,
-  gradeRevision,
-  gradeRule,
-  gradeRuleApplication,
-} from './journal.schema';
+import { attendanceEntry, attendanceRevision, gradeEntry, gradeRevision } from './journal.schema';
 
 /**
  * Репозиторий журнала: доступ к оценкам, посещаемости, правилам и истории.
@@ -52,14 +45,19 @@ export interface RevisionRecord {
   createdAt: Date;
 }
 
-export interface RuleRecord {
+/** Накопленный знак: пересчёт съедает знаки и помечает их оплатившей оценкой. */
+export interface SignRecord {
   id: string;
+  studentId: string;
+  subjectId: string;
   sign: string;
-  threshold: number;
-  reward: string;
-  categoryId: string | null;
-  subjectId: string | null;
-  isActive: boolean;
+  /** Дата урока, на котором поставлен знак: по ней идёт порядок и дата оценки. */
+  lessonDate: string;
+  lessonId: string;
+  /** Причина знака: она попадает в аудит при съедании. */
+  categoryTitle: string | null;
+  /** Оценка, которая уже оплатила этот знак. `null` — знак свободен. */
+  consumedByGradeId: string | null;
 }
 
 export interface JournalRepository {
@@ -73,11 +71,11 @@ export interface JournalRepository {
     onDate: string,
     executor?: Executor,
   ): Promise<{ studentId: string; fullName: string }[]>;
-  /** Знаки ученика по предмету за период: накопление для правила. */
+  /** Накопленные знаки ученика по предмету за период: накопление для правила. */
   listSignsForStudentSubject(
     filter: { studentId: string; subjectId: string; from?: string; to?: string },
     executor?: Executor,
-  ): Promise<{ sign: string | null }[]>;
+  ): Promise<SignRecord[]>;
   /**
    * Все знаки группы за период: вход для пересчёта правил.
    *
@@ -87,7 +85,7 @@ export interface JournalRepository {
   listSignsForGroup(
     filter: { studyGroupId: string; from?: string; to?: string },
     executor?: Executor,
-  ): Promise<{ studentId: string; subjectId: string; sign: string }[]>;
+  ): Promise<SignRecord[]>;
   /** Числовые оценки ученика по предмету за период: для аналитики. */
   listGradesForStudentSubject(
     filter: { studentId: string; subjectId: string; from?: string; to?: string },
@@ -193,26 +191,29 @@ export interface JournalRepository {
     executor?: Executor,
   ): Promise<void>;
 
-  /** Правила, действующие для предмета: общие и уточнённые для него. */
-  listRulesForSubject(subjectId: string, executor?: Executor): Promise<RuleRecord[]>;
-  listRules(executor?: Executor): Promise<RuleRecord[]>;
-  /** Сколько раз правило уже сработало у ученика по предмету за период. */
-  countApplications(
-    filter: { ruleId: string; studentId: string; subjectId: string; periodId: string | null },
+  /**
+   * Накопленные знаки ученика по предмету: из них собирается счётчик пересчёта.
+   *
+   * Возвращаем и идентификаторы: съеденный знак нужно пометить оплатившей оценкой.
+   */
+  listSignsForStudentSubject(
+    filter: { studentId: string; subjectId: string; from?: string; to?: string },
+    executor?: Executor,
+  ): Promise<SignRecord[]>;
+  listSignsForGroup(
+    filter: { studyGroupId: string; from?: string; to?: string },
+    executor?: Executor,
+  ): Promise<SignRecord[]>;
+  /** Ещё не съеденные знаки учеников группы: материал для пересчёта по правилам. */
+  listPendingSignsForGroup(
+    filter: { studyGroupId: string; from?: string; to?: string },
+    executor?: Executor,
+  ): Promise<SignRecord[]>;
+  /** Пометить знаки съеденными: их оплатила оценка `gradeId`. */
+  markSignsConsumed(
+    input: { signIds: string[]; gradeId: string; actorId: string | null },
     executor?: Executor,
   ): Promise<number>;
-  insertApplication(
-    input: {
-      ruleId: string;
-      studentId: string;
-      subjectId: string;
-      periodId: string | null;
-      applicationNumber: number;
-      counterValue: number;
-      gradeEntryId: string | null;
-    },
-    executor?: Executor,
-  ): Promise<void>;
   /** Учебный период, в который попадает дата: границы счётчика знаков (ADR-009). */
   findPeriodForDate(
     date: string,
@@ -241,6 +242,85 @@ export function createJournalRepository(db: Database): JournalRepository {
       .select(GRADE_SELECTION)
       .from(gradeEntry)
       .leftJoin(gradeCategory, eq(gradeCategory.id, gradeEntry.categoryId));
+
+  /**
+   * Выборка накопленных знаков.
+   *
+   * Порядок — по дате урока, затем по паре: пересчёт съедает знаки по порядку, и
+   * «первый знак» должен быть тем, что поставлен раньше. Ученик и предмет задают
+   * счётчик (знаки Пети и знаки Васи — разные), группа нужна пересчёту целиком.
+   *
+   * `pendingOnly` отсекает уже съеденные знаки: без этого повторный пересчёт
+   * посчитал бы их снова.
+   */
+  const selectSigns = async (
+    executor: Executor,
+    filter: {
+      studentId?: string;
+      subjectId?: string;
+      studyGroupId?: string;
+      from?: string;
+      to?: string;
+    },
+    pendingOnly = false,
+  ): Promise<SignRecord[]> => {
+    const rows = await executor.execute(sql`
+      select
+        g.id,
+        g.student_id,
+        l.subject_id,
+        g.sign,
+        l.id as lesson_id,
+        l.lesson_date,
+        c.title as category_title,
+        g.consumed_by_grade_id
+      from grade_entry g
+      join lesson l on l.id = g.lesson_id
+      left join grade_category c on c.id = g.category_id
+      ${
+        filter.studyGroupId === undefined
+          ? sql``
+          : sql`join student_enrollment e on e.student_id = g.student_id
+                and e.study_group_id = l.study_group_id
+                and e.joined_on <= l.lesson_date
+                and (e.left_on is null or e.left_on >= l.lesson_date)`
+      }
+      where g.deleted_at is null
+        and g.sign is not null
+        ${pendingOnly ? sql`and g.consumed_by_grade_id is null` : sql``}
+        ${filter.studentId === undefined ? sql`` : sql`and g.student_id = ${filter.studentId}`}
+        ${filter.subjectId === undefined ? sql`` : sql`and l.subject_id = ${filter.subjectId}`}
+        ${filter.studyGroupId === undefined ? sql`` : sql`and l.study_group_id = ${filter.studyGroupId}`}
+        ${filter.from === undefined ? sql`` : sql`and l.lesson_date >= ${filter.from}`}
+        ${filter.to === undefined ? sql`` : sql`and l.lesson_date <= ${filter.to}`}
+      order by l.lesson_date, l.pair_number, g.created_at
+    `);
+
+    return (
+      rows as unknown as {
+        id: string;
+        student_id: string;
+        subject_id: string;
+        sign: string;
+        lesson_id: string;
+        lesson_date: string | Date;
+        category_title: string | null;
+        consumed_by_grade_id: string | null;
+      }[]
+    ).map((row) => ({
+      id: row.id,
+      studentId: row.student_id,
+      subjectId: row.subject_id,
+      sign: row.sign,
+      lessonId: row.lesson_id,
+      lessonDate:
+        row.lesson_date instanceof Date
+          ? row.lesson_date.toISOString().slice(0, 10)
+          : String(row.lesson_date).slice(0, 10),
+      categoryTitle: row.category_title,
+      consumedByGradeId: row.consumed_by_grade_id,
+    }));
+  };
 
   return {
     async listGradesForLesson(lessonId, executor: Executor = db.orm) {
@@ -287,43 +367,52 @@ export function createJournalRepository(db: Database): JournalRepository {
     },
 
     async listSignsForStudentSubject(filter, executor: Executor = db.orm) {
-      const conditions = [
-        eq(gradeEntry.studentId, filter.studentId),
-        isNull(gradeEntry.deletedAt),
-        sql`${gradeEntry.sign} is not null`,
-        sql`${gradeEntry.lessonId} in (select id from lesson where subject_id = ${filter.subjectId}${
-          filter.from === undefined ? sql`` : sql` and lesson_date >= ${filter.from}`
-        }${filter.to === undefined ? sql`` : sql` and lesson_date <= ${filter.to}`})`,
-      ];
+      const rows = await selectSigns(executor, {
+        studentId: filter.studentId,
+        subjectId: filter.subjectId,
+        ...(filter.from === undefined ? {} : { from: filter.from }),
+        ...(filter.to === undefined ? {} : { to: filter.to }),
+      });
 
-      return executor
-        .select({ sign: gradeEntry.sign })
-        .from(gradeEntry)
-        .where(and(...conditions));
+      return rows;
     },
 
     async listSignsForGroup(filter, executor: Executor = db.orm) {
-      const rows = await executor.execute(sql`
-        select g.student_id, l.subject_id, g.sign
-        from grade_entry g
-        join lesson l on l.id = g.lesson_id
-        join student_enrollment e on e.student_id = g.student_id and e.study_group_id = l.study_group_id
-        where g.deleted_at is null
-          and g.sign is not null
-          and l.study_group_id = ${filter.studyGroupId}
-          and e.joined_on <= l.lesson_date
-          and (e.left_on is null or e.left_on >= l.lesson_date)
-          ${filter.from === undefined ? sql`` : sql`and l.lesson_date >= ${filter.from}`}
-          ${filter.to === undefined ? sql`` : sql`and l.lesson_date <= ${filter.to}`}
-      `);
+      const rows = await selectSigns(executor, {
+        studyGroupId: filter.studyGroupId,
+        ...(filter.from === undefined ? {} : { from: filter.from }),
+        ...(filter.to === undefined ? {} : { to: filter.to }),
+      });
 
-      return (rows as unknown as { student_id: string; subject_id: string; sign: string }[]).map(
-        (row) => ({
-          studentId: row.student_id,
-          subjectId: row.subject_id,
-          sign: row.sign,
-        }),
+      return rows;
+    },
+
+    async listPendingSignsForGroup(filter, executor: Executor = db.orm) {
+      return selectSigns(
+        executor,
+        {
+          studyGroupId: filter.studyGroupId,
+          ...(filter.from === undefined ? {} : { from: filter.from }),
+          ...(filter.to === undefined ? {} : { to: filter.to }),
+        },
+        true,
       );
+    },
+
+    async markSignsConsumed(input, executor: Executor = db.orm) {
+      if (input.signIds.length === 0) return 0;
+
+      const updated = await executor
+        .update(gradeEntry)
+        .set({
+          consumedByGradeId: input.gradeId,
+          consumedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(inArray(gradeEntry.id, input.signIds))
+        .returning({ id: gradeEntry.id });
+
+      return updated.length;
     },
 
     async listGradesForStudentSubject(filter, executor: Executor = db.orm) {
@@ -569,47 +658,6 @@ export function createJournalRepository(db: Database): JournalRepository {
         reason: input.reason,
         actorId: input.actorId,
       });
-    },
-
-    async listRulesForSubject(subjectId, executor: Executor = db.orm) {
-      return executor
-        .select()
-        .from(gradeRule)
-        .where(
-          and(
-            eq(gradeRule.isActive, true),
-            sql`(${gradeRule.subjectId} is null or ${gradeRule.subjectId} = ${subjectId})`,
-          ),
-        )
-        .orderBy(asc(gradeRule.sign));
-    },
-
-    async listRules(executor: Executor = db.orm) {
-      return executor.select().from(gradeRule).orderBy(asc(gradeRule.sign));
-    },
-
-    async countApplications(filter, executor: Executor = db.orm) {
-      const rows = await executor
-        .select({ count: sql<number>`count(*)::int` })
-        .from(gradeRuleApplication)
-        .where(
-          and(
-            eq(gradeRuleApplication.ruleId, filter.ruleId),
-            eq(gradeRuleApplication.studentId, filter.studentId),
-            eq(gradeRuleApplication.subjectId, filter.subjectId),
-            filter.periodId === null
-              ? isNull(gradeRuleApplication.periodId)
-              : eq(gradeRuleApplication.periodId, filter.periodId),
-          ),
-        );
-
-      return rows[0]?.count ?? 0;
-    },
-
-    async insertApplication(input, executor: Executor = db.orm) {
-      // `onConflictDoNothing` — вторая половина идемпотентности: даже при
-      // одновременных пересчётах вторая запись не появится (ADR-010).
-      await executor.insert(gradeRuleApplication).values(input).onConflictDoNothing();
     },
 
     async findPeriodForDate(date, executor: Executor = db.orm) {

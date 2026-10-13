@@ -14,6 +14,8 @@ import {
   useDeleteRoom,
   useDeleteSubject,
   useGradeCategories,
+  useSignRules,
+  useUpdateSignRule,
   useRooms,
   useSaveBell,
   useSubjects,
@@ -423,8 +425,8 @@ function CategoriesCard() {
 
   return (
     <Card
-      title="Категории оценок"
-      description="Вес учитывается в среднем балле: контрольная весит больше ответа у доски."
+      title="Причины оценок"
+      description="Причина обязательна при выставлении оценки и задаёт её вес в среднем балле."
     >
       <form
         className="flex flex-col gap-3"
@@ -441,10 +443,10 @@ function CategoriesCard() {
         }}
       >
         <div className="grid gap-3 sm:grid-cols-4">
-          <Field label="Код" hint="Латиницей: test, project">
+          <Field label="Код" hint="До двух символов: Д, К, Пр">
             <TextInput
               required
-              pattern="[a-z][a-z0-9_]*"
+              maxLength={2}
               value={code}
               onChange={(event) => setCode(event.target.value)}
             />
@@ -452,7 +454,7 @@ function CategoriesCard() {
           <Field label="Название">
             <TextInput required value={title} onChange={(event) => setTitle(event.target.value)} />
           </Field>
-          <Field label="Вес" hint="1–10">
+          <Field label="Вес" hint="1–5">
             <TextInput
               required
               inputMode="numeric"
@@ -462,7 +464,7 @@ function CategoriesCard() {
           </Field>
           <div className="flex items-end pb-2">
             <Button type="submit" disabled={create.isPending}>
-              Добавить категорию
+              Добавить причину
             </Button>
           </div>
         </div>
@@ -472,7 +474,7 @@ function CategoriesCard() {
 
       <div className="mt-4">
         {categories.data !== undefined && categories.data.items.length === 0 && (
-          <EmptyState>Категорий пока нет.</EmptyState>
+          <EmptyState>Причин пока нет.</EmptyState>
         )}
 
         {categories.data !== undefined && categories.data.items.length > 0 && (
@@ -497,7 +499,7 @@ function CategoriesCard() {
                     >
                       Править
                     </Button>
-                    {/* Категорию по умолчанию удалять нельзя: сервер объяснит,
+                    {/* Причину по умолчанию удалять нельзя: сервер объяснит,
                         что она нужна как запасной вариант. */}
                     <Button
                       tone="ghost"
@@ -539,7 +541,7 @@ function CategoriesCard() {
                 onChange={(event) => setEditTitle(event.target.value)}
               />
             </Field>
-            <Field label="Вес" hint="1–10">
+            <Field label="Вес" hint="1–5">
               <TextInput
                 required
                 inputMode="numeric"
@@ -568,6 +570,80 @@ function CategoriesCard() {
  * При составлении расписания время подставляется по номеру пары, но остаётся
  * правимым — в отдельных случаях пара идёт в другое время.
  */
+/**
+ * Накопительные знаки: сколько плюсов и точек даёт оценку.
+ *
+ * Награда не настраивается: плюсы всегда дают «5», точки «2» — это правило
+ * предметной области. Заведение решает, сколько знаков нужно и включён ли
+ * пересчёт: пока выключено, знаки копятся, но оценки за них не появляются.
+ */
+function SignRulesCard() {
+  const rules = useSignRules();
+  const update = useUpdateSignRule();
+
+  return (
+    <Card
+      title="Знаки: сколько нужно для оценки"
+      description="Плюсы дают «5», точки дают «2». Пересчёт запускается вручную из журнала урока."
+    >
+      {rules.isLoading && <EmptyState>Загружаем…</EmptyState>}
+      {rules.isError && <Alert tone="error">{errorMessage(rules.error)}</Alert>}
+
+      {rules.data !== undefined && (
+        <Table head={['Знак', 'Причина оценки', 'Сколько знаков', 'Пересчёт', '']}>
+          {rules.data.items.map((rule) => (
+            <tr key={rule.id} className="border-b border-slate-100">
+              <td className="px-3 py-2 text-lg font-semibold">
+                {rule.sign === 'plus' ? '+' : '·'}
+              </td>
+              <td className="px-3 py-2">
+                {rule.categoryTitle}
+                <span className="block text-xs text-slate-500">
+                  выдаётся оценка «{rule.sign === 'plus' ? '5' : '2'}»
+                </span>
+              </td>
+              <td className="px-3 py-2">
+                <TextInput
+                  type="number"
+                  min={1}
+                  max={20}
+                  defaultValue={String(rule.threshold)}
+                  aria-label={`Сколько знаков для оценки (${rule.sign === 'plus' ? 'плюсы' : 'точки'})`}
+                  onBlur={(event) => {
+                    const threshold = Number(event.target.value);
+                    if (!Number.isInteger(threshold) || threshold < 1 || threshold > 20) return;
+                    if (threshold === rule.threshold) return;
+
+                    void update.mutateAsync({ sign: rule.sign, threshold }).catch(() => undefined);
+                  }}
+                />
+              </td>
+              <td className="px-3 py-2">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={rule.isActive}
+                    aria-label={`Пересчитывать ${rule.sign === 'plus' ? 'плюсы' : 'точки'} в оценки`}
+                    onChange={(event) =>
+                      void update
+                        .mutateAsync({ sign: rule.sign, isActive: event.target.checked })
+                        .catch(() => undefined)
+                    }
+                  />
+                  {rule.isActive ? 'включён' : 'выключен'}
+                </label>
+              </td>
+              <td className="px-3 py-2 text-xs text-slate-500">порог меняется при уходе из поля</td>
+            </tr>
+          ))}
+        </Table>
+      )}
+
+      {update.isError && <Alert tone="error">{errorMessage(update.error)}</Alert>}
+    </Card>
+  );
+}
+
 function BellsCard() {
   const bells = useBells();
   const save = useSaveBell();
@@ -708,6 +784,7 @@ export function CatalogsScreen() {
       <SubjectsCard />
       <RoomsCard />
       <CategoriesCard />
+      <SignRulesCard />
       <BellsCard />
     </div>
   );

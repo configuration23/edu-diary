@@ -1,4 +1,4 @@
-import { DEFAULT_GRADE_CATEGORIES } from '@edu-diary/contracts';
+import { DEFAULT_GRADE_CATEGORIES, SIGN_TITLES } from '@edu-diary/contracts';
 import {
   compareISODates,
   describeRange,
@@ -20,6 +20,7 @@ import type {
   Dependencies,
   EnrollmentRecord,
   GradeCategoryRecord,
+  SignRuleRecord,
   PeriodRecord,
   RoomRecord,
   StudentListFilters,
@@ -29,6 +30,9 @@ import type {
 } from './academics.repository';
 
 /** Ученики, учебные годы и периоды, группы, зачисления и справочники. */
+
+/** Порог знаков по умолчанию: пять знаков на одну оценку. */
+const DEFAULT_SIGN_THRESHOLD = 5;
 
 export interface MutationOptions {
   actor: AuditActor;
@@ -191,6 +195,10 @@ export interface CreateGradeCategoryInput {
   weight: number;
   color?: string | null | undefined;
   isDefault: boolean;
+  /** Накопительный знак: `plus` или `dot`. У обычных причин не задаётся. */
+  sign?: string | undefined;
+  signThreshold?: number | undefined;
+  signRuleActive?: boolean | undefined;
 }
 
 export interface UpdateGradeCategoryInput {
@@ -300,6 +308,13 @@ export interface AcademicsService {
    * существующие не перезаписываются — названия и веса правит заведение.
    */
   syncGradeCategories(): Promise<{ created: number; total: number }>;
+  /** Накопительные знаки: пороги плюсов и точек. */
+  listSignRules(): Promise<SignRuleRecord[]>;
+  updateSignRule(
+    sign: string,
+    input: { threshold?: number | undefined; isActive?: boolean | undefined },
+    options: MutationOptions,
+  ): Promise<SignRuleRecord>;
   createGradeCategory(
     input: CreateGradeCategoryInput,
     options: MutationOptions,
@@ -1568,8 +1583,67 @@ export function createAcademicsService(
         created += 1;
       }
 
+      /**
+       * Накопительные знаки: по строке на плюсы и точки. Порог у них обязателен, иначе
+       * пересчёт не знает, сколько знаков даёт оценку. Строку, заведённую ранее без
+       * порога, дополняем значением по умолчанию.
+       */
+      for (const sign of ['plus', 'dot'] as const) {
+        const existing = await academics.findSignRule(sign);
+        if (existing !== null) continue;
+
+        const byCode = await academics.findGradeCategoryByCode(sign === 'plus' ? '+' : '·');
+        if (byCode !== null) {
+          await academics.updateSignRule(sign, { threshold: DEFAULT_SIGN_THRESHOLD });
+          created += 1;
+          continue;
+        }
+
+        await academics.insertGradeCategory({
+          code: sign === 'plus' ? '+' : '·',
+          title: SIGN_TITLES[sign],
+          weight: 1,
+          color: null,
+          isDefault: true,
+          sign,
+          signThreshold: DEFAULT_SIGN_THRESHOLD,
+          signRuleActive: false,
+        });
+        created += 1;
+      }
+
       const all = await academics.listGradeCategories();
       return { created, total: all.length };
+    },
+
+    listSignRules() {
+      return academics.listSignRules();
+    },
+
+    async updateSignRule(sign, input, options) {
+      const current = await academics.findSignRule(sign);
+      if (current === null) {
+        throw new AppError('NOT_FOUND', 'Накопительный знак не найден');
+      }
+
+      return withTransaction(db, options.executor, async (tx) => {
+        const updated = await academics.updateSignRule(sign, input, tx);
+        if (updated === null) throw new AppError('NOT_FOUND', 'Накопительный знак не найден');
+
+        await audit.record(
+          {
+            action: 'update',
+            entityKind: 'grade_category',
+            entityId: updated.id,
+            before: { threshold: current.threshold, isActive: current.isActive },
+            after: { threshold: updated.threshold, isActive: updated.isActive },
+          },
+          options.actor,
+          tx,
+        );
+
+        return updated;
+      });
     },
 
     async createGradeCategory(input, options): Promise<GradeCategoryRecord> {

@@ -291,6 +291,47 @@ export const updateGradeCategoryRequestSchema = z
 export type UpdateGradeCategoryRequestDto = z.infer<typeof updateGradeCategoryRequestSchema>;
 
 /**
+ * Накопительный знак: сколько плюсов или точек даёт оценку.
+ *
+ * Награда не настраивается: плюсы всегда дают `5`, точки всегда `2` — это правило
+ * предметной области. Заведение решает, сколько знаков нужно и включён ли пересчёт.
+ *
+ * Знак — не причина для ручной отметки, а настройка: она хранится рядом с причинами,
+ * поэтому в интерфейсе и живёт в том же справочнике.
+ */
+export const signRuleSchema = z.object({
+  id: uuidSchema,
+  sign: z.enum(['plus', 'dot']),
+  /** Причина, которой записывается выданная оценка. */
+  categoryId: uuidSchema,
+  categoryTitle: z.string(),
+  /** Сколько знаков нужно на одну оценку. */
+  threshold: z.number().int().min(1).max(20),
+  /** Включён ли пересчёт знаков в оценки. */
+  isActive: z.boolean(),
+});
+export type SignRuleDto = z.infer<typeof signRuleSchema>;
+
+export const listSignRulesResponseSchema = z.object({
+  items: z.array(signRuleSchema),
+});
+export type ListSignRulesResponseDto = z.infer<typeof listSignRulesResponseSchema>;
+
+export const updateSignRuleRequestSchema = z
+  .object({
+    threshold: z.number().int().min(1).max(20).optional(),
+    isActive: z.boolean().optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, { message: 'Нет полей для изменения' });
+export type UpdateSignRuleRequestDto = z.infer<typeof updateSignRuleRequestSchema>;
+
+/** Подписи знаков: «+» и «·» — как в журнале. */
+export const SIGN_TITLES: Record<'plus' | 'dot', string> = {
+  plus: 'Плюсы',
+  dot: 'Точки',
+};
+
+/**
  * Причины оценок «из коробки»: код, название и вес.
  *
  * Заводятся при старте приложения, как каталог прав: на новой установке они есть
