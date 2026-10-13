@@ -177,11 +177,15 @@ export interface EscalationRule {
 }
 
 /**
- * Сколько раз сработало правило при текущем накоплении и сколько знаков «съедено».
+ * Сколько раз сработает правило при текущем накоплении и сколько знаков осталось.
  *
  * Считаем не «сработало ли», а **сколько раз**: за период плюсы могут накопить две
- * оценки, если порог пройден дважды. Возвращаем и остаток — он понадобится, чтобы
- * показать ученику «до оценки осталось 2 плюса».
+ * оценки, если порог пройден дважды.
+ *
+ * `remaining` — сколько знаков **осталось до следующей** оценки, а не «сколько уже
+ * накоплено сверх порога». Это разные числа, и путать их нельзя: при пороге 3 и двух
+ * плюсах до оценки остаётся один плюс, а не два. Когда порог набран ровно, остаток
+ * равен нулю: оценку можно выдать хоть сейчас.
  *
  * Функция чистая: одинаковое накопление всегда даёт одинаковый результат. Именно
  * на ней держится идемпотентность пересчёта (ADR-010) — повторный расчёт по тем же
@@ -191,13 +195,14 @@ export function escalationState(
   counts: SignCounts,
   rule: EscalationRule,
 ): { applications: number; remaining: number } {
-  if (rule.threshold <= 0) return { applications: 0, remaining: counts[rule.sign] };
-
   const total = counts[rule.sign];
-  return {
-    applications: Math.floor(total / rule.threshold),
-    remaining: total % rule.threshold,
-  };
+  if (rule.threshold <= 0) return { applications: 0, remaining: rule.threshold };
+
+  const applications = Math.floor(total / rule.threshold);
+  const extra = total % rule.threshold;
+  const remaining = extra === 0 ? 0 : rule.threshold - extra;
+
+  return { applications, remaining };
 }
 
 /**

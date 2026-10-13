@@ -274,6 +274,7 @@ export function registerJournalRoutes(
       const result = await journal.applyRules(
         {
           studyGroupId: body.studyGroupId,
+          ...(body.subjectId === undefined ? {} : { subjectId: body.subjectId }),
           ...(body.from === undefined ? {} : { from: body.from }),
           ...(body.to === undefined ? {} : { to: body.to }),
         },

@@ -132,12 +132,20 @@ describeWithDatabase('пересчёт знаков в оценки', () => {
   const gradesOf = (journal: Json): Json[] =>
     ((journal.students as Json[])[0]?.grades as Json[]) ?? [];
 
+  /**
+   * Пересчёт по группе.
+   *
+   * Пересчёт в жизни идёт по всей группе, но в тестах это означает, что в него
+   * попадают свободные знаки других сценариев: тогда «выдано 1» превращается в «2»
+   * из-за чужого знака. Поэтому по умолчанию ограничиваем пересчёт текущим
+   * предметом сценария, а полноту по группе проверяем отдельно.
+   */
   const apply = async (): Promise<Json> => {
     const response = await testApp.app.inject({
       method: 'POST',
       url: '/api/journal/apply-sign-rules',
       headers: auth(),
-      payload: { studyGroupId: groupId },
+      payload: { studyGroupId: groupId, subjectId },
     });
 
     expect(response.statusCode, response.body).toBe(200);
@@ -316,6 +324,38 @@ describeWithDatabase('пересчёт знаков в оценки', () => {
     expect(enabled.statusCode, enabled.body).toBe(200);
     expect((enabled.json() as Json).threshold).toBe(3);
     expect((enabled.json() as Json).isActive).toBe(true);
+  });
+
+  it('журнал показывает, сколько знаков осталось до оценки', async () => {
+    /**
+     * Ошибка из проверки владельцем: при пороге 3 и двух плюсах журнал писал
+     * «до оценки: 2» — то есть сколько уже выставлено, а не сколько осталось.
+     */
+    subjectId = await freshSubject();
+    await enableSign('plus', 3);
+
+    /**
+     * Даты — в своей полосе, не пересекающейся с другими сценариями: занятия разных
+     * проверок не должны стоять на одних и тех же числах.
+     */
+    const dates = [shiftDays(-45), shiftDays(-44), shiftDays(-43)];
+    const lessons = await createLessons(dates);
+
+    const remainingOn = async (date: string): Promise<number> => {
+      const journal = await journalOf(lessonAt(lessons, date));
+      const signs = (journal.students as Json[])[0]?.signs as Json;
+      return signs.plusRemaining as number;
+    };
+
+    await putSign(lessonAt(lessons, dates[0] as string), 'plus', homeReasonId);
+    expect(await remainingOn(dates[0] as string)).toBe(2);
+
+    await putSign(lessonAt(lessons, dates[1] as string), 'plus', homeReasonId);
+    expect(await remainingOn(dates[1] as string)).toBe(1);
+
+    // Порог набран: до оценки ничего не осталось, её можно выдать.
+    await putSign(lessonAt(lessons, dates[2] as string), 'plus', homeReasonId);
+    expect(await remainingOn(dates[2] as string)).toBe(0);
   });
 
   it('пример владельца: три плюса дают «5» датой последнего знака, четвёртый остаётся', async () => {

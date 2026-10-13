@@ -323,6 +323,10 @@ test('Этап 4, шаг 2: пересчёт плюсов в оценку', asyn
     'учебный год',
   );
 
+  /**
+   * Своя группа: пересчёт идёт по группе, и общая группа с первым сценарием
+   * смешала бы свободные знаки двух тестов.
+   */
   const group = await bodyOf<{ id: string }>(
     await page.request.post('/api/groups', {
       data: {
@@ -387,15 +391,17 @@ test('Этап 4, шаг 2: пересчёт плюсов в оценку', asyn
   const homeReason = reasons.items.find((item) => item.code === 'Д');
   expect(homeReason).toBeDefined();
 
-  // Порог: два плюса дают оценку. Пересчёт включаем осознанно — по умолчанию он выключен.
+  // Порог: три плюса дают оценку. Пересчёт включаем осознанно — по умолчанию выключен.
   const rule = await bodyOf<{ threshold: number }>(
-    await page.request.patch('/api/sign-rules/plus', { data: { threshold: 2, isActive: true } }),
+    await page.request.patch('/api/sign-rules/plus', { data: { threshold: 3, isActive: true } }),
     'правило знаков',
   );
-  expect(rule.threshold).toBe(2);
+  expect(rule.threshold).toBe(3);
 
+  // Три урока: знаков нужно ровно на порог.
+  const dates = [shiftDays(-3), shiftDays(-2), shiftDays(-1)];
   const lessonIds: string[] = [];
-  for (const [index, date] of [shiftDays(-3), shiftDays(-2)].entries()) {
+  for (const [index, date] of dates.entries()) {
     const lesson = await bodyOf<{ id: string }>(
       await page.request.post('/api/lessons', {
         data: {
@@ -413,15 +419,49 @@ test('Этап 4, шаг 2: пересчёт плюсов в оценку', asyn
     lessonIds.push(lesson.id);
   }
 
-  // Два плюса: по одному на уроке — вместе они набирают порог.
-  for (const lessonId of lessonIds) {
-    await bodyOf(
-      await page.request.post(`/api/lessons/${lessonId}/grades`, {
-        data: { studentId: student.id, sign: 'plus', categoryId: homeReason?.id ?? '' },
-      }),
-      'знак',
-    );
-  }
+  /**
+   * Ставим плюсы **через интерфейс**: заодно проверяем остаток до оценки — его
+   * считает журнал. Ошибку поймал владелец: при пороге 3 и двух плюсах журнал писал
+   * «до оценки: 2» вместо «до оценки: 1».
+   */
+  const putPlus = async (lessonId: string): Promise<void> => {
+    await page.goto(`/lessons/${lessonId}`);
+    await page.getByTitle('Плюс: накапливается и по правилу даёт оценку').click();
+    await page.getByLabel('Причина').selectOption({ label: 'Д — Домашнее задание' });
+    await page.getByRole('button', { name: 'Поставить' }).click();
+
+    /**
+     * Ждём появления знака: без этого переход на другой урок мог случиться до того,
+     * как запрос ушёл, и следующий шаг читал бы прежнее состояние.
+     */
+    await expect(page.locator('ul.marks-row > li > button[aria-label^="+,"]')).toBeVisible();
+  };
+
+  const remainingOn = async (lessonId: string): Promise<string | null> => {
+    await page.goto(`/lessons/${lessonId}`);
+
+    /**
+     * Ждём, пока журнал загрузится: `count()` не ждёт появления элемента, и без
+     * этого проверка читала бы пустую страницу «Загружаем…».
+     */
+    await expect(page.getByRole('heading', { level: 2, name: 'Ученики' })).toBeVisible();
+
+    const remaining = page.getByText(/до оценки:/);
+
+    // Когда порог набран, строки «до оценки» нет вовсе — тогда `null`.
+    return (await remaining.count()) === 0 ? null : await remaining.first().innerText();
+  };
+
+  await putPlus(lessonIds[0] as string);
+
+  expect(await remainingOn(lessonIds[0] as string)).toContain('до оценки: 2');
+
+  await putPlus(lessonIds[1] as string);
+  expect(await remainingOn(lessonIds[1] as string)).toContain('до оценки: 1');
+
+  await putPlus(lessonIds[2] as string);
+  // Порог набран: до оценки ничего не осталось.
+  expect(await remainingOn(lessonIds[1] as string)).toBeNull();
 
   // Пересчёт из журнала урока: кнопка доступна администратору.
   await page.goto(`/lessons/${lessonIds[1] as string}`);
@@ -429,17 +469,29 @@ test('Этап 4, шаг 2: пересчёт плюсов в оценку', asyn
   await expect(page.getByText('Выдано оценок: 1')).toBeVisible();
 
   /**
-   * На уроке последнего знака осталась только оценка «5»: сами знаки съедены и в
-   * журнале не показываются. Это была ошибка: оценка появлялась, а знаки оставались
-   * висеть рядом, хотя счётчик обнулялся.
+   * Оценка стоит на уроке **последнего** знака набора — это третий урок. На нём не
+   * осталось ни одного плюса: знаки съедены и в журнале не показываются. Это была
+   * ошибка: оценка появлялась, а знаки оставались висеть рядом, хотя счётчик сбросился.
+   *
+   * Считаем отметки в строке ученика: на странице есть и другие ряды с кнопками.
    */
-  const lastLesson = page.locator('ul.marks-row > li > button[aria-label]');
-  await expect(lastLesson).toHaveCount(1);
-  await expect(lastLesson.first()).toHaveAttribute('aria-label', /^5,/);
+  await page.goto(`/lessons/${lessonIds[2] as string}`);
+  const marksOfStudent = page
+    .getByRole('row', { name: new RegExp(`Ученик Знаков ${RUN}`) })
+    .locator('ul.marks-row > li > button[aria-label]');
 
-  // И на уроке первого знака тоже пусто: он оплатил оценку.
-  await page.goto(`/lessons/${lessonIds[0] as string}`);
-  await expect(page.locator('ul.marks-row > li > button[aria-label]')).toHaveCount(0);
+  await expect(marksOfStudent).toHaveCount(1);
+  await expect(marksOfStudent.first()).toHaveAttribute('aria-label', /^5,/);
+
+  // На уроках съеденных знаков пусто: они оплатили оценку.
+  for (const lessonId of [lessonIds[0], lessonIds[1]]) {
+    await page.goto(`/lessons/${lessonId as string}`);
+    await expect(
+      page
+        .getByRole('row', { name: new RegExp(`Ученик Знаков ${RUN}`) })
+        .locator('ul.marks-row > li > button[aria-label]'),
+    ).toHaveCount(0);
+  }
 
   // Повторный пересчёт ничего не меняет: знаки уже оплачены оценкой.
   await page.getByRole('button', { name: 'Пересчитать + / ·' }).click();

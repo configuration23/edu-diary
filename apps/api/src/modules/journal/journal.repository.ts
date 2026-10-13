@@ -206,7 +206,7 @@ export interface JournalRepository {
   ): Promise<SignRecord[]>;
   /** Ещё не съеденные знаки учеников группы: материал для пересчёта по правилам. */
   listPendingSignsForGroup(
-    filter: { studyGroupId: string; from?: string; to?: string },
+    filter: { studyGroupId: string; subjectId?: string; from?: string; to?: string },
     executor?: Executor,
   ): Promise<SignRecord[]>;
   /** Пометить знаки съеденными: их оплатила оценка `gradeId`. */
@@ -404,6 +404,7 @@ export function createJournalRepository(db: Database): JournalRepository {
         executor,
         {
           studyGroupId: filter.studyGroupId,
+          ...(filter.subjectId === undefined ? {} : { subjectId: filter.subjectId }),
           ...(filter.from === undefined ? {} : { from: filter.from }),
           ...(filter.to === undefined ? {} : { to: filter.to }),
         },

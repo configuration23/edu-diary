@@ -167,7 +167,7 @@ export interface JournalService {
    * знака и возвращает, сколько оценок выдано этим запуском.
    */
   applyRules(
-    filter: { studyGroupId: string; from?: string; to?: string },
+    filter: { studyGroupId: string; subjectId?: string; from?: string; to?: string },
     options: MutationOptions,
   ): Promise<{ awarded: number }>;
   stats(filter: {
@@ -695,6 +695,7 @@ export function createJournalService(dependencies: JournalServiceDependencies): 
        */
       const signs = await journal.listPendingSignsForGroup({
         studyGroupId: filter.studyGroupId,
+        ...(filter.subjectId === undefined ? {} : { subjectId: filter.subjectId }),
         ...(filter.from === undefined ? {} : { from: filter.from }),
         ...(filter.to === undefined ? {} : { to: filter.to }),
       });

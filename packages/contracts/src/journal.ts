@@ -133,11 +133,13 @@ export type LessonJournalDto = z.infer<typeof lessonJournalSchema>;
  *
  * Запускается вручную из журнала: преподаватель должен понимать, откуда взялась
  * оценка. Границы периода задаёт учебный период, а `from`/`to` позволяют сузить
- * пересчёт до части периода.
+ * пересчёт до части периода, `subjectId` — до одного предмета: счётчики всё равно
+ * ведутся по предметам, поэтому сужение осмысленно.
  */
 export const applySignRulesRequestSchema = z
   .object({
     studyGroupId: uuidSchema,
+    subjectId: uuidSchema.optional(),
     from: isoDateSchema.optional(),
     to: isoDateSchema.optional(),
   })

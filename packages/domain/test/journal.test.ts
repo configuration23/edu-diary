@@ -133,16 +133,30 @@ describe('правило «плюсы и точки → оценка»', () => {
     ).toEqual({ applications: 1, remaining: 0 });
   });
 
-  it('лишние знаки переносятся в остаток', () => {
+  /**
+   * Остаток — это сколько знаков **осталось до оценки**, а не «сколько лишних».
+   * Ошибку поймал владелец: при пороге 3 и двух плюсах журнал писал «до оценки: 2»
+   * вместо «до оценки: 1».
+   */
+  it('остаток считает, сколько знаков осталось до оценки', () => {
+    expect(
+      escalationState({ plus: 2, dot: 0 }, { sign: 'plus', threshold: 3, reward: '5' }),
+    ).toEqual({ applications: 0, remaining: 1 });
+
     expect(
       escalationState({ plus: 6, dot: 0 }, { sign: 'plus', threshold: 4, reward: '5' }),
     ).toEqual({ applications: 1, remaining: 2 });
+
+    // Порог набран ровно: до оценки ничего не осталось, её можно выдать сейчас.
+    expect(
+      escalationState({ plus: 4, dot: 0 }, { sign: 'plus', threshold: 4, reward: '5' }),
+    ).toEqual({ applications: 1, remaining: 0 });
   });
 
   it('плюсы и точки считаются раздельно', () => {
     const rule = { sign: 'dot', threshold: 3, reward: '3' } as const;
     const counts = { plus: 10, dot: 2 };
-    expect(escalationState(counts, rule)).toEqual({ applications: 0, remaining: 2 });
+    expect(escalationState(counts, rule)).toEqual({ applications: 0, remaining: 1 });
   });
 
   it('повторный расчёт по тем же данным ничего не меняет', () => {
@@ -161,8 +175,9 @@ describe('правило «плюсы и точки → оценка»', () => {
   });
 
   it('порог меньше единицы не срабатывает никогда', () => {
+    // Порог 0 — испорченная настройка: оценок не будет, и «осталось» тоже бессмысленно.
     expect(
       escalationState({ plus: 10, dot: 0 }, { sign: 'plus', threshold: 0, reward: '5' }),
-    ).toEqual({ applications: 0, remaining: 10 });
+    ).toEqual({ applications: 0, remaining: 0 });
   });
 });
