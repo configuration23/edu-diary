@@ -46,6 +46,43 @@ const ATTENDANCE_CHOICES: AttendanceStatusDto[] = ['present', 'not_present', 'si
 
 const selectClass = 'w-full rounded-md border border-slate-300 px-3 py-2 text-sm';
 
+/** Что стоит ученику: «5», «+» или «·». */
+function describeGradeValue(grade: GradeEntryDto): string {
+  if (grade.value !== null) return grade.value;
+  return grade.sign === 'plus' ? '+' : '·';
+}
+
+/**
+ * Расшифровка отметки для подсказки: полное название причины и вес.
+ *
+ * Вес `1` не упоминаем: он по умолчанию и в подсказке был бы шумом — так же, как
+ * он не показывается рядом с оценкой.
+ */
+function gradeDescription(grade: GradeEntryDto): string {
+  const title = grade.categoryTitle ?? 'Причина не указана';
+  if (grade.categoryWeight === null || grade.categoryWeight <= 1) return title;
+
+  return `${title} · вес ${String(grade.categoryWeight)}`;
+}
+
+/** Подсказка посещаемости: «Не был, уважительно · справка». */
+function attendanceDescription(
+  status: AttendanceStatusDto,
+  isExcused: boolean,
+  reason: string | null,
+): string {
+  const label =
+    status === 'not_present' && isExcused ? 'Не был, уважительно' : ATTENDANCE_LABELS[status];
+  const parts = [label];
+
+  // Причину показываем только у уважительной: для остальных она не заполняется.
+  if (status === 'not_present' && isExcused && reason !== null && reason !== '') {
+    parts.push(reason);
+  }
+
+  return parts.join(' · ');
+}
+
 /** Что ставим: цифру или знак. */
 type PendingMark = { kind: 'value'; value: string } | { kind: 'sign'; sign: 'plus' | 'dot' };
 
@@ -411,40 +448,42 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
                         ) : (
                           <ul className="flex flex-col gap-1">
                             {student.grades.map((grade: GradeEntryDto) => (
-                              <li key={grade.id} className="flex flex-wrap items-center gap-2">
+                              <li key={grade.id}>
                                 {/*
-                                Причина — верхним регистром, вес — нижним, полное название
-                                показывается при наведении. Так строка журнала остаётся узкой,
-                                а расшифровка всегда под рукой.
-                              */}
+                                  Отметка читается как «5₁д»: сама оценка, вес —
+                                  подстрочно (кроме веса 1: он по умолчанию и только
+                                  засорял бы журнал), код причины — надстрочно.
+                                  Полное название причины и вес — в подсказке и в
+                                  доступном имени кнопки, чтобы расшифровка была
+                                  и при наведении, и у программы чтения с экрана.
+                                */}
                                 <button
                                   type="button"
                                   disabled={!canWrite || cancelled}
-                                  title={`${grade.categoryTitle ?? 'Причина не указана'}${
-                                    grade.categoryWeight === null
-                                      ? ''
-                                      : ` · вес ${String(grade.categoryWeight)}`
-                                  }`}
+                                  title={gradeDescription(grade)}
+                                  aria-label={`${describeGradeValue(grade)}, ${gradeDescription(grade)}`}
                                   onClick={() =>
                                     setEditingGradeId(editingGradeId === grade.id ? null : grade.id)
                                   }
-                                  className={`rounded-md border px-3 py-2 text-left transition ${
+                                  className={`rounded-md border px-2 py-1 transition ${
                                     canWrite && !cancelled
-                                      ? 'border-slate-300 bg-white hover:border-sky-400 hover:bg-sky-50'
-                                      : 'border-transparent bg-transparent'
+                                      ? 'border-transparent hover:border-sky-400 hover:bg-sky-50'
+                                      : 'border-transparent'
                                   } ${editingGradeId === grade.id ? 'border-sky-400 bg-sky-50' : ''}`}
                                 >
-                                  <span className="flex items-baseline gap-2">
-                                    <span className="text-lg font-semibold">
-                                      {grade.value ?? (grade.sign === 'plus' ? '+' : '·')}
-                                    </span>
-                                    <span className="text-xs font-semibold tracking-wide text-slate-600 uppercase">
-                                      {grade.categoryTitle ?? grade.categoryCode ?? '—'}
-                                    </span>
+                                  <span className="text-lg font-semibold">
+                                    {describeGradeValue(grade)}
                                   </span>
-                                  <span className="block text-xs text-slate-400">
-                                    вес {grade.categoryWeight ?? 1}
-                                  </span>
+                                  {grade.categoryWeight !== null && grade.categoryWeight > 1 && (
+                                    <sub className="text-xs font-medium text-slate-500">
+                                      {grade.categoryWeight}
+                                    </sub>
+                                  )}
+                                  {grade.categoryCode !== null && (
+                                    <sup className="text-xs font-medium text-sky-700">
+                                      {grade.categoryCode}
+                                    </sup>
+                                  )}
                                 </button>
                               </li>
                             ))}
@@ -583,16 +622,16 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
                           <span className="flex flex-wrap items-center gap-2">
                             {/*
                               В журнале видно только букву: полное название и причина —
-                              во всплывающей подсказке. Так столбец остаётся узким, а
-                              расшифровка доступна при наведении.
+                              во всплывающей подсказке. У отсутствия с уважительной
+                              причиной подсказка говорит «Не был, уважительно · причина»:
+                              «У» — это не отдельное состояние, а та же неявка.
                             */}
                             <span
-                              title={[
-                                ATTENDANCE_LABELS[student.attendance.status as AttendanceStatusDto],
+                              title={attendanceDescription(
+                                student.attendance.status as AttendanceStatusDto,
+                                student.attendance.isExcused,
                                 student.attendance.reason,
-                              ]
-                                .filter((part) => part !== null && part !== '')
-                                .join(' · ')}
+                              )}
                             >
                               <Badge
                                 tone={

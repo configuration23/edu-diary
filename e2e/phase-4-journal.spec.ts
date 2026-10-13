@@ -201,15 +201,15 @@ test('Этап 4: журнал урока — оценки с причинами
   await page.getByRole('button', { name: '5', exact: true }).click();
   await page.getByLabel('Причина').selectOption({ label: 'Д — Домашнее задание' });
   await page.getByRole('button', { name: 'Поставить' }).click();
-  // В журнале причина показана рядом с оценкой (верхним регистром), вес — снизу.
-  // Имя кнопки — исходный текст: регистр меняет оформление, а не содержимое.
-  await expect(page.getByRole('button', { name: /5\s*Домашнее задание\s*вес 1/ })).toBeVisible();
+  // Оценка читается как «5д»: вес 1 не показывается, код причины — надстрочно.
+  // Доступное имя кнопки даёт расшифровку: «5, Домашнее задание».
+  await expect(page.getByRole('button', { name: '5, Домашнее задание' })).toBeVisible();
 
   // Вторая оценка за тот же урок с другой причиной: их может быть несколько.
   await page.getByRole('button', { name: '4', exact: true }).click();
   await page.getByLabel('Причина').selectOption({ label: 'К — Контрольная работа' });
   await page.getByRole('button', { name: 'Поставить' }).click();
-  await expect(page.getByRole('button', { name: /4\s*Контрольная работа\s*вес 1/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: '4, Контрольная работа' })).toBeVisible();
 
   // Дубль с той же причиной: сервер отказывает, интерфейс предлагает замену.
   await page.getByRole('button', { name: '3', exact: true }).click();
@@ -224,9 +224,9 @@ test('Этап 4: журнал урока — оценки с причинами
    * задание вместо прежней «5». Исчезновение «5» — самое важное здесь: замена не
    * должна оставлять старую отметку рядом с новой.
    */
-  await expect(page.getByRole('button', { name: /3\s*Домашнее задание/ })).toBeVisible();
-  await expect(page.getByRole('button', { name: /5\s*Домашнее задание/ })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: /4\s*Контрольная работа/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: '3, Домашнее задание' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '5, Домашнее задание' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '4, Контрольная работа' })).toBeVisible();
 
   // Посещаемость: «Н» открывает окно с необязательной уважительной причиной.
   await page.getByRole('button', { name: 'Н', exact: true }).first().click();
@@ -235,18 +235,18 @@ test('Этап 4: журнал урока — оценки с причинами
   ).toBeVisible();
   // Точное имя: без него «Ок» совпадает и с кнопками подтверждения в других окнах.
   await page.getByRole('button', { name: 'Ок', exact: true }).click();
-  // Проставленная посещаемость обозначена только буквой.
+  // Проставленная посещаемость обозначена только буквой, расшифровка — в подсказке.
   await expect(page.getByTitle('Не был')).toBeVisible();
 
   // Правка оценки: нажатие на саму оценку, причина правки обязательна.
-  await page.getByRole('button', { name: /3\s*Домашнее задание/ }).click();
+  await page.getByRole('button', { name: '3, Домашнее задание' }).click();
   const saveEdit = page.getByRole('button', { name: 'Сохранить правку' });
   await expect(saveEdit).toBeDisabled();
 
   await page.getByLabel('Новая оценка').selectOption('2');
   await page.getByLabel('Причина правки').fill('Опечатка при выставлении');
   await saveEdit.click();
-  await expect(page.getByRole('button', { name: /2\s*Домашнее задание/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: '2, Домашнее задание' })).toBeVisible();
 
   // --- Ученик видит только свои отметки ---
   await page.getByRole('button', { name: 'Выйти' }).click();
