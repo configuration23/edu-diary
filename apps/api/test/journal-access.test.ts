@@ -190,7 +190,15 @@ describeWithDatabase('доступ преподавателя к журналу'
     await database.dispose();
   });
 
-  it('свой урок преподаватель открывает', async () => {
+  /**
+   * Журнал своего урока у преподавателя должен показывать **состав группы**.
+   *
+   * Дефект, найденный человеком: фильтр «только свои строки» применялся и к
+   * преподавателю, у которого своих учеников нет, поэтому состав вырезался целиком и
+   * журнал приходил пустым — «в группе на эту дату учеников нет». Наружу это вылезло,
+   * когда признак «видит всех» перестал ошибочно включаться для преподавателя.
+   */
+  it('свой урок преподаватель открывает с составом группы', async () => {
     const response = await testApp.app.inject({
       method: 'GET',
       url: `/api/lessons/${ownLessonId}/journal`,
@@ -198,6 +206,8 @@ describeWithDatabase('доступ преподавателя к журналу'
     });
 
     expect(response.statusCode, response.body).toBe(200);
+    const students = (response.json() as { students: Array<{ studentId: string }> }).students;
+    expect(students.map((student) => student.studentId)).toContain(studentId);
   });
 
   it('чужой урок преподавателю не виден', async () => {
