@@ -845,7 +845,7 @@ describeWithDatabase('расписание и уроки', () => {
     expect(visible.some((item) => item.id === target?.id)).toBe(true);
   });
 
-  it('преподаватель видит только свои занятия и не может менять расписание', async () => {
+  it('преподаватель видит занятия своих групп, но менять расписание не может', async () => {
     const lessons = await testApp.app.inject({
       method: 'GET',
       url: `/api/lessons?from=${shiftDays(-30)}&to=${shiftDays(60)}`,
@@ -854,8 +854,27 @@ describeWithDatabase('расписание и уроки', () => {
 
     expect(lessons.statusCode).toBe(200);
     const items = (lessons.json() as { items: Json[] }).items;
-    // Все видимые уроки — его: либо он ведёт, либо он заменял.
-    expect(items.every((lesson) => lesson.teacherUserId === teacherUserId)).toBe(true);
+
+    /**
+     * Решение владельца: преподавателю показываем **все** занятия его групп, а не только
+     * свои, — ему нужно видеть, какой предмет идёт следующим. Чужие занятия интерфейс
+     * показывает серыми и не даёт править, а правку запрещает сервер журнала
+     * (см. `journal-access.test.ts`).
+     *
+     * Здесь проверяем границу доступа, а не оформление: свои занятия видны — и чужих
+     * занятий в выдаче быть не может, если преподаватель не ведёт их группу.
+     */
+    expect(items.some((lesson) => lesson.teacherUserId === teacherUserId)).toBe(true);
+
+    const groups = await testApp.app.inject({
+      method: 'GET',
+      url: '/api/groups',
+      headers: teacherAuth(),
+    });
+    const ownGroups = new Set(
+      ((groups.json() as { items: Json[] }).items ?? []).map((group) => group.id as string),
+    );
+    expect(items.every((lesson) => ownGroups.has(lesson.studyGroupId as string))).toBe(true);
 
     // Запрос идёт с сессией преподавателя: расписание правит только администратор.
     const forbidden = await testApp.app.inject({
