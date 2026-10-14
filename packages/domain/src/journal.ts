@@ -120,6 +120,63 @@ export function attendanceBreakdown(marks: readonly AttendanceMark[]): {
   };
 }
 
+/**
+ * Процент пропусков по предмету.
+ *
+ * Решение владельца: по умолчанию пропуск — это только «не был» (`Н`). Галочки
+ * добавляют к пропускам уважительные причины (`У` — это `Н` с отметкой уважительной) и
+ * больничные (`Б`). «Опоздал» (`О`) пропуском не считается никогда.
+ *
+ * Знаменатель — все прошедшие занятия по предмету, у которых есть отметка. Занятие без
+ * отметки в счёт не идёт: его просто не отмечали, и винить в этом ученика нельзя.
+ */
+export interface AbsenceOptions {
+  /** Считать уважительные (`У`) пропусками. */
+  countExcused: boolean;
+  /** Считать больничные (`Б`) пропусками. */
+  countSick: boolean;
+}
+
+export function absenceStats(
+  marks: readonly AttendanceMark[],
+  options: AbsenceOptions,
+): {
+  /** Всего отмеченных занятий — знаменатель процента. */
+  total: number;
+  /** Сколько занятий зачтено пропусками при выбранных галочках. */
+  absences: number;
+  /** Доля пропусков в процентах, с одним знаком после запятой. */
+  percent: number;
+  /** Состав пропусков: видно, из чего сложился процент. */
+  byReason: { notPresent: number; excused: number; sick: number; late: number };
+} {
+  const byReason = { notPresent: 0, excused: 0, sick: 0, late: 0 };
+
+  for (const mark of marks) {
+    if (mark.status === 'not_present') {
+      byReason.notPresent += 1;
+      if (mark.isExcused === true) byReason.excused += 1;
+      continue;
+    }
+    if (mark.status === 'sick') byReason.sick += 1;
+    if (mark.status === 'late') byReason.late += 1;
+  }
+
+  const absences =
+    byReason.notPresent +
+    (options.countExcused ? byReason.excused : 0) +
+    (options.countSick ? byReason.sick : 0);
+
+  const total = marks.length;
+
+  return {
+    total,
+    absences,
+    percent: total === 0 ? 0 : Math.round((absences / total) * 1000) / 10,
+    byReason,
+  };
+}
+
 /** Оценка для расчёта среднего балла: категория задаёт вес. */
 export interface WeightedGrade {
   /** Числовая оценка строкой: знаки в средний балл не входят. */

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  absenceStats,
   ATTENDANCE_STATUSES,
   attendanceBreakdown,
   attendanceLetter,
@@ -117,6 +118,60 @@ describe('посещаемость', () => {
     expect(result.total).toBe(0);
     expect(result.percent).toBe(0);
     expect(result.byStatus.present.percent).toBe(0);
+  });
+});
+
+describe('процент пропусков', () => {
+  /** Восемь занятий: три неявки (одна уважительная), болезнь, опоздание, три явки. */
+  const marks = [
+    { status: 'present' as const },
+    { status: 'present' as const },
+    { status: 'not_present' as const },
+    { status: 'sick' as const },
+    { status: 'not_present' as const, isExcused: true },
+    { status: 'present' as const },
+    { status: 'late' as const },
+    { status: 'not_present' as const },
+  ];
+
+  it('по умолчанию пропуск — только «не был»', () => {
+    const result = absenceStats(marks, { countExcused: false, countSick: false });
+
+    expect(result.total).toBe(8);
+    expect(result.absences).toBe(3);
+    // 3 из 8 → 37.5 %
+    expect(result.percent).toBe(37.5);
+    // Опоздание пропуском не считается никогда.
+    expect(result.byReason.late).toBe(1);
+  });
+
+  it('галочка «уважительные» добавляет их к пропускам', () => {
+    const result = absenceStats(marks, { countExcused: true, countSick: false });
+
+    // Три неявки среди них одна уважительная: 3 + 1 = 4.
+    expect(result.absences).toBe(4);
+    expect(result.percent).toBe(50);
+  });
+
+  it('галочка «больничные» добавляет болезни', () => {
+    const result = absenceStats(marks, { countExcused: false, countSick: true });
+
+    expect(result.absences).toBe(4);
+    expect(result.percent).toBe(50);
+  });
+
+  it('обе галочки складываются', () => {
+    const result = absenceStats(marks, { countExcused: true, countSick: true });
+
+    expect(result.absences).toBe(5);
+    expect(result.percent).toBe(62.5);
+  });
+
+  it('без отмеченных занятий процент ноль, а не деление на ноль', () => {
+    const result = absenceStats([], { countExcused: true, countSick: true });
+
+    expect(result.total).toBe(0);
+    expect(result.percent).toBe(0);
   });
 });
 
