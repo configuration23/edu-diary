@@ -51,6 +51,13 @@ export interface SignRuleLookupPort {
 export interface MutationOptions {
   actor: AuditActor;
   executor?: Executor | undefined;
+  /**
+   * Доступны ли все уроки (право с областью `all`). Иначе изменение разрешено только
+   * для своего урока: `assigned` — это «уроки этого преподавателя».
+   */
+  seesAll?: boolean | undefined;
+  /** Сотрудник (преподаватель, администратор) или ученик с представителем. */
+  staff?: boolean | undefined;
 }
 
 /** Урок, к которому применяется журнал: проверяется через порт расписания. */
@@ -93,7 +100,7 @@ export interface JournalService {
   /** Экран урока: состав группы, отметки и накопление знаков. */
   lessonJournal(
     lessonId: string,
-    viewer: { userId: string; seesAll: boolean },
+    viewer: { userId: string; seesAll: boolean; staff: boolean },
   ): Promise<{
     lesson: JournalLesson;
     students: {
@@ -262,22 +269,74 @@ export function createJournalService(dependencies: JournalServiceDependencies): 
   const { db, journal, audit, schedule, signRules } = dependencies;
 
   /** Урок с проверкой области действия: чужая группа отвечает `404`. */
+  /**
+   * Доступ к уроку.
+   *
+   * `seesAll` — право с областью `all` (администратор): он видит и правит любой урок.
+   *
+   * Остальным урок доступен только «свой»:
+   * - **преподавателю** — тот, который он ведёт (`lesson.teacherUserId`). Замена
+   *   переносит это поле на замещающего, поэтому заместитель получает доступ, а
+   *   заболевший — теряет: журнал ведёт тот, кто фактически провёл занятие. Область
+   *   `assigned` означает именно «уроки этого преподавателя», а не «все уроки»;
+   * - **ученику и родителю** — урок группы, в которой ученик числится.
+   *
+   * Отвечаем `404`, а не `403`: чужой урок не должен подтверждать своё существование.
+   */
+  const requireLessonAccess = async (
+    lesson: JournalLesson,
+    viewer: { userId: string | null; seesAll: boolean; staff: boolean },
+  ): Promise<void> => {
+    if (viewer.seesAll) return;
+
+    /**
+     * Преподаватель: доступен только свой урок.
+     *
+     * Проверять преподавателя по составу группы нельзя — в этом и была дыра: двое
+     * преподавателей ведут разные предметы в одной группе, и по группе каждый из них
+     * получал доступ к журналу другого.
+     */
+    if (viewer.staff) {
+      if (viewer.userId !== null && lesson.teacherUserId === viewer.userId) return;
+      throw new AppError('NOT_FOUND', 'Урок не найден');
+    }
+
+    // Ученик и родитель: доступ по группе, в которой числится ученик.
+    if (viewer.userId !== null) {
+      const ownGroups = await schedule.groupsOfViewer(viewer.userId);
+      if (ownGroups.includes(lesson.studyGroupId)) return;
+    }
+
+    throw new AppError('NOT_FOUND', 'Урок не найден');
+  };
+
   const requireLessonForViewer = async (
     lessonId: string,
-    viewer: { userId: string; seesAll: boolean },
+    viewer: { userId: string; seesAll: boolean; staff: boolean },
   ) => {
     const lesson = await schedule.findLesson(lessonId);
     if (lesson === null) throw new AppError('NOT_FOUND', 'Урок не найден');
 
-    // Сотрудник видит любой урок: его доступ ограничен правами, а не составом
-    // группы. Ученику и родителю остаётся проверка «свой ли это урок».
-    if (viewer.seesAll) return lesson;
+    await requireLessonAccess(lesson, viewer);
 
-    const ownGroups = await schedule.groupsOfViewer(viewer.userId);
-    if (!ownGroups.includes(lesson.studyGroupId)) {
-      throw new AppError('NOT_FOUND', 'Урок не найден');
-    }
+    return lesson;
+  };
 
+  /**
+   * Урок для изменения: доступ проверяется теми же правилами, что и просмотр.
+   * Отдельная обёртка нужна, чтобы правило нельзя было забыть в одном из способов
+   * записи — раньше так и вышло: проверка была только на просмотре.
+   */
+  const requireLessonForWrite = async (
+    lessonId: string,
+    options: { userId: string | null; seesAll: boolean; staff: boolean },
+  ): Promise<JournalLesson> => {
+    const lesson = await requireLesson(lessonId);
+    await requireLessonAccess(lesson, {
+      userId: options.userId,
+      seesAll: options.seesAll,
+      staff: options.staff,
+    });
     return lesson;
   };
 
@@ -385,7 +444,11 @@ export function createJournalService(dependencies: JournalServiceDependencies): 
     },
 
     async saveGrade(lessonId, input, options) {
-      const lesson = await requireLesson(lessonId);
+      const lesson = await requireLessonForWrite(lessonId, {
+        userId: options.actor.userId,
+        seesAll: options.seesAll ?? false,
+        staff: options.staff ?? true,
+      });
       assertLessonActive(lesson);
 
       const value = input.value ?? null;
@@ -491,6 +554,16 @@ export function createJournalService(dependencies: JournalServiceDependencies): 
       const current = await journal.findGrade(gradeId);
       if (current === null) throw new AppError('NOT_FOUND', 'Оценка не найдена');
 
+      /**
+       * Доступ проверяем по уроку, к которому относится отметка: правка чужой
+       * отметки — тот же чужой журнал.
+       */
+      await requireLessonAccess(await requireLesson(current.lessonId), {
+        userId: options.actor.userId,
+        seesAll: options.seesAll ?? false,
+        staff: options.staff ?? true,
+      });
+
       const value = input.value === undefined ? current.value : input.value;
       const sign = input.sign === undefined ? current.sign : input.sign;
       assertSignOrValue(value, sign);
@@ -541,6 +614,16 @@ export function createJournalService(dependencies: JournalServiceDependencies): 
       const current = await journal.findGrade(gradeId);
       if (current === null) throw new AppError('NOT_FOUND', 'Оценка не найдена');
 
+      /**
+       * Доступ проверяем по уроку, к которому относится отметка: правка чужой
+       * отметки — тот же чужой журнал.
+       */
+      await requireLessonAccess(await requireLesson(current.lessonId), {
+        userId: options.actor.userId,
+        seesAll: options.seesAll ?? false,
+        staff: options.staff ?? true,
+      });
+
       await withTransaction(db, options.executor, async (tx) => {
         const removed = await journal.softDeleteGrade(
           gradeId,
@@ -578,6 +661,16 @@ export function createJournalService(dependencies: JournalServiceDependencies): 
     async restoreGrade(gradeId, options) {
       const current = await journal.findGrade(gradeId);
       if (current === null) throw new AppError('NOT_FOUND', 'Оценка не найдена');
+
+      /**
+       * Доступ проверяем по уроку, к которому относится отметка: правка чужой
+       * отметки — тот же чужой журнал.
+       */
+      await requireLessonAccess(await requireLesson(current.lessonId), {
+        userId: options.actor.userId,
+        seesAll: options.seesAll ?? false,
+        staff: options.staff ?? true,
+      });
 
       /**
        * Съеденный знак восстанавливать нельзя.
@@ -637,6 +730,16 @@ export function createJournalService(dependencies: JournalServiceDependencies): 
       const current = await journal.findAttendance(attendanceId);
       if (current === null) throw new AppError('NOT_FOUND', 'Отметка посещаемости не найдена');
 
+      /**
+       * Доступ проверяем по уроку, к которому относится отметка: правка чужой
+       * отметки — тот же чужой журнал.
+       */
+      await requireLessonAccess(await requireLesson(current.lessonId), {
+        userId: options.actor.userId,
+        seesAll: options.seesAll ?? false,
+        staff: options.staff ?? true,
+      });
+
       await withTransaction(db, options.executor, async (tx) => {
         const removed = await journal.softDeleteAttendance(
           attendanceId,
@@ -674,6 +777,16 @@ export function createJournalService(dependencies: JournalServiceDependencies): 
     async restoreAttendance(attendanceId, options) {
       const current = await journal.findAttendance(attendanceId);
       if (current === null) throw new AppError('NOT_FOUND', 'Отметка посещаемости не найдена');
+
+      /**
+       * Доступ проверяем по уроку, к которому относится отметка: правка чужой
+       * отметки — тот же чужой журнал.
+       */
+      await requireLessonAccess(await requireLesson(current.lessonId), {
+        userId: options.actor.userId,
+        seesAll: options.seesAll ?? false,
+        staff: options.staff ?? true,
+      });
 
       /**
        * У ученика на уроке может быть только одна отметка посещаемости. Если за время
@@ -759,7 +872,11 @@ export function createJournalService(dependencies: JournalServiceDependencies): 
     },
 
     async saveAttendance(lessonId, input, options) {
-      const lesson = await requireLesson(lessonId);
+      const lesson = await requireLessonForWrite(lessonId, {
+        userId: options.actor.userId,
+        seesAll: options.seesAll ?? false,
+        staff: options.staff ?? true,
+      });
       assertLessonActive(lesson);
 
       if (!isAttendanceStatus(input.status)) {

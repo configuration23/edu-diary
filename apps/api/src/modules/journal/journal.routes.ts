@@ -52,18 +52,31 @@ export function registerJournalRoutes(
     studentsOfGroup: scheduleStudentsOfGroup,
   } = dependencies;
 
+  /**
+   * Права записи вместе с признаком «доступны все уроки».
+   *
+   * Область `all` (администратор) — любой урок. Область `assigned` — только свои:
+   * право `assigned` означает «уроки этого преподавателя», и сужает его сервис по
+   * `lesson.teacherUserId`. Раньше признак не передавался, и преподаватель мог
+   * править чужой журнал, открыв его по прямой ссылке.
+   */
   const mutationOptions = (request: Parameters<typeof actorFromRequest>[0]): MutationOptions => ({
     actor: actorFromRequest(request),
+    seesAll: authHasPermission(authOf(request), 'grades:read', 'all'),
+    /** Сотрудник: ему доступны свои уроки, а не уроки групп, где он что-то ведёт. */
+    staff: authHasPermission(authOf(request), 'grades:read', 'assigned'),
   });
 
-  /** Смотрящий видит оценки всех (staff) или только своих (ученик, родитель). */
-  const seesAllStudents = (request: Parameters<typeof authOf>[0]): boolean => {
-    const auth = authOf(request);
-    return (
-      authHasPermission(auth, 'grades:read', 'all') ||
-      authHasPermission(auth, 'grades:read', 'assigned')
-    );
-  };
+  /**
+   * Видит ли смотрящий оценки **всех** учеников.
+   *
+   * Это только область `all` (администратор). Раньше сюда попадала и область
+   * `assigned`, и преподаватель получал признак «видит всех»: проверка доступа к
+   * уроку сразу пропускала его, и открывался журнал любого урока. Область `assigned`
+   * означает «свои уроки», и её разбирает сервис по `lesson.teacherUserId`.
+   */
+  const seesAllStudents = (request: Parameters<typeof authOf>[0]): boolean =>
+    authHasPermission(authOf(request), 'grades:read', 'all');
 
   /** Экран урока: состав группы, отметки и накопление знаков. */
   app.get(
@@ -81,6 +94,7 @@ export function registerJournalRoutes(
       const data = await journal.lessonJournal(id, {
         userId: auth.userId,
         seesAll: seesAllStudents(request),
+        staff: authHasPermission(auth, 'grades:read', 'assigned'),
       });
 
       /**
