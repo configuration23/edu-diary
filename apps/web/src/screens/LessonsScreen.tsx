@@ -640,8 +640,12 @@ export function LessonsScreen({ session }: { session: SessionResponseDto }) {
     const color = subjectColor(lesson.subjectId, lesson.subjectColor);
     const filled = appearance.colorsEnabled && !cancelled;
     /**
-     * Чужой урок: серый и без цвета предмета. Плитку оставляем нажимаемой — детали
-     * посмотреть можно, — но править в панели ничего нельзя.
+     * Чужой урок: серый, без цвета предмета и **некликабельный**.
+     *
+     * Раньше плитка открывала панель деталей, но править в ней было нечего, а кнопка
+     * «Журнал урока» вела на экран, который отвечал «Урок не найден»: доступ к чужому
+     * журналу закрыт на сервере. Кнопка, которая заведомо ведёт в отказ, только путает,
+     * поэтому чужое занятие не открывается вовсе.
      */
     const foreign = !cancelled && !isOwnLesson(lesson);
 
@@ -649,15 +653,18 @@ export function LessonsScreen({ session }: { session: SessionResponseDto }) {
       <button
         key={lesson.id}
         type="button"
-        onClick={() => setSelectedLessonId(lesson.id)}
+        disabled={foreign}
+        onClick={foreign ? undefined : () => setSelectedLessonId(lesson.id)}
         title={
           foreign
-            ? `${lesson.subjectName} · ${lesson.groupName} · ${lesson.teacherName} · чужое занятие: только просмотр`
+            ? `${lesson.subjectName} · ${lesson.groupName} · ${lesson.teacherName} · ведёт другой преподаватель`
             : `${lesson.subjectName} · ${lesson.groupName} · ${lesson.teacherName} · ${lesson.roomName ?? 'без аудитории'}`
         }
         className={`relative w-full rounded border px-1 py-0.5 text-left text-[11px] leading-tight transition ${
-          cancelled || foreign ? 'border-slate-200 bg-slate-50 text-slate-400' : 'border-slate-200'
-        } ${foreign ? 'cursor-default' : 'hover:shadow-sm'}`}
+          cancelled || foreign
+            ? 'border-slate-200 bg-slate-50 text-slate-400'
+            : 'cursor-pointer border-slate-200 hover:shadow-sm'
+        }`}
         style={
           filled && !foreign ? { backgroundColor: `${color}22`, borderColor: color } : undefined
         }

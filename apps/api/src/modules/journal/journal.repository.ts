@@ -105,6 +105,17 @@ export interface JournalRepository {
   listGradesForLesson(lessonId: string, executor?: Executor): Promise<GradeRecord[]>;
   /** Отметки посещаемости урока (без удалённых). */
   listAttendanceForLesson(lessonId: string, executor?: Executor): Promise<AttendanceRecord[]>;
+  /**
+   * Текущий состав группы: зачисленные и не отчисленные.
+   *
+   * Нужен как запасной вариант, когда на дату урока не числился никто: у группы может
+   * быть проставлена дата зачисления позже начала занятий (или её не проставили вовсе),
+   * и тогда журнал оставался пустым — «в группе на эту дату учеников нет».
+   */
+  listCurrentGroupStudents(
+    studyGroupId: string,
+    executor?: Executor,
+  ): Promise<{ studentId: string; fullName: string }[]>;
   /** Ученики группы, которые числились в ней на дату урока. */
   listStudentsForGroup(
     studyGroupId: string,
@@ -459,6 +470,21 @@ export function createJournalRepository(db: Database): JournalRepository {
       }));
     },
 
+    async listCurrentGroupStudents(studyGroupId, executor: Executor = db.orm) {
+      const rows = await executor.execute(sql`
+      select s.id as student_id, s.full_name
+      from student_enrollment e
+      join student s on s.id = e.student_id
+      where e.study_group_id = ${studyGroupId}
+        and (e.left_on is null or e.left_on >= current_date)
+      order by s.full_name
+    `);
+
+      return (rows as unknown as { student_id: string; full_name: string }[]).map((row) => ({
+        studentId: row.student_id,
+        fullName: row.full_name,
+      }));
+    },
     async findStudentName(studentId, executor: Executor = db.orm) {
       const rows = await executor.execute(
         sql`select full_name from student where id = ${studentId}`,

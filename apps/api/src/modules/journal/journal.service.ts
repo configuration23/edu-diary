@@ -340,6 +340,22 @@ export function createJournalService(dependencies: JournalServiceDependencies): 
     return lesson;
   };
 
+  /**
+   * Состав группы для журнала урока.
+   *
+   * Считается по датам зачисления, но пустой результат — не повод показывать пустой
+   * журнал: у группы может быть проставлена дата зачисления позже начала занятий (или
+   * её не проставили вовсе), и тогда на дату урока не числился никто. Преподаватель
+   * видел «в группе на эту дату учеников нет» и не мог вести занятие. В таком случае
+   * берём текущий состав группы: он ближе к правде, чем пустой список.
+   */
+  const rosterForLesson = async (
+    lesson: JournalLesson,
+  ): Promise<{ studentId: string; fullName: string }[]> => {
+    const onDate = await journal.listStudentsForGroup(lesson.studyGroupId, lesson.lessonDate);
+    if (onDate.length > 0) return onDate;
+    return journal.listCurrentGroupStudents(lesson.studyGroupId);
+  };
   const requireLesson = async (lessonId: string): Promise<JournalLesson> => {
     const lesson = await schedule.findLesson(lessonId);
     if (lesson === null) throw new AppError('NOT_FOUND', 'Урок не найден');
@@ -393,7 +409,7 @@ export function createJournalService(dependencies: JournalServiceDependencies): 
       const lesson = await requireLessonForViewer(lessonId, viewer);
 
       const [students, grades, attendance] = await Promise.all([
-        journal.listStudentsForGroup(lesson.studyGroupId, lesson.lessonDate),
+        rosterForLesson(lesson),
         journal.listGradesForLesson(lessonId),
         journal.listAttendanceForLesson(lessonId),
       ]);
@@ -973,7 +989,7 @@ export function createJournalService(dependencies: JournalServiceDependencies): 
       assertLessonActive(lesson);
 
       const except = new Set(input.exceptStudentIds ?? []);
-      const students = await journal.listStudentsForGroup(lesson.studyGroupId, lesson.lessonDate);
+      const students = await rosterForLesson(lesson);
 
       let marked = 0;
       for (const student of students) {
