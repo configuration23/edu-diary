@@ -1,6 +1,8 @@
 import type { LessonDto, LessonMarksResponseDto, SessionResponseDto } from '@edu-diary/contracts';
 import { useState } from 'react';
 
+import { subjectCode } from '@edu-diary/domain';
+
 import { useAcademicContext } from '../components/AcademicContext';
 import { useAppearanceSettings } from '../components/AppearanceContext';
 import { LessonAttendance, LessonGrades, LessonGradesCount } from '../components/LessonMarks';
@@ -447,7 +449,7 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
                     );
 
                     return (
-                      <td key={iso} className="px-3 py-2">
+                      <td key={iso} className="px-0.5 py-1">
                         {cell.length === 0 ? (
                           <span className="text-xs text-slate-400">окно</span>
                         ) : (
@@ -467,7 +469,12 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
                               */
                               <span
                                 key={lesson.id}
-                                className={`block rounded px-1 text-xs ${
+                                /*
+                                  Строго три строки фиксированной высоты и фиксированная
+                                  ширина (решение владельца): иначе плитка меняет размер от
+                                  того, заполнены отметки или нет, и сетка «дышит».
+                                */
+                                className={`block h-12 w-24 overflow-hidden rounded px-1 text-xs ${
                                   lesson.status === 'cancelled'
                                     ? 'text-slate-400'
                                     : 'text-slate-700'
@@ -482,14 +489,14 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
                               >
                                 {/*
                                   Плитка недели — три строки (решение владельца):
-                                  предмет с аудиторией, группа, затем посещаемость слева и
-                                  количество оценок справа. Раньше отметки стояли по углам,
+                                  код предмета с аудиторией, группа, затем посещаемость слева
+                                  и количество оценок справа. Раньше отметки стояли по углам,
                                   и посещаемость уезжала на третью строку сама собой — это
                                   понравилось, поэтому расположение закрепили строками.
                                 */}
-                                <span className="flex items-baseline justify-between gap-1">
+                                <span className="flex h-4 items-baseline justify-between gap-1">
                                   <span className="truncate">
-                                    {lesson.subjectName}
+                                    {subjectCode(lesson.subjectName, lesson.subjectShortName)}
                                     {/* Событие видно и в сетке недели: значок вместо слова. */}
                                     {lessonMarker(lesson, appearance) !== null && (
                                       <span className="ml-1">
@@ -502,11 +509,11 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
                                   </span>
                                 </span>
 
-                                <span className="block truncate text-slate-500">
+                                <span className="block h-4 truncate text-slate-500">
                                   {lesson.groupName}
                                 </span>
 
-                                <span className="flex items-center justify-between gap-1">
+                                <span className="flex h-4 items-center justify-between gap-1">
                                   {showMarks ? (
                                     <LessonAttendance mark={attendanceOf(lesson.id)} />
                                   ) : (
