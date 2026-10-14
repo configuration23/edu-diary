@@ -660,7 +660,12 @@ export function LessonsScreen({ session }: { session: SessionResponseDto }) {
             ? `${lesson.subjectName} · ${lesson.groupName} · ${lesson.teacherName} · ведёт другой преподаватель`
             : `${lesson.subjectName} · ${lesson.groupName} · ${lesson.teacherName} · ${lesson.roomName ?? 'без аудитории'}`
         }
-        className={`relative w-full rounded border px-1 py-0.5 text-left text-[11px] leading-tight transition ${
+        /*
+          Шрифт плитки такой же, как в недельной сетке расписания: `text-sm` (14 px)
+          вместо прежних 11 px и полужирный — решение владельца. Межстрочный `leading-4`,
+          чтобы строки не разъезжались.
+        */
+        className={`relative w-full rounded border px-1 py-0.5 text-left text-sm leading-4 font-semibold transition ${
           cancelled || foreign
             ? 'border-slate-200 bg-slate-50 text-slate-400'
             : 'cursor-pointer border-slate-200 hover:shadow-sm'
@@ -674,7 +679,7 @@ export function LessonsScreen({ session }: { session: SessionResponseDto }) {
         )}
 
         <span className="flex items-baseline gap-1 pr-4">
-          <span className="truncate font-medium">
+          <span className="truncate">
             {subjectCode(lesson.subjectName, lesson.subjectShortName)}
           </span>
           <span className="ml-auto shrink-0 text-slate-500">{lesson.roomName ?? '—'}</span>
