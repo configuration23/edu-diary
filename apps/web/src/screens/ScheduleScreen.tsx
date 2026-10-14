@@ -467,7 +467,7 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
                               */
                               <span
                                 key={lesson.id}
-                                className={`relative block rounded px-1 text-xs ${
+                                className={`block rounded px-1 text-xs ${
                                   lesson.status === 'cancelled'
                                     ? 'text-slate-400'
                                     : 'text-slate-700'
@@ -480,26 +480,40 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
                                     : undefined
                                 }
                               >
-                                {/* Счётчик оценок — в правом верхнем углу плитки. */}
-                                {showMarks && (
-                                  <span className="absolute top-0 right-0 pr-1">
-                                    <LessonGradesCount grades={gradesOf(lesson.id)} />
+                                {/*
+                                  Плитка недели — три строки (решение владельца):
+                                  предмет с аудиторией, группа, затем посещаемость слева и
+                                  количество оценок справа. Раньше отметки стояли по углам,
+                                  и посещаемость уезжала на третью строку сама собой — это
+                                  понравилось, поэтому расположение закрепили строками.
+                                */}
+                                <span className="flex items-baseline justify-between gap-1">
+                                  <span className="truncate">
+                                    {lesson.subjectName}
+                                    {/* Событие видно и в сетке недели: значок вместо слова. */}
+                                    {lessonMarker(lesson, appearance) !== null && (
+                                      <span className="ml-1">
+                                        {lessonMarker(lesson, appearance)}
+                                      </span>
+                                    )}
                                   </span>
-                                )}
-                                {lesson.subjectName}
-                                {/* Событие видно и в сетке недели: значок вместо слова. */}
-                                {lessonMarker(lesson, appearance) !== null && (
-                                  <span className="ml-1">{lessonMarker(lesson, appearance)}</span>
-                                )}
-                                <span className="block text-slate-500">
-                                  {lesson.groupName} · {lesson.roomName ?? '—'}
+                                  <span className="shrink-0 text-slate-500">
+                                    {lesson.roomName ?? '—'}
+                                  </span>
                                 </span>
-                                {/* Отметка посещаемости — в левом нижнем углу плитки. */}
-                                {showMarks && (
-                                  <span className="mt-0.5 block">
+
+                                <span className="block truncate text-slate-500">
+                                  {lesson.groupName}
+                                </span>
+
+                                <span className="flex items-center justify-between gap-1">
+                                  {showMarks ? (
                                     <LessonAttendance mark={attendanceOf(lesson.id)} />
-                                  </span>
-                                )}
+                                  ) : (
+                                    <span />
+                                  )}
+                                  {showMarks && <LessonGradesCount grades={gradesOf(lesson.id)} />}
+                                </span>
                               </span>
                             ))}
                           </button>
