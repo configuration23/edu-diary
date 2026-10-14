@@ -785,23 +785,34 @@ test('Этап 4, шаг 4: аналитика по группе', async ({ page
    * тест создал уже после — без перезагрузки её не было бы в списке.
    */
   await page.reload();
-  await page.getByRole('link', { name: 'Аналитика' }).click();
-  await expect(page.getByRole('heading', { level: 2, name: 'Аналитика' })).toBeVisible();
+  await page.getByRole('link', { name: 'Оценки и посещение' }).click();
+  await expect(page.getByRole('heading', { level: 2, name: 'Оценки и посещение' })).toBeVisible();
 
+  // Администратор выбирает группу и ученика.
   await page.locator('select[name="studyGroupId"]').selectOption({ label: groupName });
-  await page.getByLabel('С даты').fill(shiftDays(-40));
-  await page.getByLabel('По дату').fill(shiftDays(1));
+  await page.locator('select[name="studentId"]').selectOption({
+    label: `Ученик Аналитики ${run}`,
+  });
 
-  const card = page
+  const gradesCard = page
     .locator('section')
-    .filter({ has: page.getByRole('heading', { name: `Ученик Аналитики ${run}` }) });
-  await expect(card).toBeVisible();
+    .filter({ has: page.getByRole('heading', { name: `Аналитика (${run})` }) });
+  await expect(gradesCard).toBeVisible();
 
-  // Средний балл 4.50: две оценки с весом 1 каждая.
-  await expect(card.getByText('4.50')).toBeVisible();
-  await expect(card.getByText('Оценок:')).toBeVisible();
-  // Одно отмеченное занятие, и на нём ученик отсутствовал: посещаемость 0%.
-  await expect(card.getByText('Посещаемость:')).toBeVisible();
-  await expect(card.getByText('Не был')).toBeVisible();
-  await expect(card.getByRole('img', { name: 'Посещаемость' })).toBeVisible();
+  // Средняя по предмету 4.50: две оценки с весом 1 каждая.
+  await expect(gradesCard.getByText('4.50')).toBeVisible();
+
+  // Вкладка «Посещение»: одно отмеченное занятие, на нём ученик болел.
+  await page.locator('#tab-attendance').click();
+  const attendanceCard = page
+    .locator('section')
+    .filter({ has: page.getByRole('heading', { name: `Аналитика (${run})` }) });
+  await expect(attendanceCard.getByText('Пропуски:')).toBeVisible();
+
+  /**
+   * Галочка «больничные» меняет расчёт: без неё пропусков нет, с ней — одно из одного.
+   * Так проверяется, что галочка действительно влияет на процент.
+   */
+  await page.getByLabel('Считать больничные как пропуски').check();
+  await expect(attendanceCard.getByText('100%', { exact: true })).toBeVisible();
 });

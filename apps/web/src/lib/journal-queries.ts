@@ -6,7 +6,10 @@ import {
   attendanceEntrySchema,
   gradeEntrySchema,
   lessonJournalSchema,
+  attendanceBySubjectResponseSchema,
+  gradesBySubjectResponseSchema,
   journalStatsResponseSchema,
+  marksByStudentResponseSchema,
   lessonMarksResponseSchema,
   listDeletedResponseSchema,
   listGradeCategoriesResponseSchema,
@@ -308,5 +311,68 @@ export function useLessonMarks(lessonIds: string[]) {
     queryKey: ['lesson-marks', query],
     enabled: lessonIds.length > 0,
     queryFn: () => apiRequest(`/api/journal/lesson-marks?${query}`, lessonMarksResponseSchema),
+  });
+}
+
+/** Общие галочки раздела «Оценки и посещение». */
+export interface AbsenceOptions {
+  countExcused: boolean;
+  countSick: boolean;
+}
+
+/**
+ * Отметки по предметам: раздел «Оценки и посещение» для ученика, представителя и
+ * администратора, выбравшего ученика.
+ *
+ * Диапазон дат не передаём: раздел всегда работает за текущий учебный период.
+ */
+export function useGradesBySubject(studentId: string | null) {
+  const query = studentId === null ? '' : `?studentId=${studentId}`;
+
+  return useQuery({
+    queryKey: ['grades-by-subject', query],
+    queryFn: () =>
+      apiRequest(`/api/journal/grades-by-subject${query}`, gradesBySubjectResponseSchema),
+  });
+}
+
+export function useAttendanceBySubject(studentId: string | null, options: AbsenceOptions) {
+  const params = new URLSearchParams();
+  if (studentId !== null) params.set('studentId', studentId);
+  if (options.countExcused) params.set('countExcused', 'true');
+  if (options.countSick) params.set('countSick', 'true');
+
+  const query = params.toString();
+
+  return useQuery({
+    /** Ключ включает галочки: смена галочки меняет расчёт, и ответ нужно обновить. */
+    queryKey: ['attendance-by-subject', query],
+    queryFn: () =>
+      apiRequest(
+        `/api/journal/attendance-by-subject${query === '' ? '' : `?${query}`}`,
+        attendanceBySubjectResponseSchema,
+      ),
+  });
+}
+
+/** Вид преподавателя: строки по ученикам его группы за текущий период. */
+export function useMarksByStudent(
+  filter: { studyGroupId: string; subjectId: string },
+  options: AbsenceOptions,
+  enabled: boolean,
+) {
+  const params = new URLSearchParams();
+  params.set('studyGroupId', filter.studyGroupId);
+  params.set('subjectId', filter.subjectId);
+  if (options.countExcused) params.set('countExcused', 'true');
+  if (options.countSick) params.set('countSick', 'true');
+
+  const query = params.toString();
+
+  return useQuery({
+    queryKey: ['marks-by-student', query],
+    enabled: enabled && filter.studyGroupId !== '' && filter.subjectId !== '',
+    queryFn: () =>
+      apiRequest(`/api/journal/marks-by-student?${query}`, marksByStudentResponseSchema),
   });
 }
