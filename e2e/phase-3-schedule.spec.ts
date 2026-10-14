@@ -46,18 +46,42 @@ function shiftDays(days: number): string {
   ].join('-');
 }
 
-/** Дата нужного дня недели: сегодня, если совпало, иначе ближайший такой день. */
-function nextWeekday(dayOfWeek: number): string {
+/** Понедельник текущей недели. */
+function mondayOfToday(): string {
   const date = new Date();
-  if (date.getDay() !== dayOfWeek % 7) date.setDate(date.getDate() + 1);
-  while (date.getDay() !== dayOfWeek % 7) {
-    date.setDate(date.getDate() + 1);
-  }
+  const weekday = date.getDay() === 0 ? 7 : date.getDay();
+  date.setDate(date.getDate() + 1 - weekday);
   return [
     String(date.getFullYear()).padStart(4, '0'),
     String(date.getMonth() + 1).padStart(2, '0'),
     String(date.getDate()).padStart(2, '0'),
   ].join('-');
+}
+
+/**
+ * С какого дня генерировать уроки, чтобы сетка показала их **сразу**.
+ *
+ * Экран «Уроки» открывается на текущей неделе. Занятие по шаблону бывает раз в неделю, и
+ * его ближайший день может оказаться на **следующей** неделе — тогда в показанной сетке
+ * плитки нет. Раньше здесь стоял просто `nextWeekday(2)`, и сценарий проходил только два
+ * дня из семи: со среды по воскресенье ближайший вторник уже на следующей неделе.
+ *
+ * Поэтому день генерации выбираем от дня недели самого занятия:
+ * - занятие ещё **впереди на этой неделе** — генерируем с прошлой недели, тогда оно
+ *   попадает и на показанную неделю, и на следующую;
+ * - занятие уже **прошло на этой неделе** — генерируем с понедельника текущей недели,
+ *   и оно попадает на показанную неделю.
+ */
+function generationStart(lessonWeekday: number): string {
+  const today = new Date();
+  const weekday = today.getDay() === 0 ? 7 : today.getDay();
+  const lessonDay = lessonWeekday % 7 === 0 ? 7 : lessonWeekday % 7;
+
+  // День занятия ещё не прошёл: начинаем с прошлой недели, чтобы попасть в текущую.
+  if (weekday <= lessonDay) return shiftDays(-7);
+
+  // День занятия уже прошёл: текущая неделя начинается с понедельника.
+  return mondayOfToday();
 }
 
 async function login(page: Page, username: string, password: string): Promise<void> {
@@ -208,7 +232,11 @@ test.describe('Этап 3: звонки, расписание, уроки', () =
 
     // Группа и период: генерация уроков живёт на этом же экране.
     await page.locator('select[name="studyGroupId"]').selectOption({ label: GROUP });
-    await page.getByLabel('С даты').fill(nextWeekday(2));
+    /*
+      День начала генерации выбираем так, чтобы занятие попало в **показанную** неделю:
+      иначе плитки в сетке нет, и проверка зависит от дня недели (см. generationStart).
+    */
+    await page.getByLabel('С даты').fill(generationStart(2));
     await page.getByLabel('По дату').fill(shiftDays(30));
     await page.getByRole('button', { name: 'Создать уроки за период' }).click();
 
@@ -268,6 +296,21 @@ test.describe('Этап 3: звонки, расписание, уроки', () =
     await page.locator('#view-week').click();
     await expect(page.getByRole('cell', { name: '3-я' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Пара' })).toBeVisible();
+
+    /**
+     * В сетке недели должны быть **все семь дней**, включая воскресенье.
+     *
+     * Здесь стояла сетка на шесть дней, и воскресенье пропадало — при том что полоса дат
+     * над сеткой показывала семь дней, а суббота и воскресенье в колледже обычные учебные
+     * дни: занятие в воскресенье просто негде было увидеть.
+     */
+    // Заголовки берём только из таблицы: «Пн» есть и в полосе дат над сеткой.
+    const headers = await page.getByRole('columnheader').allInnerTexts();
+    const headerText = headers.join(' | ');
+    for (const day of ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']) {
+      expect(headerText, `в заголовках недели нет ${day}: ${headerText}`).toContain(day);
+    }
+
     await page.locator('#view-day').click();
     await expect(
       page.getByRole('heading', { level: 2, name: 'Расписание', exact: true }),

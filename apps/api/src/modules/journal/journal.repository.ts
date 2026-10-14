@@ -1,15 +1,9 @@
-import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, gte, inArray, isNull, lte, sql } from 'drizzle-orm';
 
 import type { Database, Executor } from '../../shared/db/client';
-import { gradeCategory } from '../academics';
-import {
-  attendanceEntry,
-  attendanceRevision,
-  gradeEntry,
-  gradeRevision,
-  gradeRule,
-  gradeRuleApplication,
-} from './journal.schema';
+import { gradeCategory, subject } from '../academics';
+import { lesson } from '../schedule';
+import { attendanceEntry, attendanceRevision, gradeEntry, gradeRevision } from './journal.schema';
 
 /**
  * Репозиторий журнала: доступ к оценкам, посещаемости, правилам и истории.
@@ -25,9 +19,13 @@ export interface GradeRecord {
   value: string | null;
   sign: string | null;
   categoryId: string | null;
+  categoryCode: string | null;
   categoryTitle: string | null;
   categoryWeight: number | null;
   comment: string | null;
+  /** Оценка, оплатившая этот знак пересчётом. 
+ull — знак свободен. */
+  consumedByGradeId: string | null;
   createdAt: Date;
 }
 
@@ -36,7 +34,15 @@ export interface AttendanceRecord {
   lessonId: string;
   studentId: string;
   status: string;
+  isExcused: boolean;
   reason: string | null;
+  /**
+   * Когда отметку убрали. `null` — отметка действует.
+   *
+   * Поле нужно восстановлению: без него не отличить действующую отметку от
+   * удалённой, и можно вернуть вторую на того же ученика.
+   */
+  deletedAt: Date | null;
   createdAt: Date;
 }
 
@@ -50,14 +56,49 @@ export interface RevisionRecord {
   createdAt: Date;
 }
 
-export interface RuleRecord {
+/**
+ * Удалённая отметка: видно, что убрали, кто и почему.
+ *
+ * Такие строки остаются в базе (ADR-011), но в журнал не попадают: их место — в
+ * списке удалённого, откуда администратор может вернуть отметку.
+ */
+export interface DeletedGradeRecord {
   id: string;
+  studentId: string;
+  studentName: string;
+  value: string | null;
+  sign: string | null;
+  categoryTitle: string | null;
+  deletedAt: Date;
+  deletedReason: string | null;
+  deletedByName: string | null;
+}
+
+export interface DeletedAttendanceRecord {
+  id: string;
+  studentId: string;
+  studentName: string;
+  status: string;
+  isExcused: boolean;
+  reason: string | null;
+  deletedAt: Date;
+  deletedReason: string | null;
+  deletedByName: string | null;
+}
+
+/** Накопленный знак: пересчёт съедает знаки и помечает их оплатившей оценкой. */
+export interface SignRecord {
+  id: string;
+  studentId: string;
+  subjectId: string;
   sign: string;
-  threshold: number;
-  reward: string;
-  categoryId: string | null;
-  subjectId: string | null;
-  isActive: boolean;
+  /** Дата урока, на котором поставлен знак: по ней идёт порядок и дата оценки. */
+  lessonDate: string;
+  lessonId: string;
+  /** Причина знака: она попадает в аудит при съедании. */
+  categoryTitle: string | null;
+  /** Оценка, которая уже оплатила этот знак. `null` — знак свободен. */
+  consumedByGradeId: string | null;
 }
 
 export interface JournalRepository {
@@ -65,17 +106,62 @@ export interface JournalRepository {
   listGradesForLesson(lessonId: string, executor?: Executor): Promise<GradeRecord[]>;
   /** Отметки посещаемости урока (без удалённых). */
   listAttendanceForLesson(lessonId: string, executor?: Executor): Promise<AttendanceRecord[]>;
+  /**
+   * Текущий состав группы: зачисленные и не отчисленные.
+   *
+   * Нужен как запасной вариант, когда на дату урока не числился никто: у группы может
+   * быть проставлена дата зачисления позже начала занятий (или её не проставили вовсе),
+   * и тогда журнал оставался пустым — «в группе на эту дату учеников нет».
+   */
+  listCurrentGroupStudents(
+    studyGroupId: string,
+    executor?: Executor,
+  ): Promise<{ studentId: string; fullName: string }[]>;
   /** Ученики группы, которые числились в ней на дату урока. */
   listStudentsForGroup(
     studyGroupId: string,
     onDate: string,
     executor?: Executor,
   ): Promise<{ studentId: string; fullName: string }[]>;
-  /** Знаки ученика по предмету за период: накопление для правила. */
+  /** Имя ученика: отчёту аналитики нужен читаемый заголовок строки. */
+  findStudentName(studentId: string, executor?: Executor): Promise<string | null>;
+
+  /**
+   * Отметки учеников вместе с предметом и датой занятия.
+   *
+   * Нужны разделу «Оценки и посещение»: он показывает списки по предметам, а плоские
+   * выборки предмет не знают — его пришлось бы дотягивать по одному уроку.
+   */
+  listGradeDetails(
+    filter: {
+      studentIds: string[];
+      subjectId?: string;
+      teacherUserId?: string;
+      from?: string;
+      to?: string;
+    },
+    executor?: Executor,
+  ): Promise<(GradeRecord & { subjectId: string; subjectName: string; lessonDate: string })[]>;
+  /** Отметки посещаемости с предметом и датой занятия. */
+  listAttendanceDetails(
+    filter: {
+      studentIds: string[];
+      subjectId?: string;
+      teacherUserId?: string;
+      from?: string;
+      to?: string;
+    },
+    executor?: Executor,
+  ): Promise<(AttendanceRecord & { subjectId: string; subjectName: string; lessonDate: string })[]>;
+  /** Оценки нескольких занятий сразу: расписанию нужны отметки за период. */
+  listGradesForLessons(lessonIds: string[], executor?: Executor): Promise<GradeRecord[]>;
+  /** Отметки посещаемости нескольких занятий сразу. */
+  listAttendanceForLessons(lessonIds: string[], executor?: Executor): Promise<AttendanceRecord[]>;
+  /** Накопленные знаки ученика по предмету за период: накопление для правила. */
   listSignsForStudentSubject(
     filter: { studentId: string; subjectId: string; from?: string; to?: string },
     executor?: Executor,
-  ): Promise<{ sign: string | null }[]>;
+  ): Promise<SignRecord[]>;
   /**
    * Все знаки группы за период: вход для пересчёта правил.
    *
@@ -85,7 +171,7 @@ export interface JournalRepository {
   listSignsForGroup(
     filter: { studyGroupId: string; from?: string; to?: string },
     executor?: Executor,
-  ): Promise<{ studentId: string; subjectId: string; sign: string }[]>;
+  ): Promise<SignRecord[]>;
   /** Числовые оценки ученика по предмету за период: для аналитики. */
   listGradesForStudentSubject(
     filter: { studentId: string; subjectId: string; from?: string; to?: string },
@@ -102,6 +188,11 @@ export interface JournalRepository {
   ): Promise<AttendanceRecord[]>;
 
   findGrade(id: string, executor?: Executor): Promise<GradeRecord | null>;
+  /** Причина оценки: проверка существования и веса при выставлении. */
+  findGradeCategory(
+    id: string,
+    executor?: Executor,
+  ): Promise<{ id: string; code: string; title: string; weight: number } | null>;
   /** Активная оценка ученика в уроке: заменяется при повторной записи. */
   findGradeForSlot(
     lessonId: string,
@@ -158,11 +249,48 @@ export interface JournalRepository {
     studentId: string,
     executor?: Executor,
   ): Promise<AttendanceRecord | null>;
+  /** Отметка по идентификатору: нужна для правки, удаления и восстановления. */
+  findAttendance(id: string, executor?: Executor): Promise<AttendanceRecord | null>;
+  softDeleteAttendance(
+    id: string,
+    input: { reason: string; actorId: string | null },
+    executor?: Executor,
+  ): Promise<boolean>;
+  restoreAttendance(id: string, executor?: Executor): Promise<boolean>;
+  /**
+   * Удалённые отметки урока: оценки и посещаемость.
+   *
+   * Без этой выборки восстановление недостижимо — удалённое исчезает из журнала, и
+   * администратор не знает, что именно там было.
+   */
+  listDeletedForLesson(
+    lessonId: string,
+    executor?: Executor,
+  ): Promise<{
+    grades: DeletedGradeRecord[];
+    attendance: DeletedAttendanceRecord[];
+  }>;
+  /** История правок отметки посещаемости: кто, когда, было и стало. */
+  listAttendanceRevisions(
+    attendanceEntryId: string,
+    executor?: Executor,
+  ): Promise<{ revision: RevisionRecord; actorName: string | null }[]>;
+  /**
+   * Все отметки посещаемости урока, включая удалённые.
+   *
+   * Нужны, чтобы при восстановлении не создать вторую отметку на того же ученика:
+   * действующая и удалённая строки живут в одной таблице.
+   */
+  listAttendanceForLessonIncludingDeleted(
+    lessonId: string,
+    executor?: Executor,
+  ): Promise<AttendanceRecord[]>;
   insertAttendance(
     input: {
       lessonId: string;
       studentId: string;
       status: string;
+      isExcused: boolean;
       reason: string | null;
       createdBy: string | null;
     },
@@ -170,7 +298,7 @@ export interface JournalRepository {
   ): Promise<AttendanceRecord>;
   updateAttendance(
     id: string,
-    input: { status?: string; reason?: string | null },
+    input: { status?: string; isExcused?: boolean; reason?: string | null },
     executor?: Executor,
   ): Promise<AttendanceRecord | null>;
   recordAttendanceRevision(
@@ -185,26 +313,29 @@ export interface JournalRepository {
     executor?: Executor,
   ): Promise<void>;
 
-  /** Правила, действующие для предмета: общие и уточнённые для него. */
-  listRulesForSubject(subjectId: string, executor?: Executor): Promise<RuleRecord[]>;
-  listRules(executor?: Executor): Promise<RuleRecord[]>;
-  /** Сколько раз правило уже сработало у ученика по предмету за период. */
-  countApplications(
-    filter: { ruleId: string; studentId: string; subjectId: string; periodId: string | null },
+  /**
+   * Накопленные знаки ученика по предмету: из них собирается счётчик пересчёта.
+   *
+   * Возвращаем и идентификаторы: съеденный знак нужно пометить оплатившей оценкой.
+   */
+  listSignsForStudentSubject(
+    filter: { studentId: string; subjectId: string; from?: string; to?: string },
+    executor?: Executor,
+  ): Promise<SignRecord[]>;
+  listSignsForGroup(
+    filter: { studyGroupId: string; from?: string; to?: string },
+    executor?: Executor,
+  ): Promise<SignRecord[]>;
+  /** Ещё не съеденные знаки учеников группы: материал для пересчёта по правилам. */
+  listPendingSignsForGroup(
+    filter: { studyGroupId: string; subjectId?: string; from?: string; to?: string },
+    executor?: Executor,
+  ): Promise<SignRecord[]>;
+  /** Пометить знаки съеденными: их оплатила оценка `gradeId`. */
+  markSignsConsumed(
+    input: { signIds: string[]; gradeId: string; actorId: string | null },
     executor?: Executor,
   ): Promise<number>;
-  insertApplication(
-    input: {
-      ruleId: string;
-      studentId: string;
-      subjectId: string;
-      periodId: string | null;
-      applicationNumber: number;
-      counterValue: number;
-      gradeEntryId: string | null;
-    },
-    executor?: Executor,
-  ): Promise<void>;
   /** Учебный период, в который попадает дата: границы счётчика знаков (ADR-009). */
   findPeriodForDate(
     date: string,
@@ -220,12 +351,26 @@ const GRADE_SELECTION = {
   value: gradeEntry.value,
   sign: gradeEntry.sign,
   categoryId: gradeEntry.categoryId,
+  categoryCode: gradeCategory.code,
   categoryTitle: gradeCategory.title,
   categoryWeight: gradeCategory.weight,
   comment: gradeEntry.comment,
+  consumedByGradeId: gradeEntry.consumedByGradeId,
   createdAt: gradeEntry.createdAt,
 };
 
+/**
+ * Строка оценки с предметом и датой занятия: то, что нужно разделу «Оценки и посещение».
+ *
+ * Отдельная выборка, а не общая: соединение с уроком и предметом нужно не всем запросам
+ * журнала, и тянуть его в каждый незачем.
+ */
+const GRADE_DETAIL_SELECTION = {
+  ...GRADE_SELECTION,
+  subjectId: lesson.subjectId,
+  subjectName: subject.name,
+  lessonDate: lesson.lessonDate,
+};
 export function createJournalRepository(db: Database): JournalRepository {
   const queryGrades = (executor: Executor) =>
     executor
@@ -233,10 +378,101 @@ export function createJournalRepository(db: Database): JournalRepository {
       .from(gradeEntry)
       .leftJoin(gradeCategory, eq(gradeCategory.id, gradeEntry.categoryId));
 
+  /**
+   * Выборка накопленных знаков.
+   *
+   * Порядок — по дате урока, затем по паре: пересчёт съедает знаки по порядку, и
+   * «первый знак» должен быть тем, что поставлен раньше. Ученик и предмет задают
+   * счётчик (знаки Пети и знаки Васи — разные), группа нужна пересчёту целиком.
+   *
+   * `pendingOnly` отсекает уже съеденные знаки: без этого повторный пересчёт
+   * посчитал бы их снова.
+   */
+  const selectSigns = async (
+    executor: Executor,
+    filter: {
+      studentId?: string;
+      subjectId?: string;
+      studyGroupId?: string;
+      from?: string;
+      to?: string;
+    },
+    pendingOnly = false,
+  ): Promise<SignRecord[]> => {
+    const rows = await executor.execute(sql`
+      select
+        g.id,
+        g.student_id,
+        l.subject_id,
+        g.sign,
+        l.id as lesson_id,
+        l.lesson_date,
+        c.title as category_title,
+        g.consumed_by_grade_id
+      from grade_entry g
+      join lesson l on l.id = g.lesson_id
+      left join grade_category c on c.id = g.category_id
+      ${
+        filter.studyGroupId === undefined
+          ? sql``
+          : sql`join student_enrollment e on e.student_id = g.student_id
+                and e.study_group_id = l.study_group_id
+                and e.joined_on <= l.lesson_date
+                and (e.left_on is null or e.left_on >= l.lesson_date)`
+      }
+      where g.deleted_at is null
+        and g.sign is not null
+        ${pendingOnly ? sql`and g.consumed_by_grade_id is null` : sql``}
+        ${filter.studentId === undefined ? sql`` : sql`and g.student_id = ${filter.studentId}`}
+        ${filter.subjectId === undefined ? sql`` : sql`and l.subject_id = ${filter.subjectId}`}
+        ${filter.studyGroupId === undefined ? sql`` : sql`and l.study_group_id = ${filter.studyGroupId}`}
+        ${filter.from === undefined ? sql`` : sql`and l.lesson_date >= ${filter.from}`}
+        ${filter.to === undefined ? sql`` : sql`and l.lesson_date <= ${filter.to}`}
+      order by l.lesson_date, l.pair_number, g.created_at
+    `);
+
+    return (
+      rows as unknown as {
+        id: string;
+        student_id: string;
+        subject_id: string;
+        sign: string;
+        lesson_id: string;
+        lesson_date: string | Date;
+        category_title: string | null;
+        consumed_by_grade_id: string | null;
+      }[]
+    ).map((row) => ({
+      id: row.id,
+      studentId: row.student_id,
+      subjectId: row.subject_id,
+      sign: row.sign,
+      lessonId: row.lesson_id,
+      lessonDate:
+        row.lesson_date instanceof Date
+          ? row.lesson_date.toISOString().slice(0, 10)
+          : String(row.lesson_date).slice(0, 10),
+      categoryTitle: row.category_title,
+      consumedByGradeId: row.consumed_by_grade_id,
+    }));
+  };
+
   return {
     async listGradesForLesson(lessonId, executor: Executor = db.orm) {
       return queryGrades(executor)
-        .where(and(eq(gradeEntry.lessonId, lessonId), isNull(gradeEntry.deletedAt)))
+        .where(
+          and(
+            eq(gradeEntry.lessonId, lessonId),
+            isNull(gradeEntry.deletedAt),
+            /**
+             * Съеденные знаки в журнале не показываем: пересчёт «плюсы и точки →
+             * оценка» уже превратил их в оценку, и рядом с ней они выглядели бы
+             * как отметки, которых больше нет. Сами строки остаются в базе — по ним
+             * видно, из чего сложилась оценка, и их можно восстановить.
+             */
+            isNull(gradeEntry.consumedByGradeId),
+          ),
+        )
         .orderBy(asc(gradeEntry.createdAt));
     },
 
@@ -247,7 +483,9 @@ export function createJournalRepository(db: Database): JournalRepository {
           lessonId: attendanceEntry.lessonId,
           studentId: attendanceEntry.studentId,
           status: attendanceEntry.status,
+          isExcused: attendanceEntry.isExcused,
           reason: attendanceEntry.reason,
+          deletedAt: attendanceEntry.deletedAt,
           createdAt: attendanceEntry.createdAt,
         })
         .from(attendanceEntry)
@@ -276,50 +514,199 @@ export function createJournalRepository(db: Database): JournalRepository {
       }));
     },
 
-    async listSignsForStudentSubject(filter, executor: Executor = db.orm) {
-      const conditions = [
-        eq(gradeEntry.studentId, filter.studentId),
-        isNull(gradeEntry.deletedAt),
-        sql`${gradeEntry.sign} is not null`,
-        sql`${gradeEntry.lessonId} in (select id from lesson where subject_id = ${filter.subjectId}${
-          filter.from === undefined ? sql`` : sql` and lesson_date >= ${filter.from}`
-        }${filter.to === undefined ? sql`` : sql` and lesson_date <= ${filter.to}`})`,
-      ];
+    async listCurrentGroupStudents(studyGroupId, executor: Executor = db.orm) {
+      const rows = await executor.execute(sql`
+      select s.id as student_id, s.full_name
+      from student_enrollment e
+      join student s on s.id = e.student_id
+      where e.study_group_id = ${studyGroupId}
+        and (e.left_on is null or e.left_on >= current_date)
+      order by s.full_name
+    `);
 
-      return executor
-        .select({ sign: gradeEntry.sign })
+      return (rows as unknown as { student_id: string; full_name: string }[]).map((row) => ({
+        studentId: row.student_id,
+        fullName: row.full_name,
+      }));
+    },
+    async listGradesForLessons(lessonIds, executor: Executor = db.orm) {
+      if (lessonIds.length === 0) return [];
+
+      /**
+       * Съеденные знаки не показываем — как и в журнале одного урока: пересчёт уже
+       * превратил их в оценку, и рядом с ней они выглядели бы отметками, которых нет.
+       */
+      return queryGrades(executor).where(
+        and(
+          inArray(gradeEntry.lessonId, lessonIds),
+          isNull(gradeEntry.deletedAt),
+          isNull(gradeEntry.consumedByGradeId),
+        ),
+      ) as unknown as Promise<GradeRecord[]>;
+    },
+
+    async listAttendanceForLessons(lessonIds, executor: Executor = db.orm) {
+      if (lessonIds.length === 0) return [];
+
+      const rows = await executor
+        .select()
+        .from(attendanceEntry)
+        .where(and(inArray(attendanceEntry.lessonId, lessonIds), isNull(attendanceEntry.deletedAt)))
+        .orderBy(asc(attendanceEntry.createdAt));
+
+      return rows.map((row) => ({
+        id: row.id,
+        lessonId: row.lessonId,
+        studentId: row.studentId,
+        status: row.status,
+        isExcused: row.isExcused,
+        reason: row.reason,
+        deletedAt: row.deletedAt,
+        createdAt: row.createdAt,
+      }));
+    },
+    async listGradeDetails(filter, executor: Executor = db.orm) {
+      if (filter.studentIds.length === 0) return [];
+
+      const rows = await executor
+        .select(GRADE_DETAIL_SELECTION)
         .from(gradeEntry)
-        .where(and(...conditions));
+        .leftJoin(gradeCategory, eq(gradeCategory.id, gradeEntry.categoryId))
+        .innerJoin(lesson, eq(lesson.id, gradeEntry.lessonId))
+        .innerJoin(subject, eq(subject.id, lesson.subjectId))
+        .where(
+          and(
+            inArray(gradeEntry.studentId, filter.studentIds),
+            isNull(gradeEntry.deletedAt),
+            // Съеденные знаки уже стали оценкой: в аналитике они не отметки.
+            isNull(gradeEntry.consumedByGradeId),
+            ...(filter.subjectId === undefined ? [] : [eq(lesson.subjectId, filter.subjectId)]),
+            ...(filter.teacherUserId === undefined
+              ? []
+              : [eq(lesson.teacherUserId, filter.teacherUserId)]),
+            ...(filter.from === undefined ? [] : [gte(lesson.lessonDate, filter.from)]),
+            ...(filter.to === undefined ? [] : [lte(lesson.lessonDate, filter.to)]),
+          ),
+        );
+
+      return rows.map((row) => ({
+        id: row.id,
+        lessonId: row.lessonId,
+        studentId: row.studentId,
+        value: row.value,
+        sign: row.sign,
+        categoryId: row.categoryId,
+        categoryCode: row.categoryCode,
+        categoryTitle: row.categoryTitle,
+        categoryWeight: row.categoryWeight,
+        comment: row.comment,
+        consumedByGradeId: row.consumedByGradeId,
+        createdAt: row.createdAt,
+        subjectId: row.subjectId,
+        subjectName: row.subjectName,
+        lessonDate: row.lessonDate,
+      }));
+    },
+
+    async listAttendanceDetails(filter, executor: Executor = db.orm) {
+      if (filter.studentIds.length === 0) return [];
+
+      const rows = await executor
+        .select({
+          id: attendanceEntry.id,
+          lessonId: attendanceEntry.lessonId,
+          studentId: attendanceEntry.studentId,
+          status: attendanceEntry.status,
+          isExcused: attendanceEntry.isExcused,
+          reason: attendanceEntry.reason,
+          deletedAt: attendanceEntry.deletedAt,
+          createdAt: attendanceEntry.createdAt,
+          subjectId: lesson.subjectId,
+          subjectName: subject.name,
+          lessonDate: lesson.lessonDate,
+        })
+        .from(attendanceEntry)
+        .innerJoin(lesson, eq(lesson.id, attendanceEntry.lessonId))
+        .innerJoin(subject, eq(subject.id, lesson.subjectId))
+        .where(
+          and(
+            inArray(attendanceEntry.studentId, filter.studentIds),
+            isNull(attendanceEntry.deletedAt),
+            ...(filter.subjectId === undefined ? [] : [eq(lesson.subjectId, filter.subjectId)]),
+            ...(filter.teacherUserId === undefined
+              ? []
+              : [eq(lesson.teacherUserId, filter.teacherUserId)]),
+            ...(filter.from === undefined ? [] : [gte(lesson.lessonDate, filter.from)]),
+            ...(filter.to === undefined ? [] : [lte(lesson.lessonDate, filter.to)]),
+          ),
+        );
+
+      return rows;
+    },
+    async findStudentName(studentId, executor: Executor = db.orm) {
+      const rows = await executor.execute(
+        sql`select full_name from student where id = ${studentId}`,
+      );
+      const row = (rows as unknown as { full_name: string }[])[0];
+      return row?.full_name ?? null;
+    },
+
+    async listSignsForStudentSubject(filter, executor: Executor = db.orm) {
+      const rows = await selectSigns(executor, {
+        studentId: filter.studentId,
+        subjectId: filter.subjectId,
+        ...(filter.from === undefined ? {} : { from: filter.from }),
+        ...(filter.to === undefined ? {} : { to: filter.to }),
+      });
+
+      return rows;
     },
 
     async listSignsForGroup(filter, executor: Executor = db.orm) {
-      const rows = await executor.execute(sql`
-        select g.student_id, l.subject_id, g.sign
-        from grade_entry g
-        join lesson l on l.id = g.lesson_id
-        join student_enrollment e on e.student_id = g.student_id and e.study_group_id = l.study_group_id
-        where g.deleted_at is null
-          and g.sign is not null
-          and l.study_group_id = ${filter.studyGroupId}
-          and e.joined_on <= l.lesson_date
-          and (e.left_on is null or e.left_on >= l.lesson_date)
-          ${filter.from === undefined ? sql`` : sql`and l.lesson_date >= ${filter.from}`}
-          ${filter.to === undefined ? sql`` : sql`and l.lesson_date <= ${filter.to}`}
-      `);
+      const rows = await selectSigns(executor, {
+        studyGroupId: filter.studyGroupId,
+        ...(filter.from === undefined ? {} : { from: filter.from }),
+        ...(filter.to === undefined ? {} : { to: filter.to }),
+      });
 
-      return (rows as unknown as { student_id: string; subject_id: string; sign: string }[]).map(
-        (row) => ({
-          studentId: row.student_id,
-          subjectId: row.subject_id,
-          sign: row.sign,
-        }),
+      return rows;
+    },
+
+    async listPendingSignsForGroup(filter, executor: Executor = db.orm) {
+      return selectSigns(
+        executor,
+        {
+          studyGroupId: filter.studyGroupId,
+          ...(filter.subjectId === undefined ? {} : { subjectId: filter.subjectId }),
+          ...(filter.from === undefined ? {} : { from: filter.from }),
+          ...(filter.to === undefined ? {} : { to: filter.to }),
+        },
+        true,
       );
+    },
+
+    async markSignsConsumed(input, executor: Executor = db.orm) {
+      if (input.signIds.length === 0) return 0;
+
+      const updated = await executor
+        .update(gradeEntry)
+        .set({
+          consumedByGradeId: input.gradeId,
+          consumedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(inArray(gradeEntry.id, input.signIds))
+        .returning({ id: gradeEntry.id });
+
+      return updated.length;
     },
 
     async listGradesForStudentSubject(filter, executor: Executor = db.orm) {
       const conditions = [
         eq(gradeEntry.studentId, filter.studentId),
         isNull(gradeEntry.deletedAt),
+        // Съеденные знаки уже стали оценкой: в аналитике они не отметки.
+        isNull(gradeEntry.consumedByGradeId),
         sql`${gradeEntry.lessonId} in (select id from lesson where subject_id = ${filter.subjectId}${
           filter.from === undefined ? sql`` : sql` and lesson_date >= ${filter.from}`
         }${filter.to === undefined ? sql`` : sql` and lesson_date <= ${filter.to}`})`,
@@ -334,6 +721,8 @@ export function createJournalRepository(db: Database): JournalRepository {
       const conditions = [
         inArray(gradeEntry.studentId, filter.studentIds),
         isNull(gradeEntry.deletedAt),
+        // Съеденные знаки уже стали оценкой: в аналитике они не отметки.
+        isNull(gradeEntry.consumedByGradeId),
         sql`${gradeEntry.lessonId} in (select id from lesson where 1 = 1${
           filter.subjectId === undefined ? sql`` : sql` and subject_id = ${filter.subjectId}`
         }${filter.from === undefined ? sql`` : sql` and lesson_date >= ${filter.from}`}${
@@ -361,7 +750,9 @@ export function createJournalRepository(db: Database): JournalRepository {
           lessonId: attendanceEntry.lessonId,
           studentId: attendanceEntry.studentId,
           status: attendanceEntry.status,
+          isExcused: attendanceEntry.isExcused,
           reason: attendanceEntry.reason,
+          deletedAt: attendanceEntry.deletedAt,
           createdAt: attendanceEntry.createdAt,
         })
         .from(attendanceEntry)
@@ -370,6 +761,21 @@ export function createJournalRepository(db: Database): JournalRepository {
 
     async findGrade(id, executor: Executor = db.orm) {
       const rows = await queryGrades(executor).where(eq(gradeEntry.id, id)).limit(1);
+      return rows[0] ?? null;
+    },
+
+    async findGradeCategory(id, executor: Executor = db.orm) {
+      const rows = await executor
+        .select({
+          id: gradeCategory.id,
+          code: gradeCategory.code,
+          title: gradeCategory.title,
+          weight: gradeCategory.weight,
+        })
+        .from(gradeCategory)
+        .where(eq(gradeCategory.id, id))
+        .limit(1);
+
       return rows[0] ?? null;
     },
 
@@ -478,7 +884,9 @@ export function createJournalRepository(db: Database): JournalRepository {
           lessonId: attendanceEntry.lessonId,
           studentId: attendanceEntry.studentId,
           status: attendanceEntry.status,
+          isExcused: attendanceEntry.isExcused,
           reason: attendanceEntry.reason,
+          deletedAt: attendanceEntry.deletedAt,
           createdAt: attendanceEntry.createdAt,
         })
         .from(attendanceEntry)
@@ -492,6 +900,199 @@ export function createJournalRepository(db: Database): JournalRepository {
         .limit(1);
 
       return rows[0] ?? null;
+    },
+
+    async findAttendance(id, executor: Executor = db.orm) {
+      const rows = await executor
+        .select({
+          id: attendanceEntry.id,
+          lessonId: attendanceEntry.lessonId,
+          studentId: attendanceEntry.studentId,
+          status: attendanceEntry.status,
+          isExcused: attendanceEntry.isExcused,
+          reason: attendanceEntry.reason,
+          deletedAt: attendanceEntry.deletedAt,
+          createdAt: attendanceEntry.createdAt,
+        })
+        .from(attendanceEntry)
+        .where(eq(attendanceEntry.id, id))
+        .limit(1);
+
+      return rows[0] ?? null;
+    },
+
+    async softDeleteAttendance(id, input, executor: Executor = db.orm) {
+      const rows = await executor
+        .update(attendanceEntry)
+        .set({
+          deletedAt: new Date(),
+          deletedBy: input.actorId,
+          deletedReason: input.reason,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(attendanceEntry.id, id), isNull(attendanceEntry.deletedAt)))
+        .returning({ id: attendanceEntry.id });
+
+      return rows.length > 0;
+    },
+
+    async restoreAttendance(id, executor: Executor = db.orm) {
+      const rows = await executor
+        .update(attendanceEntry)
+        .set({ deletedAt: null, deletedBy: null, deletedReason: null, updatedAt: new Date() })
+        .where(eq(attendanceEntry.id, id))
+        .returning({ id: attendanceEntry.id });
+
+      return rows.length > 0;
+    },
+
+    async listDeletedForLesson(lessonId, executor: Executor = db.orm) {
+      /**
+       * Удалённые отметки урока: оценки и посещаемость вместе.
+       *
+       * Без этой выборки восстановление недостижимо: удалённое просто исчезает из
+       * журнала, и администратор не знает, что там было. Показываем и причину
+       * удаления, и кто удалил — иначе восстановление будет вслепую.
+       */
+      const grades = await executor.execute(sql`
+        select
+          g.id,
+          'grade' as kind,
+          g.student_id,
+          s.full_name as student_name,
+          g.value,
+          g.sign,
+          g.deleted_at,
+          g.deleted_reason,
+          u.full_name as deleted_by_name,
+          c.title as category_title
+        from grade_entry g
+        join student s on s.id = g.student_id
+        left join app_user u on u.id = g.deleted_by
+        left join grade_category c on c.id = g.category_id
+        where g.lesson_id = ${lessonId} and g.deleted_at is not null
+      `);
+
+      const attendance = await executor.execute(sql`
+        select
+          a.id,
+          'attendance' as kind,
+          a.student_id,
+          s.full_name as student_name,
+          a.status,
+          a.is_excused,
+          a.reason,
+          a.deleted_at,
+          a.deleted_reason,
+          u.full_name as deleted_by_name
+        from attendance_entry a
+        join student s on s.id = a.student_id
+        left join app_user u on u.id = a.deleted_by
+        where a.lesson_id = ${lessonId} and a.deleted_at is not null
+      `);
+
+      return {
+        grades: (
+          grades as unknown as {
+            id: string;
+            student_id: string;
+            student_name: string;
+            value: string | null;
+            sign: string | null;
+            deleted_at: Date;
+            deleted_reason: string | null;
+            deleted_by_name: string | null;
+            category_title: string | null;
+          }[]
+        ).map((row) => ({
+          id: row.id,
+          studentId: row.student_id,
+          studentName: row.student_name,
+          value: row.value,
+          sign: row.sign,
+          categoryTitle: row.category_title,
+          deletedAt: row.deleted_at,
+          deletedReason: row.deleted_reason,
+          deletedByName: row.deleted_by_name,
+        })),
+        attendance: (
+          attendance as unknown as {
+            id: string;
+            student_id: string;
+            student_name: string;
+            status: string;
+            is_excused: boolean;
+            reason: string | null;
+            deleted_at: Date;
+            deleted_reason: string | null;
+            deleted_by_name: string | null;
+          }[]
+        ).map((row) => ({
+          id: row.id,
+          studentId: row.student_id,
+          studentName: row.student_name,
+          status: row.status,
+          isExcused: row.is_excused,
+          reason: row.reason,
+          deletedAt: row.deleted_at,
+          deletedReason: row.deleted_reason,
+          deletedByName: row.deleted_by_name,
+        })),
+      };
+    },
+
+    async listAttendanceForLessonIncludingDeleted(lessonId, executor: Executor = db.orm) {
+      const rows = await executor
+        .select({
+          id: attendanceEntry.id,
+          lessonId: attendanceEntry.lessonId,
+          studentId: attendanceEntry.studentId,
+          status: attendanceEntry.status,
+          isExcused: attendanceEntry.isExcused,
+          reason: attendanceEntry.reason,
+          deletedAt: attendanceEntry.deletedAt,
+          createdAt: attendanceEntry.createdAt,
+        })
+        .from(attendanceEntry)
+        .where(eq(attendanceEntry.lessonId, lessonId));
+
+      return rows;
+    },
+
+    async listAttendanceRevisions(attendanceEntryId, executor: Executor = db.orm) {
+      const rows = await executor.execute(sql`
+        select
+          r.id, r.action, r.before, r.after, r.reason, r.actor_id, r.created_at,
+          u.full_name as actor_name
+        from attendance_revision r
+        left join app_user u on u.id = r.actor_id
+        where r.attendance_entry_id = ${attendanceEntryId}
+        order by r.created_at desc
+      `);
+
+      return (
+        rows as unknown as {
+          id: string;
+          action: string;
+          before: string | null;
+          after: string | null;
+          reason: string | null;
+          actor_id: string | null;
+          created_at: Date;
+          actor_name: string | null;
+        }[]
+      ).map((row) => ({
+        revision: {
+          id: row.id,
+          action: row.action,
+          before: row.before,
+          after: row.after,
+          reason: row.reason,
+          actorId: row.actor_id,
+          createdAt: row.created_at,
+        },
+        actorName: row.actor_name,
+      }));
     },
 
     async insertAttendance(input, executor: Executor = db.orm) {
@@ -522,7 +1123,9 @@ export function createJournalRepository(db: Database): JournalRepository {
           lessonId: attendanceEntry.lessonId,
           studentId: attendanceEntry.studentId,
           status: attendanceEntry.status,
+          isExcused: attendanceEntry.isExcused,
           reason: attendanceEntry.reason,
+          deletedAt: attendanceEntry.deletedAt,
           createdAt: attendanceEntry.createdAt,
         })
         .from(attendanceEntry)
@@ -541,47 +1144,6 @@ export function createJournalRepository(db: Database): JournalRepository {
         reason: input.reason,
         actorId: input.actorId,
       });
-    },
-
-    async listRulesForSubject(subjectId, executor: Executor = db.orm) {
-      return executor
-        .select()
-        .from(gradeRule)
-        .where(
-          and(
-            eq(gradeRule.isActive, true),
-            sql`(${gradeRule.subjectId} is null or ${gradeRule.subjectId} = ${subjectId})`,
-          ),
-        )
-        .orderBy(asc(gradeRule.sign));
-    },
-
-    async listRules(executor: Executor = db.orm) {
-      return executor.select().from(gradeRule).orderBy(asc(gradeRule.sign));
-    },
-
-    async countApplications(filter, executor: Executor = db.orm) {
-      const rows = await executor
-        .select({ count: sql<number>`count(*)::int` })
-        .from(gradeRuleApplication)
-        .where(
-          and(
-            eq(gradeRuleApplication.ruleId, filter.ruleId),
-            eq(gradeRuleApplication.studentId, filter.studentId),
-            eq(gradeRuleApplication.subjectId, filter.subjectId),
-            filter.periodId === null
-              ? isNull(gradeRuleApplication.periodId)
-              : eq(gradeRuleApplication.periodId, filter.periodId),
-          ),
-        );
-
-      return rows[0]?.count ?? 0;
-    },
-
-    async insertApplication(input, executor: Executor = db.orm) {
-      // `onConflictDoNothing` — вторая половина идемпотентности: даже при
-      // одновременных пересчётах вторая запись не появится (ADR-010).
-      await executor.insert(gradeRuleApplication).values(input).onConflictDoNothing();
     },
 
     async findPeriodForDate(date, executor: Executor = db.orm) {

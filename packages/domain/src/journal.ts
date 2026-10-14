@@ -38,44 +38,56 @@ export const SIGN_LABELS: Record<MarkSign, string> = {
  * Коды английские, потому что попадают в БД и в выгрузки; русские буквы — это
  * подписи для интерфейса.
  */
-export const ATTENDANCE_STATUSES = ['present', 'absent', 'excused', 'sick', 'late'] as const;
+export const ATTENDANCE_STATUSES = ['present', 'not_present', 'sick', 'late', 'excused'] as const;
 export type AttendanceStatus = (typeof ATTENDANCE_STATUSES)[number];
 
+/** Статусы, которые преподаватель ставит в журнале: «уважительная» — не статус. */
+export const ATTENDANCE_CHOICES = ['present', 'not_present', 'sick', 'late'] as const;
+
 export const ATTENDANCE_LABELS: Record<AttendanceStatus, string> = {
-  present: 'Был',
-  absent: 'Прогул',
-  excused: 'Уважительная',
+  present: 'Присутствовал',
+  not_present: 'Не был',
   sick: 'Болел',
   late: 'Опоздал',
+  excused: 'Уважительная',
 };
 
 /** Короткие буквы для журнала: как в бумажном журнале. */
 export const ATTENDANCE_SHORT: Record<AttendanceStatus, string> = {
   present: 'П',
-  absent: 'О',
-  excused: 'У',
+  not_present: 'Н',
   sick: 'Б',
-  late: 'Н',
+  late: 'О',
+  excused: 'У',
 };
+
+/** Буква отметки: отсутствие с уважительной причиной показывается как «У». */
+export function attendanceLetter(status: AttendanceStatus, isExcused = false): string {
+  if (status === 'not_present' && isExcused) return 'У';
+  return ATTENDANCE_SHORT[status];
+}
 
 export function isAttendanceStatus(value: string): value is AttendanceStatus {
   return (ATTENDANCE_STATUSES as readonly string[]).includes(value);
 }
 
-/** Отметка посещаемости для расчёта: статус и причина (у прогула и уважительной). */
+/** Отметка посещаемости для расчёта: статус и признак уважительной причины. */
 export interface AttendanceMark {
   status: AttendanceStatus;
+  isExcused?: boolean;
 }
 
 /**
  * Посещаемость по всем статусам.
  *
  * Возвращаем и проценты каждого статуса (для круговой диаграммы), и итоговый
- * процент: «был» от всех отмеченных занятий. Так интерфейс показывает и разбивку,
- * и одну цифру, не считая одно через другое по-разному в разных местах.
+ * процент: «был» от всех отмеченных занятий. Уважительная причина считается
+ * отдельно — по ней видно, сколько отсутствий было по делу.
  */
 export function attendanceBreakdown(marks: readonly AttendanceMark[]): {
   total: number;
+  present: number;
+  excused: number;
   percent: number;
   byStatus: Record<AttendanceStatus, { count: number; percent: number }>;
 } {
@@ -84,7 +96,11 @@ export function attendanceBreakdown(marks: readonly AttendanceMark[]): {
     number
   >;
 
-  for (const mark of marks) counts[mark.status] += 1;
+  let excused = 0;
+  for (const mark of marks) {
+    counts[mark.status] += 1;
+    if (mark.status === 'not_present' && mark.isExcused === true) excused += 1;
+  }
 
   const total = marks.length;
   const percentOf = (count: number): number =>
@@ -92,6 +108,8 @@ export function attendanceBreakdown(marks: readonly AttendanceMark[]): {
 
   return {
     total,
+    present: counts.present,
+    excused,
     percent: percentOf(counts.present),
     byStatus: Object.fromEntries(
       ATTENDANCE_STATUSES.map((status) => [
@@ -99,6 +117,63 @@ export function attendanceBreakdown(marks: readonly AttendanceMark[]): {
         { count: counts[status], percent: percentOf(counts[status]) },
       ]),
     ) as Record<AttendanceStatus, { count: number; percent: number }>,
+  };
+}
+
+/**
+ * Процент пропусков по предмету.
+ *
+ * Решение владельца: по умолчанию пропуск — это только «не был» (`Н`). Галочки
+ * добавляют к пропускам уважительные причины (`У` — это `Н` с отметкой уважительной) и
+ * больничные (`Б`). «Опоздал» (`О`) пропуском не считается никогда.
+ *
+ * Знаменатель — все прошедшие занятия по предмету, у которых есть отметка. Занятие без
+ * отметки в счёт не идёт: его просто не отмечали, и винить в этом ученика нельзя.
+ */
+export interface AbsenceOptions {
+  /** Считать уважительные (`У`) пропусками. */
+  countExcused: boolean;
+  /** Считать больничные (`Б`) пропусками. */
+  countSick: boolean;
+}
+
+export function absenceStats(
+  marks: readonly AttendanceMark[],
+  options: AbsenceOptions,
+): {
+  /** Всего отмеченных занятий — знаменатель процента. */
+  total: number;
+  /** Сколько занятий зачтено пропусками при выбранных галочках. */
+  absences: number;
+  /** Доля пропусков в процентах, с одним знаком после запятой. */
+  percent: number;
+  /** Состав пропусков: видно, из чего сложился процент. */
+  byReason: { notPresent: number; excused: number; sick: number; late: number };
+} {
+  const byReason = { notPresent: 0, excused: 0, sick: 0, late: 0 };
+
+  for (const mark of marks) {
+    if (mark.status === 'not_present') {
+      byReason.notPresent += 1;
+      if (mark.isExcused === true) byReason.excused += 1;
+      continue;
+    }
+    if (mark.status === 'sick') byReason.sick += 1;
+    if (mark.status === 'late') byReason.late += 1;
+  }
+
+  const absences =
+    byReason.notPresent +
+    (options.countExcused ? byReason.excused : 0) +
+    (options.countSick ? byReason.sick : 0);
+
+  const total = marks.length;
+
+  return {
+    total,
+    absences,
+    percent: total === 0 ? 0 : Math.round((absences / total) * 1000) / 10,
+    byReason,
   };
 }
 
@@ -159,11 +234,15 @@ export interface EscalationRule {
 }
 
 /**
- * Сколько раз сработало правило при текущем накоплении и сколько знаков «съедено».
+ * Сколько раз сработает правило при текущем накоплении и сколько знаков осталось.
  *
  * Считаем не «сработало ли», а **сколько раз**: за период плюсы могут накопить две
- * оценки, если порог пройден дважды. Возвращаем и остаток — он понадобится, чтобы
- * показать ученику «до оценки осталось 2 плюса».
+ * оценки, если порог пройден дважды.
+ *
+ * `remaining` — сколько знаков **осталось до следующей** оценки, а не «сколько уже
+ * накоплено сверх порога». Это разные числа, и путать их нельзя: при пороге 3 и двух
+ * плюсах до оценки остаётся один плюс, а не два. Когда порог набран ровно, остаток
+ * равен нулю: оценку можно выдать хоть сейчас.
  *
  * Функция чистая: одинаковое накопление всегда даёт одинаковый результат. Именно
  * на ней держится идемпотентность пересчёта (ADR-010) — повторный расчёт по тем же
@@ -173,13 +252,14 @@ export function escalationState(
   counts: SignCounts,
   rule: EscalationRule,
 ): { applications: number; remaining: number } {
-  if (rule.threshold <= 0) return { applications: 0, remaining: counts[rule.sign] };
-
   const total = counts[rule.sign];
-  return {
-    applications: Math.floor(total / rule.threshold),
-    remaining: total % rule.threshold,
-  };
+  if (rule.threshold <= 0) return { applications: 0, remaining: rule.threshold };
+
+  const applications = Math.floor(total / rule.threshold);
+  const extra = total % rule.threshold;
+  const remaining = extra === 0 ? 0 : rule.threshold - extra;
+
+  return { applications, remaining };
 }
 
 /**

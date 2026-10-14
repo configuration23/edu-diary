@@ -31,6 +31,12 @@ async function main(): Promise<void> {
     app.log.warn({ err: error }, 'каталог прав не синхронизирован: проверьте миграции');
   }
 
+  /**
+   * Каталог прав и роли «из коробки» приводятся в соответствие с кодом.
+   * Причины оценок синхронизируются при сборке приложения: там уже собраны все
+   * зависимости справочника.
+   */
+
   let closing = false;
   const shutdown = async (signal: string): Promise<void> => {
     if (closing) return;

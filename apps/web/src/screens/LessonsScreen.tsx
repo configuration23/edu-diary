@@ -596,6 +596,18 @@ export function LessonsScreen({ session }: { session: SessionResponseDto }) {
     (grant) => grant.permission === 'schedule:write' && grant.scope === 'all',
   );
 
+  /**
+   * Свой ли это урок для текущего пользователя.
+   *
+   * Администратор правит любой урок. Преподавателю чужие занятия показываем — ему нужно
+   * видеть, какой предмет идёт следующим, — но **серыми и без правки**: чужой журнал
+   * закрыт и на сервере, а кнопка правки, которая всё равно откажет, только путает.
+   * Замена переносит `teacherUserId` на заместителя, поэтому замещающий видит замену как
+   * свой урок.
+   */
+  const isOwnLesson = (lesson: { teacherUserId: string }): boolean =>
+    canManage || lesson.teacherUserId === session.user.id;
+
   const items = lessons.data?.items ?? [];
   const visible = items.filter((lesson) => showCancelled || lesson.status !== 'cancelled');
   const selectedLesson = items.find((lesson) => lesson.id === selectedLessonId) ?? null;
@@ -627,24 +639,47 @@ export function LessonsScreen({ session }: { session: SessionResponseDto }) {
     const cancelled = lesson.status === 'cancelled';
     const color = subjectColor(lesson.subjectId, lesson.subjectColor);
     const filled = appearance.colorsEnabled && !cancelled;
+    /**
+     * Чужой урок: серый, без цвета предмета и **некликабельный**.
+     *
+     * Раньше плитка открывала панель деталей, но править в ней было нечего, а кнопка
+     * «Журнал урока» вела на экран, который отвечал «Урок не найден»: доступ к чужому
+     * журналу закрыт на сервере. Кнопка, которая заведомо ведёт в отказ, только путает,
+     * поэтому чужое занятие не открывается вовсе.
+     */
+    const foreign = !cancelled && !isOwnLesson(lesson);
 
     return (
       <button
         key={lesson.id}
         type="button"
-        onClick={() => setSelectedLessonId(lesson.id)}
-        title={`${lesson.subjectName} · ${lesson.groupName} · ${lesson.teacherName} · ${lesson.roomName ?? 'без аудитории'}`}
-        className={`relative w-full rounded border px-1 py-0.5 text-left text-[11px] leading-tight transition ${
-          cancelled ? 'border-slate-200 bg-slate-100 text-slate-400' : 'border-slate-200'
-        } hover:shadow-sm`}
-        style={filled ? { backgroundColor: `${color}22`, borderColor: color } : undefined}
+        disabled={foreign}
+        onClick={foreign ? undefined : () => setSelectedLessonId(lesson.id)}
+        title={
+          foreign
+            ? `${lesson.subjectName} · ${lesson.groupName} · ${lesson.teacherName} · ведёт другой преподаватель`
+            : `${lesson.subjectName} · ${lesson.groupName} · ${lesson.teacherName} · ${lesson.roomName ?? 'без аудитории'}`
+        }
+        /*
+          Шрифт плитки такой же, как в недельной сетке расписания: 13 px без жирности
+          (пробовали 14 px полужирным — владелец признал перебором). Межстрочный
+          `leading-4`, чтобы строки не разъезжались.
+        */
+        className={`relative w-full rounded border px-1 py-0.5 text-left text-[13px] leading-4 transition ${
+          cancelled || foreign
+            ? 'border-slate-200 bg-slate-50 text-slate-400'
+            : 'cursor-pointer border-slate-200 hover:shadow-sm'
+        }`}
+        style={
+          filled && !foreign ? { backgroundColor: `${color}22`, borderColor: color } : undefined
+        }
       >
         {marker !== null && (
           <span className="absolute top-0 right-0.5 text-[13px] leading-none">{marker}</span>
         )}
 
         <span className="flex items-baseline gap-1 pr-4">
-          <span className="truncate font-medium">
+          <span className="truncate">
             {subjectCode(lesson.subjectName, lesson.subjectShortName)}
           </span>
           <span className="ml-auto shrink-0 text-slate-500">{lesson.roomName ?? '—'}</span>
@@ -822,7 +857,7 @@ export function LessonsScreen({ session }: { session: SessionResponseDto }) {
               lesson={selectedLesson}
               reasons={reasonsFor(selectedLesson.id)}
               onClose={() => setSelectedLessonId(null)}
-              canEditTopic={canEditTopic}
+              canEditTopic={canEditTopic && isOwnLesson(selectedLesson)}
               canManage={canManage}
             />
           </div>

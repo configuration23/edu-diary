@@ -1,12 +1,16 @@
-import type { LessonDto, SessionResponseDto } from '@edu-diary/contracts';
+import type { LessonDto, LessonMarksResponseDto, SessionResponseDto } from '@edu-diary/contracts';
 import { useState } from 'react';
+
+import { subjectCode } from '@edu-diary/domain';
 
 import { useAcademicContext } from '../components/AcademicContext';
 import { useAppearanceSettings } from '../components/AppearanceContext';
+import { LessonAttendance, LessonGrades, LessonGradesCount } from '../components/LessonMarks';
 import { Alert, Badge, Button, Card, EmptyState, Field, Table } from '../components/ui';
 import { SubjectDot, lessonMarker, subjectColor } from '../lib/appearance';
 import { errorMessage } from '../lib/api-client';
 import { hasBells, pairsFromBells } from '../lib/schedule-pairs';
+import { useLessonMarks } from '../lib/journal-queries';
 import { useBells, useLessons, useScheduleGroups } from '../lib/queries';
 
 /**
@@ -85,11 +89,21 @@ function LessonCard({
   showGroup,
   marker,
   colorsEnabled,
+  grades,
+  attendance,
+  learnerView,
 }: {
   lesson: LessonDto;
   showGroup: boolean;
   marker: string | null;
   colorsEnabled: boolean;
+  grades: LessonMarksResponseDto['grades'];
+  attendance: LessonMarksResponseDto['attendance'][number] | undefined;
+  /**
+   * Ученик и законный представитель: им показываем отметки, а служебные плашки
+   * расписания («По плану», «Правка вручную») — нет: это внутренние пометки.
+   */
+  learnerView: boolean;
 }) {
   const status = STATUS[lesson.status] ?? { label: lesson.status, tone: 'neutral' as const };
 
@@ -115,13 +129,20 @@ function LessonCard({
         </span>
       )}
 
+      {/* Оценки за занятие — в правом верхнем углу, как в журнале урока. */}
+      {learnerView && (
+        <span className="absolute top-2 right-2">
+          <LessonGrades grades={grades} />
+        </span>
+      )}
+
       <div className="flex flex-wrap items-center gap-2">
         <span className="font-medium text-slate-900">{lesson.pairNumber}-я пара</span>
         <span className="text-sm text-slate-500">
           {lesson.timeStart}–{lesson.timeEnd}
         </span>
-        <Badge tone={status.tone}>{status.label}</Badge>
-        {lesson.isManual && <Badge tone="warning">Правка вручную</Badge>}
+        {!learnerView && <Badge tone={status.tone}>{status.label}</Badge>}
+        {!learnerView && lesson.isManual && <Badge tone="warning">Правка вручную</Badge>}
       </div>
 
       <div className={`mt-1 font-medium ${lesson.status === 'cancelled' ? 'line-through' : ''}`}>
@@ -146,6 +167,13 @@ function LessonCard({
         {lesson.roomName ?? 'аудитория не указана'}
         {lesson.topic === null ? '' : ` · тема: ${lesson.topic}`}
       </div>
+
+      {/* Отметка посещаемости — в правом нижнем углу, буквой журнала. */}
+      {learnerView && (
+        <span className="absolute right-2 bottom-2">
+          <LessonAttendance mark={attendance} />
+        </span>
+      )}
     </div>
   );
 }
@@ -185,7 +213,16 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
   const pairs = pairsFromBells(bells.data?.items);
 
   const weekStart = mondayOf(anchor);
-  const weekDays = Array.from({ length: 6 }, (_, index) => shiftIso(weekStart, index));
+  /**
+   * Неделя — семь дней, включая воскресенье.
+   *
+   * Здесь стояло `length: 6`, и в сетке недели не было воскресенья, хотя полоса дат над
+   * ней показывала семь дней: суббота и воскресенье — обычные учебные дни, и занятие в
+   * воскресенье просто негде было увидеть.
+   */
+  const weekDays = Array.from({ length: DAYS_SHORT.length }, (_, index) =>
+    shiftIso(weekStart, index),
+  );
 
   /** Сдвиг недели: выбранный день недели сохраняем, чтобы контекст не терялся. */
   const shiftWeek = (weeks: number): void => {
@@ -200,9 +237,23 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
     to: shiftIso(weekStart, 13),
   });
 
-  void session;
+  /**
+   * Отметки в расписании показываем ученику и законному представителю: им важно видеть,
+   * что получено на занятии. Преподавателю и администратору это ни к чему — у них есть
+   * журнал урока с правкой.
+   */
+  const showMarks = session.permissions.some(
+    (grant) => grant.permission === 'grades:read' && grant.scope === 'own',
+  );
 
   const items = lessons.data?.items ?? [];
+  const marks = useLessonMarks(showMarks ? items.map((lesson) => lesson.id) : []);
+
+  /** Отметки по занятию: в плитке нужны и оценки, и посещаемость. */
+  const gradesOf = (lessonId: string) =>
+    (marks.data?.grades ?? []).filter((grade) => grade.lessonId === lessonId);
+  const attendanceOf = (lessonId: string) =>
+    (marks.data?.attendance ?? []).find((mark) => mark.lessonId === lessonId);
   const dayLessons = items.filter((lesson) => lesson.lessonDate === date);
   const visibleDayLessons = dayLessons.filter((lesson) => lesson.status !== 'cancelled');
 
@@ -367,6 +418,9 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
                     showGroup={selectedGroupId === null}
                     marker={lessonMarker(lesson, appearance)}
                     colorsEnabled={appearance.colorsEnabled}
+                    grades={gradesOf(lesson.id)}
+                    attendance={attendanceOf(lesson.id)}
+                    learnerView={showMarks}
                   />
                 ))}
               </div>
@@ -395,7 +449,7 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
                     );
 
                     return (
-                      <td key={iso} className="px-3 py-2">
+                      <td key={iso} className="px-0.5 py-1">
                         {cell.length === 0 ? (
                           <span className="text-xs text-slate-400">окно</span>
                         ) : (
@@ -415,7 +469,17 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
                               */
                               <span
                                 key={lesson.id}
-                                className={`rounded px-1 text-xs ${
+                                /*
+                                  Строго три строки фиксированной высоты и фиксированная
+                                  ширина (решение владельца): иначе плитка меняет размер от
+                                  того, заполнены отметки или нет, и сетка «дышит».
+
+                                  Размер: 13 px. Пробовали 14 px полужирным — владелец
+                                  признал перебором, поэтому уменьшили на 1 px и убрали
+                                  жирность. Межстрочный `leading-4`: строки остаются ровно
+                                  три по 16 px.
+                                */
+                                className={`block h-12 w-24 overflow-hidden rounded px-1 text-[13px] leading-4 ${
                                   lesson.status === 'cancelled'
                                     ? 'text-slate-400'
                                     : 'text-slate-700'
@@ -428,13 +492,39 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
                                     : undefined
                                 }
                               >
-                                {lesson.subjectName}
-                                {/* Событие видно и в сетке недели: значок вместо слова. */}
-                                {lessonMarker(lesson, appearance) !== null && (
-                                  <span className="ml-1">{lessonMarker(lesson, appearance)}</span>
-                                )}
-                                <span className="block text-slate-500">
-                                  {lesson.groupName} · {lesson.roomName ?? '—'}
+                                {/*
+                                  Плитка недели — три строки (решение владельца):
+                                  код предмета с аудиторией, группа, затем посещаемость слева
+                                  и количество оценок справа. Раньше отметки стояли по углам,
+                                  и посещаемость уезжала на третью строку сама собой — это
+                                  понравилось, поэтому расположение закрепили строками.
+                                */}
+                                <span className="flex h-4 items-baseline justify-between gap-1">
+                                  <span className="truncate">
+                                    {subjectCode(lesson.subjectName, lesson.subjectShortName)}
+                                    {/* Событие видно и в сетке недели: значок вместо слова. */}
+                                    {lessonMarker(lesson, appearance) !== null && (
+                                      <span className="ml-1">
+                                        {lessonMarker(lesson, appearance)}
+                                      </span>
+                                    )}
+                                  </span>
+                                  <span className="shrink-0 text-slate-500">
+                                    {lesson.roomName ?? '—'}
+                                  </span>
+                                </span>
+
+                                <span className="block h-4 truncate text-slate-500">
+                                  {lesson.groupName}
+                                </span>
+
+                                <span className="flex h-4 items-center justify-between gap-1">
+                                  {showMarks ? (
+                                    <LessonAttendance mark={attendanceOf(lesson.id)} />
+                                  ) : (
+                                    <span />
+                                  )}
+                                  {showMarks && <LessonGradesCount grades={gradesOf(lesson.id)} />}
                                 </span>
                               </span>
                             ))}

@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  absenceStats,
   ATTENDANCE_STATUSES,
   attendanceBreakdown,
+  attendanceLetter,
   countSigns,
   escalationState,
   isAttendanceStatus,
@@ -11,7 +13,6 @@ import {
   markNumber,
   pendingApplications,
   weightedAverage,
-  type AttendanceMark,
 } from '../src/journal';
 
 /**
@@ -74,26 +75,42 @@ describe('средний балл с весами', () => {
 });
 
 describe('посещаемость', () => {
-  const marks = (statuses: AttendanceMark['status'][]): AttendanceMark[] =>
-    statuses.map((status) => ({ status }));
-
   it('статусы проверяются по списку', () => {
     expect(isAttendanceStatus('present')).toBe(true);
     expect(isAttendanceStatus('опоздал')).toBe(false);
   });
 
-  it('считает проценты по всем статусам и общий процент «был»', () => {
-    const result = attendanceBreakdown(
-      marks(['present', 'present', 'absent', 'sick', 'absent', 'present', 'excused', 'late']),
-    );
+  it('считает проценты по всем статусам и общий процент «присутствовал»', () => {
+    const result = attendanceBreakdown([
+      { status: 'present' },
+      { status: 'present' },
+      { status: 'not_present' },
+      { status: 'sick' },
+      { status: 'not_present', isExcused: true },
+      { status: 'present' },
+      { status: 'late' },
+      { status: 'not_present' },
+    ]);
 
     expect(result.total).toBe(8);
-    // Был 3 из 8 → 37.5 %
+    // Присутствовал 3 из 8 → 37.5 %
     expect(result.percent).toBe(37.5);
-    expect(result.byStatus.present.count).toBe(3);
-    expect(result.byStatus.absent.percent).toBe(25);
+    expect(result.present).toBe(3);
+    // Уважительных — одна: отсутствие с галочкой.
+    expect(result.excused).toBe(1);
+    expect(result.byStatus.not_present.count).toBe(3);
+    expect(result.byStatus.not_present.percent).toBe(37.5);
     expect(result.byStatus.sick.percent).toBe(12.5);
+    expect(result.byStatus.late.percent).toBe(12.5);
     expect(Object.keys(result.byStatus).sort()).toEqual([...ATTENDANCE_STATUSES].sort());
+  });
+
+  it('буква отметки: «Н» с уважительной причиной показывается как «У»', () => {
+    expect(attendanceLetter('present')).toBe('П');
+    expect(attendanceLetter('not_present')).toBe('Н');
+    expect(attendanceLetter('not_present', true)).toBe('У');
+    expect(attendanceLetter('sick')).toBe('Б');
+    expect(attendanceLetter('late')).toBe('О');
   });
 
   it('без отметок проценты нулевые, а не деление на ноль', () => {
@@ -101,6 +118,60 @@ describe('посещаемость', () => {
     expect(result.total).toBe(0);
     expect(result.percent).toBe(0);
     expect(result.byStatus.present.percent).toBe(0);
+  });
+});
+
+describe('процент пропусков', () => {
+  /** Восемь занятий: три неявки (одна уважительная), болезнь, опоздание, три явки. */
+  const marks = [
+    { status: 'present' as const },
+    { status: 'present' as const },
+    { status: 'not_present' as const },
+    { status: 'sick' as const },
+    { status: 'not_present' as const, isExcused: true },
+    { status: 'present' as const },
+    { status: 'late' as const },
+    { status: 'not_present' as const },
+  ];
+
+  it('по умолчанию пропуск — только «не был»', () => {
+    const result = absenceStats(marks, { countExcused: false, countSick: false });
+
+    expect(result.total).toBe(8);
+    expect(result.absences).toBe(3);
+    // 3 из 8 → 37.5 %
+    expect(result.percent).toBe(37.5);
+    // Опоздание пропуском не считается никогда.
+    expect(result.byReason.late).toBe(1);
+  });
+
+  it('галочка «уважительные» добавляет их к пропускам', () => {
+    const result = absenceStats(marks, { countExcused: true, countSick: false });
+
+    // Три неявки среди них одна уважительная: 3 + 1 = 4.
+    expect(result.absences).toBe(4);
+    expect(result.percent).toBe(50);
+  });
+
+  it('галочка «больничные» добавляет болезни', () => {
+    const result = absenceStats(marks, { countExcused: false, countSick: true });
+
+    expect(result.absences).toBe(4);
+    expect(result.percent).toBe(50);
+  });
+
+  it('обе галочки складываются', () => {
+    const result = absenceStats(marks, { countExcused: true, countSick: true });
+
+    expect(result.absences).toBe(5);
+    expect(result.percent).toBe(62.5);
+  });
+
+  it('без отмеченных занятий процент ноль, а не деление на ноль', () => {
+    const result = absenceStats([], { countExcused: true, countSick: true });
+
+    expect(result.total).toBe(0);
+    expect(result.percent).toBe(0);
   });
 });
 
@@ -117,16 +188,30 @@ describe('правило «плюсы и точки → оценка»', () => {
     ).toEqual({ applications: 1, remaining: 0 });
   });
 
-  it('лишние знаки переносятся в остаток', () => {
+  /**
+   * Остаток — это сколько знаков **осталось до оценки**, а не «сколько лишних».
+   * Ошибку поймал владелец: при пороге 3 и двух плюсах журнал писал «до оценки: 2»
+   * вместо «до оценки: 1».
+   */
+  it('остаток считает, сколько знаков осталось до оценки', () => {
+    expect(
+      escalationState({ plus: 2, dot: 0 }, { sign: 'plus', threshold: 3, reward: '5' }),
+    ).toEqual({ applications: 0, remaining: 1 });
+
     expect(
       escalationState({ plus: 6, dot: 0 }, { sign: 'plus', threshold: 4, reward: '5' }),
     ).toEqual({ applications: 1, remaining: 2 });
+
+    // Порог набран ровно: до оценки ничего не осталось, её можно выдать сейчас.
+    expect(
+      escalationState({ plus: 4, dot: 0 }, { sign: 'plus', threshold: 4, reward: '5' }),
+    ).toEqual({ applications: 1, remaining: 0 });
   });
 
   it('плюсы и точки считаются раздельно', () => {
     const rule = { sign: 'dot', threshold: 3, reward: '3' } as const;
     const counts = { plus: 10, dot: 2 };
-    expect(escalationState(counts, rule)).toEqual({ applications: 0, remaining: 2 });
+    expect(escalationState(counts, rule)).toEqual({ applications: 0, remaining: 1 });
   });
 
   it('повторный расчёт по тем же данным ничего не меняет', () => {
@@ -145,8 +230,9 @@ describe('правило «плюсы и точки → оценка»', () => {
   });
 
   it('порог меньше единицы не срабатывает никогда', () => {
+    // Порог 0 — испорченная настройка: оценок не будет, и «осталось» тоже бессмысленно.
     expect(
       escalationState({ plus: 10, dot: 0 }, { sign: 'plus', threshold: 0, reward: '5' }),
-    ).toEqual({ applications: 0, remaining: 10 });
+    ).toEqual({ applications: 0, remaining: 0 });
   });
 });

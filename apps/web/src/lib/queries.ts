@@ -23,6 +23,8 @@ import {
   listConsentsResponseSchema,
   listEnrollmentsResponseSchema,
   listGradeCategoriesResponseSchema,
+  listSignRulesResponseSchema,
+  signRuleSchema,
   listGuardianLinksResponseSchema,
   listBellsResponseSchema,
   listGroupOptionsResponseSchema,
@@ -159,7 +161,23 @@ export function useLogout(): UseMutationResult<void, Error, void> {
 
   return useMutation({
     mutationFn: () => apiSend('/api/auth/logout', { method: 'POST' }),
-    onSuccess: () => client.invalidateQueries(),
+    /**
+     * После выхода убираем данные предыдущего пользователя, но оставляем запрос сессии.
+     *
+     * `invalidateQueries` данные сохраняет: все старые запросы уходят без сессии и
+     * получают семь-восемь ответов 401 подряд, а следующий пользователь на мгновение
+     * видит чужой журнал. `clear()` убирает и запрос сессии, а по нему приложение
+     * решает показать экран входа: выход тотчас зависал на «Загружаем…» — проверено.
+     *
+     * Поэтому снимаем все данные, кроме сессии, и сразу записываем «сессии нет»:
+     * экран входа появляется без обращения к серверу.
+     */
+    onSuccess: () => {
+      client.removeQueries({ predicate: (query) => query.queryKey[0] !== 'session' });
+      // Записываем «сессии нет» как свежий ответ: иначе запрос тотчас уйдёт на сервер
+      // и получит ожидаемый, но лишний 401.
+      client.setQueryData(['session'], null, { updatedAt: Date.now() });
+    },
   });
 }
 
@@ -737,6 +755,38 @@ export function useCreateGradeCategory() {
     mutationFn: (input: { code: string; title: string; weight: number; color?: string | null }) =>
       apiRequest('/api/grade-categories', gradeCategorySchema, { method: 'POST', body: input }),
     onSuccess: () => invalidateAcademics(client),
+  });
+}
+
+/**
+ * Накопительные знаки: сколько плюсов и точек даёт оценку.
+ *
+ * Награда не настраивается — плюсы дают `5`, точки `2`; правятся только порог и
+ * выключатель пересчёта.
+ */
+export function useSignRules() {
+  return useQuery({
+    queryKey: ['sign-rules'],
+    queryFn: () => apiRequest('/api/sign-rules', listSignRulesResponseSchema),
+  });
+}
+
+export function useUpdateSignRule() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { sign: 'plus' | 'dot'; threshold?: number; isActive?: boolean }) =>
+      apiRequest(`/api/sign-rules/${input.sign}`, signRuleSchema, {
+        method: 'PATCH',
+        body: {
+          ...(input.threshold === undefined ? {} : { threshold: input.threshold }),
+          ...(input.isActive === undefined ? {} : { isActive: input.isActive }),
+        },
+      }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ['sign-rules'] });
+      // Порог виден и в журнале урока: там показывается «до оценки осталось N».
+      void client.invalidateQueries({ queryKey: ['journal'] });
+    },
   });
 }
 

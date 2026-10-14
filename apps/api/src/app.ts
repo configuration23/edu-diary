@@ -164,6 +164,21 @@ export async function buildApp({
     users: userLookup,
   });
 
+  /**
+   * Причины оценок «из коробки»: недостающие добавляются, изменённые заведением
+   * не перезаписываются. Так журнал работает сразу после установки, а справочник
+   * остаётся принадлежащим заведению.
+   *
+   * Ошибку не пробрасываем: без справочника приложение обязано стартовать — иначе
+   * не поднять даже мастер настройки, который её и починит. Причины — данные, а не
+   * условие работы (в тестах сборки приложения базы может не быть вовсе).
+   */
+  try {
+    await academics.syncGradeCategories();
+  } catch (error) {
+    app.log.warn({ err: error }, 'причины оценок не синхронизированы: проверьте миграции');
+  }
+
   const staffing = buildStaffingService({
     db,
     audit,
@@ -322,6 +337,33 @@ export async function buildApp({
       },
       studentIdsOfGuardian: (userId) => guardiansRepository.studentIdsOfGuardian(userId),
     },
+    /**
+     * Пороги накопительных знаков ведёт учебный процесс, поэтому журнал спрашивает
+     * их через порт: прямых импортов между модулями нет.
+     *
+     * В базе знак лежит строкой, а журналу нужны только два известных значения:
+     * посторонние строки отбрасываем — они не знаки, а мусор в справочнике.
+     */
+    signRules: {
+      async listSignRules() {
+        const rules = await academics.listSignRules();
+
+        return rules.flatMap((rule) =>
+          rule.sign === 'plus' || rule.sign === 'dot'
+            ? [
+                {
+                  id: rule.id,
+                  sign: rule.sign,
+                  categoryId: rule.categoryId,
+                  categoryTitle: rule.categoryTitle,
+                  threshold: rule.threshold,
+                  isActive: rule.isActive,
+                },
+              ]
+            : [],
+        );
+      },
+    },
   });
 
   let authService: SessionRevokerPort | null = null;
@@ -424,6 +466,20 @@ export async function buildApp({
           studentIds.add(id);
         }
         return [...studentIds];
+      },
+      /**
+       * Состав группы на дату: отчёту аналитики нужен список учеников группы.
+       * Берём именно состав на дату, а не текущий, — как в журнале урока.
+       */
+      async studentsOfGroup(studyGroupId, onDate) {
+        const enrollments = await academicsRepository.listEnrollments(studyGroupId);
+        const active = enrollments.filter(
+          (enrollment) =>
+            enrollment.joinedOn <= onDate &&
+            (enrollment.leftOn === null || enrollment.leftOn >= onDate),
+        );
+
+        return active.map((enrollment) => ({ studentId: enrollment.studentId }));
       },
     }),
     { prefix: '/api' },

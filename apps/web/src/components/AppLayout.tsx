@@ -1,8 +1,9 @@
+import { useEffect, useRef } from 'react';
+
 import type { SessionResponseDto } from '@edu-diary/contracts';
-import { Link, Outlet } from '@tanstack/react-router';
+import { Link, Outlet, useNavigate } from '@tanstack/react-router';
 
 import { Badge, Button } from './ui';
-import { GroupSwitcher } from './AcademicContext';
 import { useLogout } from '../lib/queries';
 import type { BrandingDto } from '@edu-diary/contracts';
 
@@ -42,7 +43,16 @@ const NAVIGATION: NavigationItem[] = [
   {
     to: '/schedule/template',
     label: 'Сетка (шаблон)',
-    visible: (session) => has(session, 'schedule:read'),
+    /**
+     * Только те, кто составляет расписание: администратор и преподаватель.
+     *
+     * Ученику и представителю этот раздел ни к чему — им нужен «Расписание» с
+     * готовыми занятиями. Права `schedule:read` у них есть, поэтому раньше раздел был
+     * виден всем: право отвечает на вопрос «можно ли читать расписание», а не «нужен
+     * ли инструмент составления».
+     */
+    visible: (session) =>
+      has(session, 'schedule:write') || hasScope(session, 'schedule:read', ['assigned', 'all']),
   },
   {
     to: '/lessons',
@@ -78,6 +88,16 @@ const NAVIGATION: NavigationItem[] = [
     visible: (session) => has(session, 'security:read'),
   },
   {
+    to: '/analytics',
+    label: 'Оценки и посещение',
+    /**
+     * Видна всем ролям: у администратора и преподавателя это отчёт по группе, у ученика и
+     * законного представителя — «Мои оценки». Право `analytics:read` есть у всех четырёх
+     * ролей, разница только в области.
+     */
+    visible: (session) => has(session, 'analytics:read'),
+  },
+  {
     to: '/settings',
     label: 'Настройки',
     visible: (session) => has(session, 'settings:write'),
@@ -101,6 +121,29 @@ function hasScope(session: SessionResponseDto, permission: string, scopes: strin
   );
 }
 
+/**
+ * После выхода возвращаем приложение на стартовый экран.
+ *
+ * Приложение — одна страница: выход её не перезагружает, и маршрут остаётся прежним.
+ * Зашли преподавателем, открыли журнал, вышли **прямо с этого экрана** и вошли другим
+ * — открывался тот же журнал. Доступ к чужому уроку сервер закрывает, но выглядит это
+ * как чужой журнал, а в адресе остаётся идентификатор чужих данных.
+ *
+ * Живёт в компоненте, а не в `useLogout`: переход по маршрутам — дело интерфейса, а
+ * импорт маршрутизатора в запросы замкнул бы файлы друг на друга (`queries` ← экраны
+ * ← `App`, где маршрутизатор и создаётся).
+ */
+function useReturnHomeAfterLogout(succeeded: boolean): void {
+  const navigate = useNavigate();
+  const moved = useRef(false);
+
+  useEffect(() => {
+    if (!succeeded || moved.current) return;
+    moved.current = true;
+    void navigate({ to: '/' });
+  }, [succeeded, navigate]);
+}
+
 export function AppLayout({
   session,
   branding,
@@ -109,6 +152,7 @@ export function AppLayout({
   branding: BrandingDto;
 }) {
   const logout = useLogout();
+  useReturnHomeAfterLogout(logout.isSuccess);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -124,7 +168,13 @@ export function AppLayout({
           </div>
 
           <div className="flex items-center gap-3 text-sm">
-            <GroupSwitcher />
+            {/*
+              Переключатель группы в шапке скрыт по решению владельца: группа выбирается
+              на каждом экране, и общий выбор только путал — казалось, что он влияет на
+              всё приложение, а влиял на три раздела. Компонент `GroupSwitcher` и общий
+              контекст (`AcademicContext`) целы: чтобы вернуть переключатель, достаточно
+              поставить его сюда обратно.
+            */}
             <span className="text-slate-600">{session.user.fullName}</span>
             {session.user.roles.map((role) => (
               <Badge key={role.code}>{role.title}</Badge>

@@ -17,6 +17,7 @@ import { GroupsScreen } from './screens/GroupsScreen';
 import { LoginScreen } from './screens/LoginScreen';
 import { LessonJournalScreen } from './screens/LessonJournalScreen';
 import { LessonsScreen } from './screens/LessonsScreen';
+import { GradesAttendanceScreen } from './screens/GradesAttendanceScreen';
 import { PrivacyScreen } from './screens/PrivacyScreen';
 import { ScheduleScreen } from './screens/ScheduleScreen';
 import { SubstitutionsScreen } from './screens/SubstitutionsScreen';
@@ -175,6 +176,12 @@ const lessonJournalRoute = createRoute({
   component: withSession((session) => <LessonJournalScreen session={session} />),
 });
 
+/** «Оценки и посещение»: отчёт за текущий учебный период. */
+const analyticsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/analytics',
+  component: withSession((session) => <GradesAttendanceScreen session={session} />),
+});
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/settings',
@@ -211,6 +218,7 @@ const routeTree = rootRoute.addChildren([
   scheduleRoute,
   scheduleTemplateRoute,
   substitutionsRoute,
+  analyticsRoute,
   lessonsRoute,
   lessonJournalRoute,
   usersRoute,

@@ -1,18 +1,9 @@
 import { sql } from 'drizzle-orm';
 import { uuidv7 } from '../../shared/ids';
-import {
-  boolean,
-  index,
-  integer,
-  pgTable,
-  text,
-  timestamp,
-  uniqueIndex,
-  uuid,
-} from 'drizzle-orm/pg-core';
+import { boolean, index, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
 import { appUser } from '../iam';
-import { gradeCategory, period, student, subject } from '../academics';
+import { gradeCategory, student } from '../academics';
 import { lesson } from '../schedule';
 
 /**
@@ -53,6 +44,16 @@ export const gradeEntry = pgTable(
     comment: text('comment'),
     /** Кто поставил: преподаватель или администратор. */
     createdBy: uuid('created_by').references(() => appUser.id, { onDelete: 'set null' }),
+    /**
+     * Какой оценкой оплачен знак.
+     *
+     * Пересчёт «плюсы и точки → оценка» съедает накопленные знаки: у съеденного
+     * знака заполнены `consumedByGradeId` и `consumedAt`. Так видно и происхождение
+     * оценки («за три плюса»), и почему знак исчез из журнала. Восстановление знака
+     * снимает пометку, и следующий пересчёт посчитает его снова.
+     */
+    consumedByGradeId: uuid('consumed_by_grade_id'),
+    consumedAt: timestamp('consumed_at', { withTimezone: true }),
     /** Мягкое удаление: строку не убираем, иначе пропадёт история (ADR-011). */
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
     deletedBy: uuid('deleted_by').references(() => appUser.id, { onDelete: 'set null' }),
@@ -64,12 +65,14 @@ export const gradeEntry = pgTable(
     index('grade_entry_lesson_idx').on(table.lessonId),
     index('grade_entry_student_idx').on(table.studentId),
     /**
-     * Одна оценка на ученика в уроке. Частичный индекс: удалённая запись место не
-     * занимает, иначе после мягкого удаления нельзя было бы поставить новую оценку.
+     * Уникальности «ученик + урок» здесь **нет намеренно**: за урок можно поставить
+     * несколько оценок и знаков — например, ответ на уроке и контрольную работу.
+     * От случайного дубля защищает сервис: он сравнивает причину и спрашивает
+     * подтверждение замены.
      */
-    uniqueIndex('grade_entry_lesson_student_key')
-      .on(table.lessonId, table.studentId)
-      .where(sql`${table.deletedAt} is null`),
+    index('grade_entry_lesson_student_idx').on(table.lessonId, table.studentId),
+    /** Ссылка на оплатившую оценку: нужна, чтобы найти съеденные знаки. */
+    index('grade_entry_consumed_by_idx').on(table.consumedByGradeId),
   ],
 );
 
@@ -86,9 +89,15 @@ export const attendanceEntry = pgTable(
     studentId: uuid('student_id')
       .notNull()
       .references(() => student.id, { onDelete: 'cascade' }),
-    /** present | absent | excused | sick | late */
+    /** present | not_present | sick | late (плюс устаревший excused из ранней версии). */
     status: text('status').notNull(),
-    /** Причина: обязательна для прогула и уважительной (правило проверяет сервис). */
+    /**
+     * Отметка «уважительная»: ставится вместе с отсутствием и требует причины.
+     *
+     * Отдельным признаком, а не статусом: в журнале это не пятая буква, а галочка
+     * к «Н» — «не был по уважительной причине».
+     */
+    isExcused: boolean('is_excused').notNull().default(false),
     reason: text('reason'),
     createdBy: uuid('created_by').references(() => appUser.id, { onDelete: 'set null' }),
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
@@ -150,69 +159,12 @@ export const attendanceRevision = pgTable(
 );
 
 /**
- * Правило «знаки → оценка»: сколько плюсов или точек даёт какую оценку (ADR-010).
+ * Пересчёт «плюсы и точки → оценка» живёт без отдельной таблицы правил.
  *
- * Порог задаёт администратор. Правило может быть общим для категории (`subjectId`
- * пусто) или уточнённым для предмета: счёт ведётся по предмету, поэтому у физики и
- * математики свои накопления.
+ * Награда жёстко привязана к знаку: плюсы дают `5`, точки дают `2` — это правило
+ * предметной области, а не настройка. Настраивается только порог, и он лежит в
+ * справочнике причин оценок (`grade_category.sign_threshold`), рядом с выключателем
+ * пересчёта. Съеденные знаки помечаются оценкой, которая их оплатила
+ * (`grade_entry.consumed_by_grade_id`), поэтому отдельный журнал срабатываний не
+ * нужен: происхождение оценки видно по самим знакам, а история — в аудите.
  */
-export const gradeRule = pgTable('grade_rule', {
-  id: uuid('id')
-    .primaryKey()
-    .$defaultFn(() => uuidv7()),
-  /** plus | dot */
-  sign: text('sign').notNull(),
-  /** Сколько знаков должно накопиться. */
-  threshold: integer('threshold').notNull(),
-  /** Что выдаётся при срабатывании: `2`…`5`. */
-  reward: text('reward').notNull(),
-  /** Категория оценки, к которой применяется правило (необязательно). */
-  categoryId: uuid('category_id').references(() => gradeCategory.id, { onDelete: 'cascade' }),
-  /** Предмет: если задан, правило действует только для него. */
-  subjectId: uuid('subject_id').references(() => subject.id, { onDelete: 'cascade' }),
-  isActive: boolean('is_active').notNull().default(true),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-});
-
-/**
- * Журнал срабатываний правила.
- *
- * Уникальность `(rule, ученик, предмет, период, номер срабатывания)` — это и есть
- * идемпотентность: повторный пересчёт по тем же данным не создаёт вторую запись,
- * сколько бы раз его ни запускали (ADR-010, критерий приёмки этапа).
- */
-export const gradeRuleApplication = pgTable(
-  'grade_rule_application',
-  {
-    id: uuid('id')
-      .primaryKey()
-      .$defaultFn(() => uuidv7()),
-    ruleId: uuid('rule_id')
-      .notNull()
-      .references(() => gradeRule.id, { onDelete: 'cascade' }),
-    studentId: uuid('student_id')
-      .notNull()
-      .references(() => student.id, { onDelete: 'cascade' }),
-    subjectId: uuid('subject_id')
-      .notNull()
-      .references(() => subject.id, { onDelete: 'cascade' }),
-    periodId: uuid('period_id').references(() => period.id, { onDelete: 'set null' }),
-    /** Номер срабатывания внутри периода: 1, 2, 3… */
-    applicationNumber: integer('application_number').notNull(),
-    /** Накопление знаков на момент срабатывания: видно, за что выдана оценка. */
-    counterValue: integer('counter_value').notNull(),
-    /** Оценка, созданная этим срабатыванием. */
-    gradeEntryId: uuid('grade_entry_id').references(() => gradeEntry.id, { onDelete: 'set null' }),
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => [
-    uniqueIndex('grade_rule_application_key').on(
-      table.ruleId,
-      table.studentId,
-      table.subjectId,
-      table.periodId,
-      table.applicationNumber,
-    ),
-  ],
-);

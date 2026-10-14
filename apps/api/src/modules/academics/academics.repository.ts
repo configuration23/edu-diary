@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, ilike, inArray, isNull, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm';
 
 import type { Database, Executor } from '../../shared/db/client';
 import {
@@ -99,6 +99,25 @@ export interface GradeCategoryRecord {
   weight: number;
   color: string | null;
   isDefault: boolean;
+  /** Накопительный знак (`plus`/`dot`) или `null` у обычной причины. */
+  sign: string | null;
+  signThreshold: number | null;
+  signRuleActive: boolean;
+}
+
+/**
+ * Накопительный знак для пересчёта в оценки.
+ *
+ * Порог и выключатель лежат у самой причины знака, поэтому здесь только удобный
+ * вид: журналу нужны знак, причина знака и порог.
+ */
+export interface SignRuleRecord {
+  id: string;
+  sign: string;
+  categoryId: string;
+  categoryTitle: string;
+  threshold: number;
+  isActive: boolean;
 }
 
 /** Виды зависимостей, из-за которых справочник или группа не удаляются. */
@@ -254,7 +273,18 @@ export interface AcademicsRepository {
   ): Promise<RoomRecord | null>;
   deleteRoom(id: string, executor?: Executor): Promise<boolean>;
 
-  listGradeCategories(): Promise<GradeCategoryRecord[]>;
+  listGradeCategories(executor?: Executor): Promise<GradeCategoryRecord[]>;
+  /** Накопительные знаки: плюсы и точки с порогами. */
+  listSignRules(executor?: Executor): Promise<SignRuleRecord[]>;
+  findSignRule(sign: string, executor?: Executor): Promise<SignRuleRecord | null>;
+  /** Правка причины знака: меняются только порог и выключатель пересчёта. */
+  updateSignRule(
+    sign: string,
+    input: { threshold?: number | undefined; isActive?: boolean | undefined },
+    executor?: Executor,
+  ): Promise<SignRuleRecord | null>;
+  /** Поиск причины по коду: нужен синхронизации справочника «из коробки». */
+  findGradeCategoryByCode(code: string, executor?: Executor): Promise<GradeCategoryRecord | null>;
   findGradeCategory(id: string, executor?: Executor): Promise<GradeCategoryRecord | null>;
   insertGradeCategory(
     input: {
@@ -263,6 +293,10 @@ export interface AcademicsRepository {
       weight: number;
       color: string | null;
       isDefault: boolean;
+      /** Заполняется только для накопительных знаков: плюсы и точки. */
+      sign?: string | undefined;
+      signThreshold?: number | undefined;
+      signRuleActive?: boolean | undefined;
     },
     executor?: Executor,
   ): Promise<GradeCategoryRecord>;
@@ -272,6 +306,37 @@ export interface AcademicsRepository {
     executor?: Executor,
   ): Promise<GradeCategoryRecord | null>;
   deleteGradeCategory(id: string, executor?: Executor): Promise<boolean>;
+}
+
+/**
+ * Приведение строки справочника к накопительному знаку.
+ *
+ * Порог у знака обязателен по смыслу: без него непонятно, сколько знаков даёт
+ * оценку. Строку без порога пропускаем — так повреждённый справочник не сломает
+ * пересчёт, а просто не даст правила.
+ */
+function toSignRule(
+  row:
+    | {
+        id: string;
+        sign: string | null;
+        categoryId: string;
+        categoryTitle: string;
+        threshold: number | null;
+        isActive: boolean;
+      }
+    | undefined,
+): SignRuleRecord | null {
+  if (row === undefined || row.sign === null || row.threshold === null) return null;
+
+  return {
+    id: row.id,
+    sign: row.sign,
+    categoryId: row.categoryId,
+    categoryTitle: row.categoryTitle,
+    threshold: row.threshold,
+    isActive: row.isActive,
+  };
 }
 
 const EMPTY_DEPENDENCIES: Dependencies = { assignments: 0, enrollments: 0 };
@@ -754,11 +819,21 @@ export function createAcademicsRepository(db: Database): AcademicsRepository {
       return rows.length > 0;
     },
 
-    async listGradeCategories(): Promise<GradeCategoryRecord[]> {
-      return db.orm
+    async listGradeCategories(executor: Executor = db.orm): Promise<GradeCategoryRecord[]> {
+      return executor
         .select()
         .from(gradeCategory)
         .orderBy(desc(gradeCategory.isDefault), asc(gradeCategory.title));
+    },
+
+    async findGradeCategoryByCode(code, executor: Executor = db.orm) {
+      const rows = await executor
+        .select()
+        .from(gradeCategory)
+        .where(eq(gradeCategory.code, code))
+        .limit(1);
+
+      return rows[0] ?? null;
     },
 
     async findGradeCategory(
@@ -772,6 +847,63 @@ export function createAcademicsRepository(db: Database): AcademicsRepository {
         .limit(1);
 
       return rows[0] ?? null;
+    },
+
+    async findSignRule(sign: string, executor: Executor = db.orm): Promise<SignRuleRecord | null> {
+      const rows = await executor
+        .select({
+          id: gradeCategory.id,
+          sign: gradeCategory.sign,
+          categoryId: gradeCategory.id,
+          categoryTitle: gradeCategory.title,
+          threshold: gradeCategory.signThreshold,
+          isActive: gradeCategory.signRuleActive,
+        })
+        .from(gradeCategory)
+        .where(eq(gradeCategory.sign, sign))
+        .limit(1);
+
+      return toSignRule(rows[0]);
+    },
+
+    async listSignRules(executor: Executor = db.orm): Promise<SignRuleRecord[]> {
+      const rows = await executor
+        .select({
+          id: gradeCategory.id,
+          sign: gradeCategory.sign,
+          categoryId: gradeCategory.id,
+          categoryTitle: gradeCategory.title,
+          threshold: gradeCategory.signThreshold,
+          isActive: gradeCategory.signRuleActive,
+        })
+        .from(gradeCategory)
+        .where(isNotNull(gradeCategory.sign))
+        .orderBy(asc(gradeCategory.sign));
+
+      return rows
+        .map((row) => toSignRule(row))
+        .filter((rule): rule is SignRuleRecord => rule !== null);
+    },
+
+    async updateSignRule(sign, input, executor: Executor = db.orm) {
+      const rows = await executor
+        .update(gradeCategory)
+        .set({
+          ...(input.threshold === undefined ? {} : { signThreshold: input.threshold }),
+          ...(input.isActive === undefined ? {} : { signRuleActive: input.isActive }),
+          updatedAt: new Date(),
+        })
+        .where(eq(gradeCategory.sign, sign))
+        .returning({
+          id: gradeCategory.id,
+          sign: gradeCategory.sign,
+          categoryId: gradeCategory.id,
+          categoryTitle: gradeCategory.title,
+          threshold: gradeCategory.signThreshold,
+          isActive: gradeCategory.signRuleActive,
+        });
+
+      return toSignRule(rows[0]);
     },
 
     async insertGradeCategory(input, executor: Executor = db.orm): Promise<GradeCategoryRecord> {

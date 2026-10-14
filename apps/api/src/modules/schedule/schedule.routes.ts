@@ -348,13 +348,19 @@ export function registerScheduleRoutes(
     const auth = authOf(request);
     const groups = await visibleGroupIds(request, 'lessons:read');
 
-    // Область `assigned`: преподаватель видит свои уроки — включая те, где он
-    // заменяющий (ADR-032), иначе замена была бы бессмысленной.
+    /**
+     * Фильтр по преподавателю.
+     *
+     * Преподавателю показываем **все занятия его групп**, а не только свои: ему нужно
+     * видеть, какой предмет идёт следующим (решение владельца). Чужие занятия интерфейс
+     * показывает серыми, а правку запрещает сервер журнала. Раньше здесь стоял фильтр
+     * по `auth.userId`, и чужих занятий преподаватель не видел вовсе.
+     *
+     * Область `all` (администратор) может запросить конкретного преподавателя.
+     */
     const teacherUserId = authHasPermission(auth, 'lessons:read', 'all')
       ? query.teacherUserId
-      : authHasPermission(auth, 'lessons:read', 'assigned')
-        ? (query.teacherUserId ?? auth.userId)
-        : undefined;
+      : undefined;
 
     const { items, total } = await schedule.listLessons({
       studyGroupId: query.studyGroupId,
