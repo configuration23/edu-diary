@@ -369,3 +369,100 @@ export const lessonMarksResponseSchema = z.object({
   attendance: z.array(lessonAttendanceSchema),
 });
 export type LessonMarksResponseDto = z.infer<typeof lessonMarksResponseSchema>;
+
+/**
+ * «Оценки и посещение»: отметки по предметам за текущий учебный период.
+ *
+ * Диапазон дат не передаётся: раздел всегда работает за текущий период, а если периода
+ * нет, сервер отвечает отказом `period_not_set` — экран показывает «Период не задан».
+ */
+export const periodInfoSchema = z.object({
+  id: uuidSchema,
+  title: z.string(),
+  startsOn: isoDateSchema,
+  endsOn: isoDateSchema,
+});
+
+/** Отметка в списке по предмету: компактный вид журнала плюс дата занятия. */
+export const subjectMarkSchema = z.object({
+  id: uuidSchema,
+  studentId: uuidSchema,
+  value: gradeValueSchema.nullable(),
+  sign: gradeSignSchema.nullable(),
+  categoryCode: z.string().nullable(),
+  categoryTitle: z.string().nullable(),
+  categoryWeight: z.number().int(),
+  lessonDate: isoDateSchema,
+});
+
+export const subjectGradesSchema = z.object({
+  subjectId: uuidSchema,
+  subjectName: z.string(),
+  /** Средний балл с весами; знаки «+» и «·» в него не входят. */
+  average: z.number().nullable(),
+  marks: z.array(subjectMarkSchema),
+});
+
+export const gradesBySubjectResponseSchema = z.object({
+  period: periodInfoSchema,
+  subjects: z.array(subjectGradesSchema),
+});
+export type GradesBySubjectResponseDto = z.infer<typeof gradesBySubjectResponseSchema>;
+
+export const subjectAttendanceMarkSchema = z.object({
+  id: uuidSchema,
+  studentId: uuidSchema,
+  status: attendanceStatusSchema,
+  isExcused: z.boolean(),
+  reason: z.string().nullable(),
+  lessonDate: isoDateSchema,
+});
+
+export const subjectAttendanceSchema = z.object({
+  subjectId: uuidSchema,
+  subjectName: z.string(),
+  total: z.number().int().nonnegative(),
+  absences: z.number().int().nonnegative(),
+  /** Процент пропусков при выбранных галочках. */
+  percent: z.number(),
+  /** Процент без галочек: видно, насколько галочки меняют картину. */
+  basePercent: z.number(),
+  marks: z.array(subjectAttendanceMarkSchema),
+});
+
+export const attendanceBySubjectResponseSchema = z.object({
+  period: periodInfoSchema,
+  subjects: z.array(subjectAttendanceSchema),
+});
+export type AttendanceBySubjectResponseDto = z.infer<typeof attendanceBySubjectResponseSchema>;
+
+/** Вид преподавателя: строки по ученикам его группы. */
+export const studentMarksSchema = z.object({
+  studentId: uuidSchema,
+  studentName: z.string(),
+  average: z.number().nullable(),
+  marks: z.array(
+    subjectMarkSchema
+      .omit({ studentId: true, lessonDate: true })
+      .extend({ lessonDate: isoDateSchema }),
+  ),
+  attendance: z.object({
+    total: z.number().int().nonnegative(),
+    absences: z.number().int().nonnegative(),
+    percent: z.number(),
+    basePercent: z.number(),
+    marks: z.array(subjectAttendanceMarkSchema.omit({ studentId: true })),
+  }),
+});
+
+export const marksByStudentResponseSchema = z.object({
+  period: periodInfoSchema,
+  students: z.array(studentMarksSchema),
+});
+export type MarksByStudentResponseDto = z.infer<typeof marksByStudentResponseSchema>;
+
+/** Общие галочки: считать уважительные и больничные пропусками. */
+export const absenceOptionsQuerySchema = z.object({
+  countExcused: z.coerce.boolean().optional(),
+  countSick: z.coerce.boolean().optional(),
+});

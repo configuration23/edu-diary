@@ -2,7 +2,10 @@ import {
   applySignRulesRequestSchema,
   applySignRulesResponseSchema,
   attendanceEntrySchema,
+  attendanceBySubjectResponseSchema,
+  gradesBySubjectResponseSchema,
   journalStatsQuerySchema,
+  marksByStudentResponseSchema,
   lessonMarksQuerySchema,
   lessonMarksResponseSchema,
   deleteAttendanceRequestSchema,
@@ -81,6 +84,64 @@ export function registerJournalRoutes(
     authHasPermission(authOf(request), 'grades:read', 'all');
 
   /**
+   * «Оценки и посещение»: отметки по предметам за текущий период.
+   *
+   * Ученику и представителю — свои строки. Сотрудник может запросить любого ученика
+   * (`studentId`): администратору этот экран нужен с выбором группы и ученика.
+   */
+  app.get(
+    '/journal/grades-by-subject',
+    { preHandler: requirePermission('grades:read', 'own') },
+    async (request) => {
+      const studentIds = await analyticsStudentIds(request);
+      const data = await journal.gradesBySubject(studentIds);
+      return gradesBySubjectResponseSchema.parse(data);
+    },
+  );
+
+  app.get(
+    '/journal/attendance-by-subject',
+    { preHandler: requirePermission('grades:read', 'own') },
+    async (request) => {
+      const studentIds = await analyticsStudentIds(request);
+      const options = absenceOptions(request);
+      const data = await journal.attendanceBySubject(studentIds, options);
+      return attendanceBySubjectResponseSchema.parse(data);
+    },
+  );
+
+  /**
+   * Вид преподавателя: по ученикам его группы за текущий период.
+   *
+   * Предмет и группа приходят в запросе, а преподаватель берётся **из сессии**: чужой
+   * журнал так не открыть. Учитываются только занятия этого преподавателя — замену
+   * смотрит основной преподаватель.
+   */
+  app.get(
+    '/journal/marks-by-student',
+    { preHandler: requirePermission('grades:read', 'assigned') },
+    async (request) => {
+      const auth = authOf(request);
+      const query = request.query as { studyGroupId?: string; subjectId?: string };
+
+      if (query.studyGroupId === undefined || query.subjectId === undefined) {
+        throw new AppError('VALIDATION_FAILED', 'Укажите группу и предмет');
+      }
+
+      const options = absenceOptions(request);
+      const data = await journal.marksByStudent(
+        {
+          studyGroupId: query.studyGroupId,
+          subjectId: query.subjectId,
+          teacherUserId: auth.userId ?? '',
+        },
+        options,
+      );
+
+      return marksByStudentResponseSchema.parse(data);
+    },
+  );
+  /**
    * Отметки по списку занятий: расписанию нужны оценки и посещаемость за период.
    *
    * Отдельный маршрут, а не журнал по каждому уроку: экран расписания показал бы десяток
@@ -111,6 +172,46 @@ export function registerJournalRoutes(
       return lessonMarksResponseSchema.parse(marks);
     },
   );
+  /** Галочки «считать уважительные/больничные пропусками»: по умолчанию выключены. */
+  const absenceOptions = (
+    request: Parameters<typeof authOf>[0],
+  ): {
+    countExcused: boolean;
+    countSick: boolean;
+  } => {
+    const query = request.query as { countExcused?: string; countSick?: string };
+
+    return {
+      countExcused: query.countExcused === 'true',
+      countSick: query.countSick === 'true',
+    };
+  };
+
+  /**
+   * Чьи отметки показывать.
+   *
+   * Ученик и представитель получают только свои строки. Сотрудник может запросить
+   * конкретного ученика: без этого администратору не посмотреть отчёт по выбранному
+   * ученику.
+   */
+  const analyticsStudentIds = async (request: Parameters<typeof authOf>[0]): Promise<string[]> => {
+    const auth = authOf(request);
+    const query = request.query as { studentId?: string };
+    const staff = authHasPermission(auth, 'grades:read', 'assigned');
+
+    if (staff) {
+      if (query.studentId === undefined) {
+        throw new AppError('VALIDATION_FAILED', 'Укажите ученика');
+      }
+      return [query.studentId];
+    }
+
+    const own = await studentsOfViewer(auth.userId);
+    if (query.studentId === undefined) return own;
+
+    // Чужого ученика не показываем: остаётся только своя строка, если она совпала.
+    return own.filter((id) => id === query.studentId);
+  };
   /** Экран урока: состав группы, отметки и накопление знаков. */
   app.get(
     '/lessons/:id/journal',

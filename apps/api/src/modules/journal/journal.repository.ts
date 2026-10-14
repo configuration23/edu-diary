@@ -1,7 +1,8 @@
-import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, gte, inArray, isNull, lte, sql } from 'drizzle-orm';
 
 import type { Database, Executor } from '../../shared/db/client';
-import { gradeCategory } from '../academics';
+import { gradeCategory, subject } from '../academics';
+import { lesson } from '../schedule';
 import { attendanceEntry, attendanceRevision, gradeEntry, gradeRevision } from './journal.schema';
 
 /**
@@ -125,6 +126,33 @@ export interface JournalRepository {
   /** Имя ученика: отчёту аналитики нужен читаемый заголовок строки. */
   findStudentName(studentId: string, executor?: Executor): Promise<string | null>;
 
+  /**
+   * Отметки учеников вместе с предметом и датой занятия.
+   *
+   * Нужны разделу «Оценки и посещение»: он показывает списки по предметам, а плоские
+   * выборки предмет не знают — его пришлось бы дотягивать по одному уроку.
+   */
+  listGradeDetails(
+    filter: {
+      studentIds: string[];
+      subjectId?: string;
+      teacherUserId?: string;
+      from?: string;
+      to?: string;
+    },
+    executor?: Executor,
+  ): Promise<(GradeRecord & { subjectId: string; subjectName: string; lessonDate: string })[]>;
+  /** Отметки посещаемости с предметом и датой занятия. */
+  listAttendanceDetails(
+    filter: {
+      studentIds: string[];
+      subjectId?: string;
+      teacherUserId?: string;
+      from?: string;
+      to?: string;
+    },
+    executor?: Executor,
+  ): Promise<(AttendanceRecord & { subjectId: string; subjectName: string; lessonDate: string })[]>;
   /** Оценки нескольких занятий сразу: расписанию нужны отметки за период. */
   listGradesForLessons(lessonIds: string[], executor?: Executor): Promise<GradeRecord[]>;
   /** Отметки посещаемости нескольких занятий сразу. */
@@ -331,6 +359,18 @@ const GRADE_SELECTION = {
   createdAt: gradeEntry.createdAt,
 };
 
+/**
+ * Строка оценки с предметом и датой занятия: то, что нужно разделу «Оценки и посещение».
+ *
+ * Отдельная выборка, а не общая: соединение с уроком и предметом нужно не всем запросам
+ * журнала, и тянуть его в каждый незачем.
+ */
+const GRADE_DETAIL_SELECTION = {
+  ...GRADE_SELECTION,
+  subjectId: lesson.subjectId,
+  subjectName: subject.name,
+  lessonDate: lesson.lessonDate,
+};
 export function createJournalRepository(db: Database): JournalRepository {
   const queryGrades = (executor: Executor) =>
     executor
@@ -524,6 +564,84 @@ export function createJournalRepository(db: Database): JournalRepository {
         deletedAt: row.deletedAt,
         createdAt: row.createdAt,
       }));
+    },
+    async listGradeDetails(filter, executor: Executor = db.orm) {
+      if (filter.studentIds.length === 0) return [];
+
+      const rows = await executor
+        .select(GRADE_DETAIL_SELECTION)
+        .from(gradeEntry)
+        .leftJoin(gradeCategory, eq(gradeCategory.id, gradeEntry.categoryId))
+        .innerJoin(lesson, eq(lesson.id, gradeEntry.lessonId))
+        .innerJoin(subject, eq(subject.id, lesson.subjectId))
+        .where(
+          and(
+            inArray(gradeEntry.studentId, filter.studentIds),
+            isNull(gradeEntry.deletedAt),
+            // Съеденные знаки уже стали оценкой: в аналитике они не отметки.
+            isNull(gradeEntry.consumedByGradeId),
+            ...(filter.subjectId === undefined ? [] : [eq(lesson.subjectId, filter.subjectId)]),
+            ...(filter.teacherUserId === undefined
+              ? []
+              : [eq(lesson.teacherUserId, filter.teacherUserId)]),
+            ...(filter.from === undefined ? [] : [gte(lesson.lessonDate, filter.from)]),
+            ...(filter.to === undefined ? [] : [lte(lesson.lessonDate, filter.to)]),
+          ),
+        );
+
+      return rows.map((row) => ({
+        id: row.id,
+        lessonId: row.lessonId,
+        studentId: row.studentId,
+        value: row.value,
+        sign: row.sign,
+        categoryId: row.categoryId,
+        categoryCode: row.categoryCode,
+        categoryTitle: row.categoryTitle,
+        categoryWeight: row.categoryWeight,
+        comment: row.comment,
+        consumedByGradeId: row.consumedByGradeId,
+        createdAt: row.createdAt,
+        subjectId: row.subjectId,
+        subjectName: row.subjectName,
+        lessonDate: row.lessonDate,
+      }));
+    },
+
+    async listAttendanceDetails(filter, executor: Executor = db.orm) {
+      if (filter.studentIds.length === 0) return [];
+
+      const rows = await executor
+        .select({
+          id: attendanceEntry.id,
+          lessonId: attendanceEntry.lessonId,
+          studentId: attendanceEntry.studentId,
+          status: attendanceEntry.status,
+          isExcused: attendanceEntry.isExcused,
+          reason: attendanceEntry.reason,
+          deletedAt: attendanceEntry.deletedAt,
+          createdAt: attendanceEntry.createdAt,
+          subjectId: lesson.subjectId,
+          subjectName: subject.name,
+          lessonDate: lesson.lessonDate,
+        })
+        .from(attendanceEntry)
+        .innerJoin(lesson, eq(lesson.id, attendanceEntry.lessonId))
+        .innerJoin(subject, eq(subject.id, lesson.subjectId))
+        .where(
+          and(
+            inArray(attendanceEntry.studentId, filter.studentIds),
+            isNull(attendanceEntry.deletedAt),
+            ...(filter.subjectId === undefined ? [] : [eq(lesson.subjectId, filter.subjectId)]),
+            ...(filter.teacherUserId === undefined
+              ? []
+              : [eq(lesson.teacherUserId, filter.teacherUserId)]),
+            ...(filter.from === undefined ? [] : [gte(lesson.lessonDate, filter.from)]),
+            ...(filter.to === undefined ? [] : [lte(lesson.lessonDate, filter.to)]),
+          ),
+        );
+
+      return rows;
     },
     async findStudentName(studentId, executor: Executor = db.orm) {
       const rows = await executor.execute(

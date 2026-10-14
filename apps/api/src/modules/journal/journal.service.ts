@@ -4,6 +4,7 @@ import {
   countSigns,
   escalationState,
   isAttendanceStatus,
+  absenceStats,
   isMarkSign,
   isMarkValue,
   weightedAverage,
@@ -97,6 +98,96 @@ export interface ScheduleLookupPort {
 export const SIGN_REWARDS: Record<'plus' | 'dot', '5' | '2'> = { plus: '5', dot: '2' };
 
 export interface JournalService {
+  /**
+   * Отметки по предметам: раздел «Оценки и посещение» для ученика и представителя.
+   *
+   * Диапазон — **текущий учебный период**, а не выбранные даты. Если периода нет,
+   * отвечаем отказом `period_not_set`: экран показывает «Период не задан».
+   */
+  gradesBySubject(studentIds: string[]): Promise<{
+    period: { id: string; title: string; startsOn: string; endsOn: string };
+    subjects: {
+      subjectId: string;
+      subjectName: string;
+      average: number | null;
+      marks: {
+        id: string;
+        studentId: string;
+        value: string | null;
+        sign: string | null;
+        categoryCode: string | null;
+        categoryTitle: string | null;
+        categoryWeight: number;
+        lessonDate: string;
+      }[];
+    }[];
+  }>;
+
+  /** Посещение по предметам: та же форма, но с процентом пропусков. */
+  attendanceBySubject(
+    studentIds: string[],
+    options: { countExcused: boolean; countSick: boolean },
+  ): Promise<{
+    period: { id: string; title: string; startsOn: string; endsOn: string };
+    subjects: {
+      subjectId: string;
+      subjectName: string;
+      total: number;
+      absences: number;
+      /** Доля пропусков при выбранных галочках. */
+      percent: number;
+      /** Доля пропусков без галочек: с ней сравнивают. */
+      basePercent: number;
+      marks: {
+        id: string;
+        studentId: string;
+        status: string;
+        isExcused: boolean;
+        reason: string | null;
+        lessonDate: string;
+      }[];
+    }[];
+  }>;
+
+  /**
+   * Отметки по ученикам: вид преподавателя.
+   *
+   * Предмет задаёт преподаватель, и учитываются только **его** занятия: замену смотрит
+   * основной преподаватель, поэтому уроки с заменой в расчёт не идут.
+   */
+  marksByStudent(
+    filter: { studyGroupId: string; subjectId: string; teacherUserId: string },
+    options: { countExcused: boolean; countSick: boolean },
+  ): Promise<{
+    period: { id: string; title: string; startsOn: string; endsOn: string };
+    students: {
+      studentId: string;
+      studentName: string;
+      average: number | null;
+      marks: {
+        id: string;
+        value: string | null;
+        sign: string | null;
+        categoryCode: string | null;
+        categoryTitle: string | null;
+        categoryWeight: number;
+        lessonDate: string;
+      }[];
+      attendance: {
+        total: number;
+        absences: number;
+        percent: number;
+        basePercent: number;
+        marks: {
+          id: string;
+          status: string;
+          isExcused: boolean;
+          reason: string | null;
+          lessonDate: string;
+        }[];
+      };
+    }[];
+  }>;
   /**
    * Отметки по списку занятий: расписанию нужны оценки и посещаемость за период.
    *
@@ -385,6 +476,30 @@ export function createJournalService(dependencies: JournalServiceDependencies): 
     if (onDate.length > 0) return onDate;
     return journal.listCurrentGroupStudents(lesson.studyGroupId);
   };
+  /**
+   * Текущий учебный период.
+   *
+   * Раздел «Оценки и посещение» работает **только за текущий период**: выбор дат убран по
+   * решению владельца. Если периода нет, отвечаем отказом с понятным кодом — экран
+   * показывает «Период не задан», а не пустой отчёт.
+   */
+  const requireCurrentPeriod = async (): Promise<{
+    id: string;
+    title: string;
+    startsOn: string;
+    endsOn: string;
+  }> => {
+    const today = new Date().toISOString().slice(0, 10);
+    const period = await journal.findPeriodForDate(today);
+
+    if (period === null) {
+      throw new AppError('VALIDATION_FAILED', 'Период не задан', {
+        details: { reason: 'period_not_set' },
+      });
+    }
+
+    return period;
+  };
   const requireLesson = async (lessonId: string): Promise<JournalLesson> => {
     const lesson = await schedule.findLesson(lessonId);
     if (lesson === null) throw new AppError('NOT_FOUND', 'Урок не найден');
@@ -434,6 +549,185 @@ export function createJournalService(dependencies: JournalServiceDependencies): 
   });
 
   return {
+    async gradesBySubject(studentIds) {
+      const period = await requireCurrentPeriod();
+
+      const details = await journal.listGradeDetails({
+        studentIds,
+        from: period.startsOn,
+        to: period.endsOn,
+      });
+
+      /** Группируем по предмету: экран показывает список предметов ученика. */
+      const bySubject = new Map<string, typeof details>();
+      for (const detail of details) {
+        const list = bySubject.get(detail.subjectId) ?? [];
+        list.push(detail);
+        bySubject.set(detail.subjectId, list);
+      }
+
+      return {
+        period,
+        subjects: [...bySubject.entries()]
+          .map(([subjectId, marks]) => ({
+            subjectId,
+            subjectName: marks[0]?.subjectName ?? 'Предмет',
+            /**
+             * Средний балл считает домен: знаки «+» и «·» в него не входят, вес берётся из
+             * причины. В списке отметок знаки остаются — по ним видно, сколько до оценки.
+             */
+            average: weightedAverage(
+              marks.map((mark) => ({
+                value: mark.value ?? '',
+                weight: mark.categoryWeight ?? 1,
+              })),
+            ),
+            marks: marks
+              .map((mark) => ({
+                id: mark.id,
+                studentId: mark.studentId,
+                value: mark.value,
+                sign: mark.sign,
+                categoryCode: mark.categoryCode,
+                categoryTitle: mark.categoryTitle,
+                categoryWeight: mark.categoryWeight ?? 1,
+                lessonDate: mark.lessonDate,
+              }))
+              // Свежие отметки первыми: так их и ждут на экране.
+              .sort((left, right) => right.lessonDate.localeCompare(left.lessonDate)),
+          }))
+          .sort((left, right) => left.subjectName.localeCompare(right.subjectName)),
+      };
+    },
+
+    async attendanceBySubject(studentIds, options) {
+      const period = await requireCurrentPeriod();
+
+      const details = await journal.listAttendanceDetails({
+        studentIds,
+        from: period.startsOn,
+        to: period.endsOn,
+      });
+
+      const bySubject = new Map<string, typeof details>();
+      for (const detail of details) {
+        const list = bySubject.get(detail.subjectId) ?? [];
+        list.push(detail);
+        bySubject.set(detail.subjectId, list);
+      }
+
+      return {
+        period,
+        subjects: [...bySubject.entries()]
+          .map(([subjectId, marks]) => {
+            const marksForCalc = marks.map((mark) => ({
+              status: mark.status as AttendanceStatus,
+              isExcused: mark.isExcused,
+            }));
+            const stats = absenceStats(marksForCalc, options);
+            /** Процент без галочек: с ним сравнивают, чтобы был виден эффект галочек. */
+            const base = absenceStats(marksForCalc, { countExcused: false, countSick: false });
+
+            return {
+              subjectId,
+              subjectName: marks[0]?.subjectName ?? 'Предмет',
+              total: stats.total,
+              absences: stats.absences,
+              percent: stats.percent,
+              basePercent: base.percent,
+              marks: marks
+                .map((mark) => ({
+                  id: mark.id,
+                  studentId: mark.studentId,
+                  status: mark.status,
+                  isExcused: mark.isExcused,
+                  reason: mark.reason,
+                  lessonDate: mark.lessonDate,
+                }))
+                .sort((left, right) => right.lessonDate.localeCompare(left.lessonDate)),
+            };
+          })
+          .sort((left, right) => left.subjectName.localeCompare(right.subjectName)),
+      };
+    },
+
+    async marksByStudent(filter, options) {
+      const period = await requireCurrentPeriod();
+
+      const students = await journal.listStudentsForGroup(filter.studyGroupId, period.endsOn);
+
+      const [grades, attendance] = await Promise.all([
+        journal.listGradeDetails({
+          studentIds: students.map((student) => student.studentId),
+          subjectId: filter.subjectId,
+          /**
+           * Только занятия этого преподавателя: замену смотрит основной преподаватель,
+           * плановая смена оформляется назначением.
+           */
+          teacherUserId: filter.teacherUserId,
+          from: period.startsOn,
+          to: period.endsOn,
+        }),
+        journal.listAttendanceDetails({
+          studentIds: students.map((student) => student.studentId),
+          subjectId: filter.subjectId,
+          teacherUserId: filter.teacherUserId,
+          from: period.startsOn,
+          to: period.endsOn,
+        }),
+      ]);
+
+      return {
+        period,
+        students: students.map((student) => {
+          const own = grades.filter((grade) => grade.studentId === student.studentId);
+          const marks = attendance.filter((mark) => mark.studentId === student.studentId);
+          const marksForCalc = marks.map((mark) => ({
+            status: mark.status as AttendanceStatus,
+            isExcused: mark.isExcused,
+          }));
+          const stats = absenceStats(marksForCalc, options);
+          const base = absenceStats(marksForCalc, { countExcused: false, countSick: false });
+
+          return {
+            studentId: student.studentId,
+            studentName: student.fullName,
+            average: weightedAverage(
+              own.map((grade) => ({
+                value: grade.value ?? '',
+                weight: grade.categoryWeight ?? 1,
+              })),
+            ),
+            marks: own
+              .map((grade) => ({
+                id: grade.id,
+                value: grade.value,
+                sign: grade.sign,
+                categoryCode: grade.categoryCode,
+                categoryTitle: grade.categoryTitle,
+                categoryWeight: grade.categoryWeight ?? 1,
+                lessonDate: grade.lessonDate,
+              }))
+              .sort((left, right) => right.lessonDate.localeCompare(left.lessonDate)),
+            attendance: {
+              total: stats.total,
+              absences: stats.absences,
+              percent: stats.percent,
+              basePercent: base.percent,
+              marks: marks
+                .map((mark) => ({
+                  id: mark.id,
+                  status: mark.status,
+                  isExcused: mark.isExcused,
+                  reason: mark.reason,
+                  lessonDate: mark.lessonDate,
+                }))
+                .sort((left, right) => right.lessonDate.localeCompare(left.lessonDate)),
+            },
+          };
+        }),
+      };
+    },
     async lessonMarks(lessonIds, visibleStudentIds) {
       if (lessonIds.length === 0) {
         return { grades: [], attendance: [] };
