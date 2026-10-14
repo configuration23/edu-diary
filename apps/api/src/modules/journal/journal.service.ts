@@ -97,6 +97,35 @@ export interface ScheduleLookupPort {
 export const SIGN_REWARDS: Record<'plus' | 'dot', '5' | '2'> = { plus: '5', dot: '2' };
 
 export interface JournalService {
+  /**
+   * Отметки по списку занятий: расписанию нужны оценки и посещаемость за период.
+   *
+   * Возвращаем только то, что рисуется в плитке: значение отметки со знаком и причиной
+   * и отметку посещаемости. Состав проверяем по видимости: ученик и представитель
+   * получают отметки только своих, поэтому список учеников приходит снаружи.
+   */
+  lessonMarks(
+    lessonIds: string[],
+    visibleStudentIds: string[] | null,
+  ): Promise<{
+    grades: {
+      lessonId: string;
+      studentId: string;
+      studentName: string;
+      value: string | null;
+      sign: string | null;
+      categoryCode: string | null;
+      categoryTitle: string | null;
+      categoryWeight: number;
+    }[];
+    attendance: {
+      lessonId: string;
+      studentId: string;
+      status: string;
+      isExcused: boolean;
+      reason: string | null;
+    }[];
+  }>;
   /** Экран урока: состав группы, отметки и накопление знаков. */
   lessonJournal(
     lessonId: string,
@@ -405,6 +434,66 @@ export function createJournalService(dependencies: JournalServiceDependencies): 
   });
 
   return {
+    async lessonMarks(lessonIds, visibleStudentIds) {
+      if (lessonIds.length === 0) {
+        return { grades: [], attendance: [] };
+      }
+
+      // Пустой список видимости — ответ пустой: связей «ученик ↔ пользователь» нет.
+      if (visibleStudentIds !== null && visibleStudentIds.length === 0) {
+        return { grades: [], attendance: [] };
+      }
+
+      const [grades, attendance] = await Promise.all([
+        journal.listGradesForLessons(lessonIds),
+        journal.listAttendanceForLessons(lessonIds),
+      ]);
+
+      /**
+       * Связь «отметка ↔ ученик» нужна для подписи: в плитке видно имя, когда смотрит
+       * преподаватель, а ученику оно и так своё.
+       */
+      const names = new Map<string, string>();
+      for (const grade of grades) {
+        if (names.has(grade.studentId)) continue;
+        names.set(grade.studentId, (await journal.findStudentName(grade.studentId)) ?? 'Ученик');
+      }
+
+      /**
+       * Отбор по видимости.
+       *
+       * `null` — смотрящий видит всех (сотрудник). **Пустой список** — не «видит всех», а
+       * «не видит никого»: у ученика и представителя строки идут по связям, и пустой
+       * список означает, что связей нет. Раньше разницы не было, и сотрудник с пустым
+       * списком получил бы отметки всех учеников — то есть больше, чем ему нужно.
+       */
+      const visible = (studentId: string): boolean =>
+        visibleStudentIds === null || visibleStudentIds.includes(studentId);
+
+      return {
+        grades: grades
+          .filter((grade) => visible(grade.studentId))
+          .map((grade) => ({
+            lessonId: grade.lessonId,
+            studentId: grade.studentId,
+            studentName: names.get(grade.studentId) ?? 'Ученик',
+            value: grade.value,
+            sign: grade.sign,
+            categoryCode: grade.categoryCode,
+            categoryTitle: grade.categoryTitle,
+            categoryWeight: grade.categoryWeight ?? 1,
+          })),
+        attendance: attendance
+          .filter((mark) => visible(mark.studentId))
+          .map((mark) => ({
+            lessonId: mark.lessonId,
+            studentId: mark.studentId,
+            status: mark.status,
+            isExcused: mark.isExcused,
+            reason: mark.reason,
+          })),
+      };
+    },
     async lessonJournal(lessonId, viewer) {
       const lesson = await requireLessonForViewer(lessonId, viewer);
 

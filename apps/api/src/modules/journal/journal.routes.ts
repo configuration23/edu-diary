@@ -3,6 +3,8 @@ import {
   applySignRulesResponseSchema,
   attendanceEntrySchema,
   journalStatsQuerySchema,
+  lessonMarksQuerySchema,
+  lessonMarksResponseSchema,
   deleteAttendanceRequestSchema,
   listDeletedResponseSchema,
   gradeEntrySchema,
@@ -78,6 +80,37 @@ export function registerJournalRoutes(
   const seesAllStudents = (request: Parameters<typeof authOf>[0]): boolean =>
     authHasPermission(authOf(request), 'grades:read', 'all');
 
+  /**
+   * Отметки по списку занятий: расписанию нужны оценки и посещаемость за период.
+   *
+   * Отдельный маршрут, а не журнал по каждому уроку: экран расписания показал бы десяток
+   * запросов и мигал бы по мере ответов. Отбор по видимости тот же, что в журнале урока:
+   * сотрудник получает всех, ученик и представитель — только своих.
+   */
+  app.get(
+    '/journal/lesson-marks',
+    { preHandler: requirePermission('grades:read', 'own') },
+    async (request) => {
+      const auth = authOf(request);
+      /**
+       * Идентификаторы приходят повторяющимся параметром (`?lessonIds=a&lessonIds=b`).
+       * При одном значении Fastify отдаёт строку, а не массив, поэтому приводим сами:
+       * без этого запрос по одному занятию не проходил проверку схемы.
+       */
+      const rawLessonIds = (request.query as { lessonIds?: string | string[] }).lessonIds;
+      const query = lessonMarksQuerySchema.parse({
+        lessonIds: rawLessonIds === undefined ? [] : [rawLessonIds].flat(),
+      });
+
+      const seesWholeRoster =
+        seesAllStudents(request) || authHasPermission(auth, 'grades:read', 'assigned');
+      const visibleStudentIds = seesWholeRoster ? null : await studentsOfViewer(auth.userId);
+
+      const marks = await journal.lessonMarks(query.lessonIds, visibleStudentIds);
+
+      return lessonMarksResponseSchema.parse(marks);
+    },
+  );
   /** Экран урока: состав группы, отметки и накопление знаков. */
   app.get(
     '/lessons/:id/journal',

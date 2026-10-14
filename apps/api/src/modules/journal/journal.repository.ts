@@ -125,6 +125,10 @@ export interface JournalRepository {
   /** Имя ученика: отчёту аналитики нужен читаемый заголовок строки. */
   findStudentName(studentId: string, executor?: Executor): Promise<string | null>;
 
+  /** Оценки нескольких занятий сразу: расписанию нужны отметки за период. */
+  listGradesForLessons(lessonIds: string[], executor?: Executor): Promise<GradeRecord[]>;
+  /** Отметки посещаемости нескольких занятий сразу. */
+  listAttendanceForLessons(lessonIds: string[], executor?: Executor): Promise<AttendanceRecord[]>;
   /** Накопленные знаки ученика по предмету за период: накопление для правила. */
   listSignsForStudentSubject(
     filter: { studentId: string; subjectId: string; from?: string; to?: string },
@@ -483,6 +487,42 @@ export function createJournalRepository(db: Database): JournalRepository {
       return (rows as unknown as { student_id: string; full_name: string }[]).map((row) => ({
         studentId: row.student_id,
         fullName: row.full_name,
+      }));
+    },
+    async listGradesForLessons(lessonIds, executor: Executor = db.orm) {
+      if (lessonIds.length === 0) return [];
+
+      /**
+       * Съеденные знаки не показываем — как и в журнале одного урока: пересчёт уже
+       * превратил их в оценку, и рядом с ней они выглядели бы отметками, которых нет.
+       */
+      return queryGrades(executor).where(
+        and(
+          inArray(gradeEntry.lessonId, lessonIds),
+          isNull(gradeEntry.deletedAt),
+          isNull(gradeEntry.consumedByGradeId),
+        ),
+      ) as unknown as Promise<GradeRecord[]>;
+    },
+
+    async listAttendanceForLessons(lessonIds, executor: Executor = db.orm) {
+      if (lessonIds.length === 0) return [];
+
+      const rows = await executor
+        .select()
+        .from(attendanceEntry)
+        .where(and(inArray(attendanceEntry.lessonId, lessonIds), isNull(attendanceEntry.deletedAt)))
+        .orderBy(asc(attendanceEntry.createdAt));
+
+      return rows.map((row) => ({
+        id: row.id,
+        lessonId: row.lessonId,
+        studentId: row.studentId,
+        status: row.status,
+        isExcused: row.isExcused,
+        reason: row.reason,
+        deletedAt: row.deletedAt,
+        createdAt: row.createdAt,
       }));
     },
     async findStudentName(studentId, executor: Executor = db.orm) {

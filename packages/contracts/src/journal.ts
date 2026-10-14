@@ -330,3 +330,42 @@ export const journalStatsResponseSchema = z.object({
 export type JournalStatsResponseDto = z.infer<typeof journalStatsResponseSchema>;
 
 export const journalStatsPageSchema = pageSchema(journalStatsResponseSchema.shape.items.element);
+
+/**
+ * Отметки для списка занятий (расписание ученика и представителя).
+ *
+ * Дневной и недельный виды показывают отметки сразу по всем занятиям периода: запрашивать
+ * журнал по одному уроку значило бы десяток запросов на экран. Отдаём только то, что
+ * рисуется: оценки со знаком и причиной — для плитки, отметку посещаемости — буквой.
+ */
+export const lessonMarksQuerySchema = z.object({
+  lessonIds: z.array(uuidSchema).min(1).max(100),
+});
+export type LessonMarksQueryDto = z.infer<typeof lessonMarksQuerySchema>;
+
+export const lessonMarkSchema = z.object({
+  lessonId: uuidSchema,
+  studentId: uuidSchema,
+  studentName: z.string(),
+  /** Что стоит ученику за занятие: «5», «+» или «·». */
+  value: z.string().nullable(),
+  sign: gradeSignSchema.nullable(),
+  categoryCode: z.string().nullable(),
+  categoryTitle: z.string().nullable(),
+  /** Вес причины: подстрочная цифра в журнале, если больше единицы. */
+  categoryWeight: z.number().int(),
+});
+
+export const lessonAttendanceSchema = z.object({
+  lessonId: uuidSchema,
+  studentId: uuidSchema,
+  status: attendanceStatusSchema,
+  isExcused: z.boolean(),
+  reason: z.string().nullable(),
+});
+
+export const lessonMarksResponseSchema = z.object({
+  grades: z.array(lessonMarkSchema),
+  attendance: z.array(lessonAttendanceSchema),
+});
+export type LessonMarksResponseDto = z.infer<typeof lessonMarksResponseSchema>;

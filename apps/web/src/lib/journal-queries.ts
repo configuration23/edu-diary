@@ -7,6 +7,7 @@ import {
   gradeEntrySchema,
   lessonJournalSchema,
   journalStatsResponseSchema,
+  lessonMarksResponseSchema,
   listDeletedResponseSchema,
   listGradeCategoriesResponseSchema,
   listGradeRevisionsResponseSchema,
@@ -287,5 +288,25 @@ export function useJournalStats(filter: {
         `/api/journal/stats${query === '' ? '' : `?${query}`}`,
         journalStatsResponseSchema,
       ),
+  });
+}
+
+/**
+ * Отметки по списку занятий: расписанию нужны оценки и посещаемость за период.
+ *
+ * Один запрос на весь период вместо журнала по каждому уроку: неделя — это до тридцати
+ * занятий, и столько запросов на экран означало бы и мигание, и лишнюю нагрузку.
+ */
+export function useLessonMarks(lessonIds: string[]) {
+  const params = new URLSearchParams();
+  for (const id of lessonIds) params.append('lessonIds', id);
+
+  const query = params.toString();
+
+  return useQuery({
+    /** Ключ включает список занятий: меняется период — меняется выборка. */
+    queryKey: ['lesson-marks', query],
+    enabled: lessonIds.length > 0,
+    queryFn: () => apiRequest(`/api/journal/lesson-marks?${query}`, lessonMarksResponseSchema),
   });
 }
