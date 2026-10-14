@@ -268,6 +268,18 @@ test.describe('Этап 3: звонки, расписание, уроки', () =
     await page.locator('#view-week').click();
     await expect(page.getByRole('cell', { name: '3-я' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Пара' })).toBeVisible();
+
+    /**
+     * В сетке недели должны быть **все семь дней**, включая воскресенье.
+     *
+     * Здесь стояла сетка на шесть дней, и воскресенье пропадало — при том что полоса дат
+     * над сеткой показывала семь дней, а суббота и воскресенье в колледже обычные учебные
+     * дни: занятие в воскресенье просто негде было увидеть.
+     */
+    for (const day of ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']) {
+      await expect(page.getByRole('columnheader', { name: day, exact: true })).toBeVisible();
+    }
+
     await page.locator('#view-day').click();
     await expect(
       page.getByRole('heading', { level: 2, name: 'Расписание', exact: true }),

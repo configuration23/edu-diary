@@ -211,7 +211,16 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
   const pairs = pairsFromBells(bells.data?.items);
 
   const weekStart = mondayOf(anchor);
-  const weekDays = Array.from({ length: 6 }, (_, index) => shiftIso(weekStart, index));
+  /**
+   * Неделя — семь дней, включая воскресенье.
+   *
+   * Здесь стояло `length: 6`, и в сетке недели не было воскресенья, хотя полоса дат над
+   * ней показывала семь дней: суббота и воскресенье — обычные учебные дни, и занятие в
+   * воскресенье просто негде было увидеть.
+   */
+  const weekDays = Array.from({ length: DAYS_SHORT.length }, (_, index) =>
+    shiftIso(weekStart, index),
+  );
 
   /** Сдвиг недели: выбранный день недели сохраняем, чтобы контекст не терялся. */
   const shiftWeek = (weeks: number): void => {
