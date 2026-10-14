@@ -1017,12 +1017,28 @@ export function createJournalService(dependencies: JournalServiceDependencies): 
         }),
       ]);
 
-      return filter.studentIds.map((studentId) => {
+      const result = [];
+      for (const studentId of filter.studentIds) {
         const own = grades.filter((grade) => grade.studentId === studentId);
         const marks = attendance.filter((mark) => mark.studentId === studentId);
+        /**
+         * Разбивку считаем один раз: в ней и процент «присутствовал», и счётчики по
+         * статусам для круговой диаграммы.
+         */
+        const breakdown = attendanceBreakdown(
+          marks.map((mark) => ({
+            status: mark.status as AttendanceStatus,
+            isExcused: mark.isExcused,
+          })),
+        );
 
-        return {
+        result.push({
           studentId,
+          studentName: (await journal.findStudentName(studentId)) ?? 'Ученик',
+          /**
+           * Средний балл — только по числовым оценкам: знаки «+» и «·» в него не
+           * входят, `weightedAverage` их пропускает.
+           */
           average: weightedAverage(
             own.map((grade) => ({
               value: grade.value ?? '',
@@ -1030,14 +1046,12 @@ export function createJournalService(dependencies: JournalServiceDependencies): 
             })),
           ),
           gradesCount: own.filter((grade) => grade.value !== null).length,
-          attendancePercent: attendanceBreakdown(
-            marks.map((mark) => ({ status: mark.status as AttendanceStatus })),
-          ).percent,
-          attendance: attendanceBreakdown(
-            marks.map((mark) => ({ status: mark.status as AttendanceStatus })),
-          ),
-        };
-      });
+          attendancePercent: breakdown.percent,
+          attendance: breakdown,
+        });
+      }
+
+      return result;
     },
   };
 }

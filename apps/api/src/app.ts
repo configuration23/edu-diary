@@ -467,6 +467,20 @@ export async function buildApp({
         }
         return [...studentIds];
       },
+      /**
+       * Состав группы на дату: отчёту аналитики нужен список учеников группы.
+       * Берём именно состав на дату, а не текущий, — как в журнале урока.
+       */
+      async studentsOfGroup(studyGroupId, onDate) {
+        const enrollments = await academicsRepository.listEnrollments(studyGroupId);
+        const active = enrollments.filter(
+          (enrollment) =>
+            enrollment.joinedOn <= onDate &&
+            (enrollment.leftOn === null || enrollment.leftOn >= onDate),
+        );
+
+        return active.map((enrollment) => ({ studentId: enrollment.studentId }));
+      },
     }),
     { prefix: '/api' },
   );

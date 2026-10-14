@@ -2,6 +2,7 @@ import {
   applySignRulesRequestSchema,
   applySignRulesResponseSchema,
   attendanceEntrySchema,
+  journalStatsQuerySchema,
   deleteAttendanceRequestSchema,
   listDeletedResponseSchema,
   gradeEntrySchema,
@@ -40,9 +41,16 @@ export function registerJournalRoutes(
     isOwnStudent: (viewerUserId: string, studentId: string) => Promise<boolean>;
     /** Все ученики, доступные смотрящему: нужны аналитике. */
     studentsOfViewer: (viewerUserId: string) => Promise<string[]>;
+    /** Состав группы на дату: нужен отчёту по группе. */
+    studentsOfGroup: (studyGroupId: string, onDate: string) => Promise<{ studentId: string }[]>;
   },
 ): void {
-  const { journal, isOwnStudent, studentsOfViewer } = dependencies;
+  const {
+    journal,
+    isOwnStudent,
+    studentsOfViewer,
+    studentsOfGroup: scheduleStudentsOfGroup,
+  } = dependencies;
 
   const mutationOptions = (request: Parameters<typeof actorFromRequest>[0]): MutationOptions => ({
     actor: actorFromRequest(request),
@@ -307,20 +315,30 @@ export function registerJournalRoutes(
     { preHandler: requirePermission('grades:read', 'own') },
     async (request) => {
       const auth = authOf(request);
-      const query = request.query as {
-        studyGroupId?: string;
-        subjectId?: string;
-        studentId?: string;
-        from?: string;
-        to?: string;
-      };
+      const query = journalStatsQuerySchema.parse(request.query);
 
-      const visible = seesAllStudents(request) ? undefined : await studentsOfViewer(auth.userId);
-      const requested = query.studentId === undefined ? undefined : [query.studentId];
-      const studentIds =
-        visible === undefined
-          ? (requested ?? [])
-          : (requested ?? visible).filter((id) => visible.includes(id));
+      /**
+       * Состав отчёта зависит от роли.
+       *
+       * Ученик и представитель видят только свои строки, поэтому их список берём из
+       * связей. Преподаватель и администратор запрашивают отчёт по группе: список
+       * учеников — состав группы, а не список идентификаторов в запросе.
+       */
+      let studentIds: string[];
+
+      if (seesAllStudents(request)) {
+        if (query.studyGroupId === undefined) {
+          throw new AppError('VALIDATION_FAILED', 'Укажите группу для отчёта');
+        }
+
+        const today = new Date().toISOString().slice(0, 10);
+        const students = await scheduleStudentsOfGroup(query.studyGroupId, today);
+        studentIds = students.map((student) => student.studentId);
+      } else {
+        const visible = await studentsOfViewer(auth.userId);
+        studentIds =
+          query.studentId === undefined ? visible : visible.filter((id) => id === query.studentId);
+      }
 
       if (studentIds.length === 0) {
         throw new AppError('VALIDATION_FAILED', 'Не указаны ученики для отчёта');

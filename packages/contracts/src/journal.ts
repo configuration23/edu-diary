@@ -302,13 +302,22 @@ export const journalStatsResponseSchema = z.object({
     z.object({
       studentId: uuidSchema,
       studentName: z.string(),
-      /** Средний балл с весами категорий: `null`, если числовых оценок нет. */
+      /** Средний балл с весами причин: `null`, если числовых оценок нет. */
       average: z.number().nullable(),
+      /** Сколько числовых оценок учтено. Знаки «+» и «·» сюда не входят. */
       gradesCount: z.number().int().nonnegative(),
-      /** Процент «был» от всех отмеченных занятий. */
+      /** Процент «присутствовал» от всех отмеченных занятий. */
       attendancePercent: z.number(),
+      /**
+       * Посещаемость для круговой диаграммы: по каждому статусу — количество и
+       * процент. `present` и `excused` продублированы отдельно: без них интерфейсу
+       * пришлось бы вытаскивать их из `byStatus` по строкам-ключам.
+       */
       attendance: z.object({
         total: z.number().int().nonnegative(),
+        present: z.number().int().nonnegative(),
+        /** Сколько отсутствий отмечено уважительной причиной. */
+        excused: z.number().int().nonnegative(),
         byStatus: z.record(
           attendanceStatusSchema,
           z.object({ count: z.number().int().nonnegative(), percent: z.number() }),

@@ -42,6 +42,7 @@ export function createJournalModule(dependencies: {
   audit: AuditService;
   isOwnStudent: (viewerUserId: string, studentId: string) => Promise<boolean>;
   studentsOfViewer: (viewerUserId: string) => Promise<string[]>;
+  studentsOfGroup: (studyGroupId: string, onDate: string) => Promise<{ studentId: string }[]>;
 }): FastifyPluginAsync {
   return async (app) => {
     registerJournalRoutes(app, dependencies);

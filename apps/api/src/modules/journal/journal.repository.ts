@@ -111,6 +111,9 @@ export interface JournalRepository {
     onDate: string,
     executor?: Executor,
   ): Promise<{ studentId: string; fullName: string }[]>;
+  /** Имя ученика: отчёту аналитики нужен читаемый заголовок строки. */
+  findStudentName(studentId: string, executor?: Executor): Promise<string | null>;
+
   /** Накопленные знаки ученика по предмету за период: накопление для правила. */
   listSignsForStudentSubject(
     filter: { studentId: string; subjectId: string; from?: string; to?: string },
@@ -454,6 +457,14 @@ export function createJournalRepository(db: Database): JournalRepository {
         studentId: row.student_id,
         fullName: row.full_name,
       }));
+    },
+
+    async findStudentName(studentId, executor: Executor = db.orm) {
+      const rows = await executor.execute(
+        sql`select full_name from student where id = ${studentId}`,
+      );
+      const row = (rows as unknown as { full_name: string }[])[0];
+      return row?.full_name ?? null;
     },
 
     async listSignsForStudentSubject(filter, executor: Executor = db.orm) {
