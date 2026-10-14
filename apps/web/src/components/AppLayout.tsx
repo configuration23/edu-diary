@@ -4,7 +4,6 @@ import type { SessionResponseDto } from '@edu-diary/contracts';
 import { Link, Outlet, useNavigate } from '@tanstack/react-router';
 
 import { Badge, Button } from './ui';
-import { GroupSwitcher } from './AcademicContext';
 import { useLogout } from '../lib/queries';
 import type { BrandingDto } from '@edu-diary/contracts';
 
@@ -169,7 +168,13 @@ export function AppLayout({
           </div>
 
           <div className="flex items-center gap-3 text-sm">
-            <GroupSwitcher />
+            {/*
+              Переключатель группы в шапке скрыт по решению владельца: группа выбирается
+              на каждом экране, и общий выбор только путал — казалось, что он влияет на
+              всё приложение, а влиял на три раздела. Компонент `GroupSwitcher` и общий
+              контекст (`AcademicContext`) целы: чтобы вернуть переключатель, достаточно
+              поставить его сюда обратно.
+            */}
             <span className="text-slate-600">{session.user.fullName}</span>
             {session.user.roles.map((role) => (
               <Badge key={role.code}>{role.title}</Badge>

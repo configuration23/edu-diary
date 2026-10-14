@@ -145,8 +145,8 @@ test.describe('Этап 2: год, группа, назначения', () => {
     await page.getByRole('link', { name: 'Назначения' }).click();
     await expect(page.getByRole('heading', { name: 'Новое назначение' })).toBeVisible();
 
-    // Формы назначения ищем внутри её карточки: «Группа» есть и в шапке —
-    // там переключатель контекста.
+    // Формы назначения ищем внутри её карточки: на странице есть и другие поля
+    // «Группа» — например в списке назначений.
     const assignmentForm = page
       .locator('section')
       .filter({ has: page.getByRole('heading', { name: 'Новое назначение' }) });
