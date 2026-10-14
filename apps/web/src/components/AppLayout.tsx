@@ -89,6 +89,16 @@ const NAVIGATION: NavigationItem[] = [
     visible: (session) => has(session, 'security:read'),
   },
   {
+    to: '/analytics',
+    label: 'Аналитика',
+    /**
+     * Видна всем ролям: у администратора и преподавателя это отчёт по группе, у ученика и
+     * законного представителя — «Мои оценки». Право `analytics:read` есть у всех четырёх
+     * ролей, разница только в области.
+     */
+    visible: (session) => has(session, 'analytics:read'),
+  },
+  {
     to: '/settings',
     label: 'Настройки',
     visible: (session) => has(session, 'settings:write'),

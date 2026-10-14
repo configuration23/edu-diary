@@ -17,6 +17,7 @@ import { GroupsScreen } from './screens/GroupsScreen';
 import { LoginScreen } from './screens/LoginScreen';
 import { LessonJournalScreen } from './screens/LessonJournalScreen';
 import { LessonsScreen } from './screens/LessonsScreen';
+import { AnalyticsRoute } from './screens/AnalyticsRoute';
 import { PrivacyScreen } from './screens/PrivacyScreen';
 import { ScheduleScreen } from './screens/ScheduleScreen';
 import { SubstitutionsScreen } from './screens/SubstitutionsScreen';
@@ -175,6 +176,12 @@ const lessonJournalRoute = createRoute({
   component: withSession((session) => <LessonJournalScreen session={session} />),
 });
 
+/** Аналитика: отчёт по группе, а для ученика и представителя — «Мои оценки». */
+const analyticsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/analytics',
+  component: withSession((session) => <AnalyticsRoute session={session} />),
+});
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/settings',
@@ -211,6 +218,7 @@ const routeTree = rootRoute.addChildren([
   scheduleRoute,
   scheduleTemplateRoute,
   substitutionsRoute,
+  analyticsRoute,
   lessonsRoute,
   lessonJournalRoute,
   usersRoute,

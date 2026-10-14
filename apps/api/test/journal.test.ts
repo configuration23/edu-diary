@@ -533,6 +533,21 @@ describeWithDatabase('журнал: оценки и посещаемость', (
     });
     expect(anonymous.statusCode).toBe(401);
 
+    /**
+     * Аналитика под учеником: «Мои оценки». Группу он не указывает — сервер берёт
+     * строки по связям «ученик ↔ пользователь», поэтому отчёт обязан вернуться, а не
+     * ответить «не указаны ученики».
+     */
+    const stats = await testApp.app.inject({
+      method: 'GET',
+      url: '/api/journal/stats',
+      headers: { cookie: studentCookie },
+    });
+    expect(stats.statusCode, stats.body).toBe(200);
+    const rows = (stats.json() as { items: Json[] }).items;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.studentId).toBe(studentId);
+
     void secondGroupId;
     void yearId;
   });

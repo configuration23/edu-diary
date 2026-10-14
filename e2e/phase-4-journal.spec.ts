@@ -654,3 +654,154 @@ test('Этап 4, шаг 2: пересчёт плюсов в оценку', asyn
   await page.getByRole('button', { name: 'Пересчитать + / ·' }).click();
   await expect(page.getByText('Знаков на оценку не набралось')).toBeVisible();
 });
+
+/**
+ * Шаг 4: экран аналитики.
+ *
+ * Проверяем то, что видит человек: администратор открывает раздел, выбирает группу за
+ * период и видит строку ученика со средним баллом и процентом посещаемости, а под
+ * диаграммой — расшифровку по статусам.
+ */
+test('Этап 4, шаг 4: аналитика по группе', async ({ page }) => {
+  const run = String(Date.now()).slice(-6);
+  const groupName = `АН-${run}`;
+
+  await page.goto('/');
+  await login(page, ADMIN.username, ADMIN.password);
+  await expect(page.getByRole('link', { name: 'Учебный год' })).toBeVisible();
+
+  const years = await page.request.get('/api/academic-years');
+  /**
+   * Берём **активный** учебный год: экран «Аналитика» фильтрует группы по нему, поэтому
+   * группа, созданная в другом году, в списке не появится — на это я и наткнулся.
+   */
+  const items = (
+    (await years.json()) as {
+      items: { id: string; startsOn: string; endsOn: string; isActive: boolean }[];
+    }
+  ).items;
+  const year = items.find((item) => item.isActive) ?? items[0];
+  expect(year).toBeTruthy();
+
+  // Границы группы берём внутри учебного года: сервер их проверяет.
+  const group = await page.request.post('/api/groups', {
+    data: {
+      academicYearId: year?.id ?? '',
+      name: groupName,
+      startsOn: year?.startsOn ?? shiftDays(-60),
+      endsOn: year?.endsOn ?? shiftDays(120),
+    },
+  });
+  expect(group.ok(), await group.text()).toBe(true);
+  const groupId = ((await group.json()) as { id: string }).id;
+
+  const subject = await page.request.post('/api/subjects', {
+    data: { name: `Аналитика (${run})`, shortName: 'АН', kind: 'mandatory' },
+  });
+  const subjectId = ((await subject.json()) as { id: string }).id;
+
+  const teacher = await page.request.post('/api/users', {
+    data: {
+      username: `e2e-prepod-analitika-${run}`,
+      fullName: `Преподаватель Аналитики ${run}`,
+      password: 'kolledzh-analitika-prepod-2025',
+      roles: ['teacher'],
+    },
+  });
+  const teacherUserId = ((await teacher.json()) as { id: string }).id;
+
+  const assignment = await page.request.post('/api/assignments', {
+    data: { teacherUserId, subjectId, studyGroupId: groupId, startsOn: shiftDays(-50) },
+  });
+  expect(assignment.ok(), await assignment.text()).toBe(true);
+
+  const student = await page.request.post('/api/students', {
+    data: {
+      fullName: `Ученик Аналитики ${run}`,
+      account: {
+        username: `e2e-uchenik-analitika-${run}`,
+        password: 'kolledzh-analitika-uchenik-2025',
+      },
+    },
+  });
+  const studentId = ((await student.json()) as { id: string }).id;
+
+  await page.request.post(`/api/groups/${groupId}/enrollments`, {
+    data: { studentId, joinedOn: shiftDays(-50) },
+  });
+
+  // Урок и две отметки: «5» и «4». Средний балл без весов — 4.5.
+  const lesson = await page.request.post('/api/lessons', {
+    data: {
+      studyGroupId: groupId,
+      subjectId,
+      teacherUserId,
+      lessonDate: shiftDays(-1),
+      pairNumber: 1,
+      timeStart: '08:30',
+      timeEnd: '10:00',
+    },
+  });
+  const lessonId = ((await lesson.json()) as { id: string }).id;
+
+  const reasons = await page.request.get('/api/grade-categories');
+  const reasonId = ((await reasons.json()) as { items: { id: string }[] }).items[0]?.id ?? '';
+
+  /**
+   * Две отметки по одной причине за один урок поставить нельзя: сервер отвечает
+   * конфликтом `duplicate_grade` и просит подтверждение замены. Поэтому вторую оценку
+   * ставим на следующий урок — так и выглядит учёба.
+   */
+  const second = await page.request.post('/api/lessons', {
+    data: {
+      studyGroupId: groupId,
+      subjectId,
+      teacherUserId,
+      lessonDate: shiftDays(-2),
+      pairNumber: 2,
+      timeStart: '10:10',
+      timeEnd: '11:40',
+    },
+  });
+  const secondLessonId = ((await second.json()) as { id: string }).id;
+
+  for (const [target, value] of [
+    [lessonId, '5'],
+    [secondLessonId, '4'],
+  ] as const) {
+    const saved = await page.request.post(`/api/lessons/${target}/grades`, {
+      data: { studentId, value, categoryId: reasonId },
+    });
+    expect(saved.ok(), await saved.text()).toBe(true);
+  }
+
+  const attendance = await page.request.post(`/api/lessons/${lessonId}/attendance`, {
+    data: { studentId, status: 'not_present', isExcused: true, reason: 'Справка' },
+  });
+  expect(attendance.ok(), await attendance.text()).toBe(true);
+
+  /**
+   * Открываем раздел заново: список групп загружается при входе в приложение, а группу
+   * тест создал уже после — без перезагрузки её не было бы в списке.
+   */
+  await page.reload();
+  await page.getByRole('link', { name: 'Аналитика' }).click();
+  await expect(page.getByRole('heading', { level: 2, name: 'Аналитика' })).toBeVisible();
+
+  await page.locator('select[name="studyGroupId"]').selectOption({ label: groupName });
+  await page.getByLabel('С даты').fill(shiftDays(-40));
+  await page.getByLabel('По дату').fill(shiftDays(1));
+
+  const card = page
+    .locator('section')
+    .filter({ has: page.getByRole('heading', { name: `Ученик Аналитики ${run}` }) });
+  await expect(card).toBeVisible();
+
+  // Средний балл 4.50: две оценки с весом 1 каждая.
+  await expect(card.getByText('4.50')).toBeVisible();
+  await expect(card.getByText('Оценок:')).toBeVisible();
+  // Одно отмеченное занятие, и на нём ученик отсутствовал: посещаемость 0%.
+  await expect(card.getByText('Посещаемость:')).toBeVisible();
+  await expect(card.getByText('Не был')).toBeVisible();
+  await expect(card.getByRole('img', { name: 'Посещаемость' })).toBeVisible();
+});

@@ -6,6 +6,7 @@ import {
   attendanceEntrySchema,
   gradeEntrySchema,
   lessonJournalSchema,
+  journalStatsResponseSchema,
   listDeletedResponseSchema,
   listGradeCategoriesResponseSchema,
   listGradeRevisionsResponseSchema,
@@ -252,6 +253,39 @@ export function useAttendanceRevisions(attendanceId: string | null) {
       apiRequest(
         `/api/attendance/${String(attendanceId)}/revisions`,
         listGradeRevisionsResponseSchema,
+      ),
+  });
+}
+
+/**
+ * Аналитика: средний балл и посещаемость (Этап 4, шаг 4).
+ *
+ * Отчёт строится по группе за период. Ученику и представителю группа не нужна: сервер
+ * сам берёт только их строки, поэтому тот же запрос обслуживает и «Мои оценки».
+ */
+export function useJournalStats(filter: {
+  studyGroupId?: string;
+  subjectId?: string;
+  from?: string;
+  to?: string;
+}) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(filter)) {
+    if (value !== undefined && value !== '') params.set(key, value);
+  }
+
+  const query = params.toString();
+
+  return useQuery({
+    queryKey: ['journal-stats', query],
+    /**
+     * Без группы отчёт по группе бессмысленен, но ученику он нужен: сервер отдаёт его
+     * строки и без группы. Поэтому запрос не выключаем, а решаем на экране.
+     */
+    queryFn: () =>
+      apiRequest(
+        `/api/journal/stats${query === '' ? '' : `?${query}`}`,
+        journalStatsResponseSchema,
       ),
   });
 }
