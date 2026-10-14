@@ -1,6 +1,6 @@
 {
   "name": "@edu-diary/api",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "API edu-diary: Fastify, модульный монолит",
   "type": "module",
