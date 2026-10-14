@@ -345,6 +345,15 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
   const attendanceRevisions = useAttendanceRevisions(historyAttendanceId);
 
   const canWrite = session.permissions.some((grant) => grant.permission === 'grades:write');
+  /**
+   * Пересчёт знаков — действие администратора: он меняет отметки сразу у всей группы,
+   * и прав у него область `all`. Преподавателю кнопку не показываем: сервер такой
+   * запрос отклоняет (`403`), а кнопка, которая заведомо ведёт в отказ, только путает —
+   * именно на это владелец и наткнулся.
+   */
+  const canApplySignRules = session.permissions.some(
+    (grant) => grant.permission === 'grades:write' && grant.scope === 'all',
+  );
   const canAttend = session.permissions.some((grant) => grant.permission === 'attendance:write');
   /** Удаление посещаемости: включено ли в интерфейсе (сейчас скрыто, см. константу). */
   const canDeleteAttendance = ATTENDANCE_DELETE_ENABLED && canAttend;
@@ -456,7 +465,7 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
           </p>
         )}
 
-        {canWrite && !cancelled && activeSignRules.length > 0 && (
+        {canApplySignRules && !cancelled && activeSignRules.length > 0 && (
           <div className="mt-3 flex flex-wrap items-center gap-3">
             <Button
               tone="secondary"

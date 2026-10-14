@@ -260,4 +260,21 @@ describeWithDatabase('доступ преподавателя к журналу'
     });
     expect(write.statusCode, write.body).toBe(201);
   });
+
+  /**
+   * Пересчёт знаков — действие администратора: он меняет отметки сразу у всей группы и
+   * требует права с областью `all`. Владелец наткнулся на обратное: кнопка пересчёта
+   * показывалась преподавателю и его запрос отвечал `403`. Проверка держит маршрут и
+   * право согласованными — интерфейс кнопку преподавателю больше не показывает.
+   */
+  it('пересчёт знаков преподавателю недоступен', async () => {
+    const response = await testApp.app.inject({
+      method: 'POST',
+      url: '/api/journal/apply-sign-rules',
+      headers: { cookie: teacherCookie },
+      payload: { studyGroupId: ownLessonId },
+    });
+
+    expect(response.statusCode).toBe(403);
+  });
 });
