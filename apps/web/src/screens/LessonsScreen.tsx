@@ -661,11 +661,11 @@ export function LessonsScreen({ session }: { session: SessionResponseDto }) {
             : `${lesson.subjectName} · ${lesson.groupName} · ${lesson.teacherName} · ${lesson.roomName ?? 'без аудитории'}`
         }
         /*
-          Шрифт плитки такой же, как в недельной сетке расписания: `text-sm` (14 px)
-          вместо прежних 11 px и полужирный — решение владельца. Межстрочный `leading-4`,
-          чтобы строки не разъезжались.
+          Шрифт плитки такой же, как в недельной сетке расписания: 13 px без жирности
+          (пробовали 14 px полужирным — владелец признал перебором). Межстрочный
+          `leading-4`, чтобы строки не разъезжались.
         */
-        className={`relative w-full rounded border px-1 py-0.5 text-left text-sm leading-4 font-semibold transition ${
+        className={`relative w-full rounded border px-1 py-0.5 text-left text-[13px] leading-4 transition ${
           cancelled || foreign
             ? 'border-slate-200 bg-slate-50 text-slate-400'
             : 'cursor-pointer border-slate-200 hover:shadow-sm'

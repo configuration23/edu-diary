@@ -474,11 +474,12 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
                                   ширина (решение владельца): иначе плитка меняет размер от
                                   того, заполнены отметки или нет, и сетка «дышит».
 
-                                  Размер: было `text-xs` (12 px), стало `text-sm` (14 px) —
-                                  решение владельца увеличить на 2 px. Межстрочный держим
-                                  `leading-4`: строки по-прежнему ровно три по 16 px.
+                                  Размер: 13 px. Пробовали 14 px полужирным — владелец
+                                  признал перебором, поэтому уменьшили на 1 px и убрали
+                                  жирность. Межстрочный `leading-4`: строки остаются ровно
+                                  три по 16 px.
                                 */
-                                className={`block h-12 w-24 overflow-hidden rounded px-1 text-sm leading-4 font-semibold ${
+                                className={`block h-12 w-24 overflow-hidden rounded px-1 text-[13px] leading-4 ${
                                   lesson.status === 'cancelled'
                                     ? 'text-slate-400'
                                     : 'text-slate-700'
