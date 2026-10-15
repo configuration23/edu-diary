@@ -16,8 +16,23 @@ export const SETTING_KEYS = {
   brandingSignature: 'branding.signature',
   brandingLogo: 'branding.logo',
   appearance: 'appearance.lessons',
+  /**
+   * Хранилище файлов (Этап 5). Ключи заготовлены с самого начала: переключение между
+   * локальным диском и S3 задумывалось заранее, чтобы на проде не дорабатывать код.
+   */
   storageProvider: 'storage.provider',
   storageLocalPath: 'storage.local_path',
+  storageS3Endpoint: 'storage.s3_endpoint',
+  storageS3Bucket: 'storage.s3_bucket',
+  storageS3Region: 'storage.s3_region',
+  storageS3AccessKey: 'storage.s3_access_key',
+  storageS3SecretKey: 'storage.s3_secret_key',
+  /** Предельный размер файла в мегабайтах: диапазон проверяет домен (1–50). */
+  storageMaxFileMb: 'storage.max_file_mb',
+  /** Белый список расширений; ядро запретов настройкой не обходится. */
+  storageAllowedTypes: 'storage.allowed_types',
+  /** Предельная длительность продолжительного задания в днях. */
+  homeworkMaxDurationDays: 'homework.max_duration_days',
 } as const;
 
 const SETTING_KEY_PATTERN = /^[a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+$/;
