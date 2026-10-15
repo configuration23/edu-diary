@@ -38,7 +38,22 @@ import type { BrandingDto, SessionResponseDto } from '@edu-diary/contracts';
 
 const queryClient = new QueryClient({
   defaultOptions: {
-    queries: { retry: 1, refetchOnWindowFocus: false, staleTime: 10_000 },
+    queries: {
+      /**
+       * Повторяем **только серверные сбои** (`5xx`) и сетевые ошибки.
+       *
+       * Решение владельца. Раньше повторялась любая ошибка, и `403`/`400` уходили в
+       * консоль дважды: ответ на них не изменится, а шум удваивался. Ошибки без статуса
+       * (обрыв сети, таймаут) повторяем: они бывают временными.
+       */
+      retry: (failureCount: number, error: unknown) => {
+        if (failureCount >= 1) return false;
+        const status = (error as { status?: number } | null)?.status;
+        return status === undefined || status >= 500;
+      },
+      refetchOnWindowFocus: false,
+      staleTime: 10_000,
+    },
   },
 });
 

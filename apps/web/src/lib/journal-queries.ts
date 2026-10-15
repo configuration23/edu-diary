@@ -326,17 +326,28 @@ export interface AbsenceOptions {
  *
  * Диапазон дат не передаём: раздел всегда работает за текущий учебный период.
  */
-export function useGradesBySubject(studentId: string | null) {
+export function useGradesBySubject(studentId: string | null, options: { enabled?: boolean } = {}) {
   const query = studentId === null ? '' : `?studentId=${studentId}`;
 
   return useQuery({
     queryKey: ['grades-by-subject', query],
+    /**
+     * Выключаем, когда смотрящий этих данных не получает: преподавателю отчёт строится по
+     * ученикам, а без `studentId` маршрут отвечает отказом «укажите ученика». Раньше
+     * запрос всё равно уходил и давал `400` в консоли.
+     */
+    enabled: options.enabled ?? true,
     queryFn: () =>
       apiRequest(`/api/journal/grades-by-subject${query}`, gradesBySubjectResponseSchema),
   });
 }
 
-export function useAttendanceBySubject(studentId: string | null, options: AbsenceOptions) {
+export function useAttendanceBySubject(
+  studentId: string | null,
+  options: AbsenceOptions,
+  /** Выключить запрос, когда раздел показывает другой вид (например, по ученикам). */
+  queryOptions: { enabled?: boolean } = {},
+) {
   const params = new URLSearchParams();
   if (studentId !== null) params.set('studentId', studentId);
   if (options.countExcused) params.set('countExcused', 'true');
@@ -347,6 +358,7 @@ export function useAttendanceBySubject(studentId: string | null, options: Absenc
   return useQuery({
     /** Ключ включает галочки: смена галочки меняет расчёт, и ответ нужно обновить. */
     queryKey: ['attendance-by-subject', query],
+    enabled: queryOptions.enabled ?? true,
     queryFn: () =>
       apiRequest(
         `/api/journal/attendance-by-subject${query === '' ? '' : `?${query}`}`,

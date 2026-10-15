@@ -364,5 +364,34 @@ test.describe.serial('Этап 1: настройка, вход, права', () 
     ]) {
       await forbidden(path);
     }
+
+    /**
+     * На **разрешённых** экранах ученик не должен получать `403` и `400`.
+     *
+     * Владелец видел иное: контекст учебного процесса запрашивал год, группы и назначения
+     * безусловно, поэтому ученик получал по три отказа `403` на каждом экране, а в
+     * «Оценках и посещении» уходили запросы без ученика и получали `400`. Повтор ошибок
+     * тоже убран: `retry` теперь только для `5xx`.
+     */
+    const forbiddenResponses: string[] = [];
+    page.on('response', (response) => {
+      const url = new URL(response.url());
+      if (!url.pathname.startsWith('/api/')) return;
+      const status = response.status();
+      if (status === 403 || status === 400) {
+        forbiddenResponses.push(`${String(status)} ${url.pathname}`);
+      }
+    });
+
+    for (const path of ['/', '/schedule', '/analytics']) {
+      await allowed(path);
+      // Ждём ответы: проверка ниже смотрит, что успело прийти.
+      await page.waitForTimeout(800);
+    }
+
+    expect(
+      forbiddenResponses,
+      `отказы на разрешённых экранах: ${forbiddenResponses.join(' | ')}`,
+    ).toEqual([]);
   });
 });

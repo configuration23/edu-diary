@@ -149,15 +149,18 @@ export function GradesAttendanceScreen({ session }: { session: SessionResponseDt
     countSick: false,
   });
 
-  /** Администратор: группа и ученик. */
-  const groups = useGroups();
+  /**
+   * Справочник групп нужен только администратору (он выбирает группу и ученика).
+   * Ученику и представителю он недоступен, преподавателю группы дают назначения.
+   */
+  const groups = useGroups({}, { enabled: canChooseStudent });
   const [adminGroupId, setAdminGroupId] = useState('');
   /** Ученики выбранной группы: список дают зачисления этой группы. */
   const enrollments = useGroupEnrollments(adminGroupId === '' ? null : adminGroupId);
   const [adminStudentId, setAdminStudentId] = useState('');
 
-  /** Преподаватель: свои назначения дают группы и предметы. */
-  const assignments = useAssignments();
+  /** Преподаватель: свои назначения дают группы и предметы. Остальным они не нужны. */
+  const assignments = useAssignments({}, { enabled: isTeacherOnly });
   const [teacherGroupId, setTeacherGroupId] = useState('');
   const [teacherSubjectId, setTeacherSubjectId] = useState('');
 
@@ -187,8 +190,31 @@ export function GradesAttendanceScreen({ session }: { session: SessionResponseDt
 
   const studentId = canChooseStudent ? (adminStudentId === '' ? null : adminStudentId) : null;
 
-  const grades = useGradesBySubject(isTeacherOnly ? null : studentId);
-  const attendance = useAttendanceBySubject(isTeacherOnly ? null : studentId, options);
+  /**
+   * Третья роль этого экрана: **ученик и законный представитель**.
+   *
+   * Им отчёт строится по своим строкам, поэтому `studentId` не нужен — его и не бывает.
+   * Признак: право `grades:read` с областью `own`. Без этой ветки запрос выключался и
+   * «Мои оценки» оставались пустыми.
+   */
+  const isOwnView =
+    !canChooseStudent &&
+    !isTeacherOnly &&
+    session.permissions.some((grant) => grant.permission === 'grades:read');
+
+  /**
+   * Преподавателю отчёт строится по ученикам, поэтому запросы «по предметам» выключаем:
+   * без `studentId` маршрут отвечает отказом «укажите ученика». Администратору они нужны,
+   * когда ученик выбран, ученику — всегда.
+   */
+  const subjectViewEnabled = isOwnView || (!isTeacherOnly && studentId !== null);
+
+  const grades = useGradesBySubject(isOwnView ? null : studentId, {
+    enabled: subjectViewEnabled,
+  });
+  const attendance = useAttendanceBySubject(isOwnView ? null : studentId, options, {
+    enabled: subjectViewEnabled,
+  });
   const teacherView = useMarksByStudent(
     { studyGroupId: teacherGroupId, subjectId: teacherSubjectId },
     options,

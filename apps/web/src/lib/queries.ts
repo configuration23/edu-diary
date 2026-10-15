@@ -510,9 +510,13 @@ export function useStudentGuardians(studentId: string | null) {
   });
 }
 
-export function useAcademicYears() {
+export function useAcademicYears(
+  /** Выключить запрос, когда роли справочник учебных годов недоступен. */
+  options: { enabled?: boolean } = {},
+) {
   return useQuery({
     queryKey: queryKeys.academicYears,
+    enabled: options.enabled ?? true,
     queryFn: () => apiRequest('/api/academic-years', listAcademicYearsResponseSchema),
   });
 }
@@ -589,11 +593,16 @@ export function useCreatePeriod() {
   });
 }
 
-export function useGroups(params: { academicYearId?: string; search?: string } = {}) {
+export function useGroups(
+  params: { academicYearId?: string; search?: string } = {},
+  /** Выключить запрос, когда роль всё равно не имеет доступа к справочнику групп. */
+  options: { enabled?: boolean } = {},
+) {
   const query = toQueryString(params);
 
   return useQuery({
     queryKey: queryKeys.groups(query),
+    enabled: options.enabled ?? true,
     queryFn: () => apiRequest(`/api/groups${query}`, listGroupsResponseSchema),
   });
 }
@@ -914,11 +923,16 @@ export function useDeletePeriod() {
   });
 }
 
-export function useAssignments(params: { teacherUserId?: string; studyGroupId?: string } = {}) {
+export function useAssignments(
+  params: { teacherUserId?: string; studyGroupId?: string } = {},
+  /** Выключить запрос, когда назначения этой роли не нужны. */
+  options: { enabled?: boolean } = {},
+) {
   const query = toQueryString(params);
 
   return useQuery({
     queryKey: queryKeys.assignments(query),
+    enabled: options.enabled ?? true,
     queryFn: () => apiRequest(`/api/assignments${query}`, listAssignmentsResponseSchema),
   });
 }
@@ -929,11 +943,15 @@ export function useAssignments(params: { teacherUserId?: string; studyGroupId?: 
  * Роль приходит в каждой записи, поэтому фильтруем на клиенте — отдельного
  * «списка преподавателей» API не заводит.
  */
-export function useTeachers() {
+export function useTeachers(
+  /** Выключить запрос: список учётных записей доступен не всем ролям. */
+  options: { enabled?: boolean } = {},
+) {
   const query = toQueryString({ limit: 200 });
 
   return useQuery({
     queryKey: queryKeys.users(query),
+    enabled: options.enabled ?? true,
     queryFn: () => apiRequest(`/api/users${query}`, listUsersResponseSchema),
   });
 }

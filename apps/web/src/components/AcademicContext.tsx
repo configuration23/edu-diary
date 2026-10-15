@@ -70,17 +70,32 @@ export function AcademicContextProvider({
 }) {
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
 
-  const years = useAcademicYears();
-  const activeYear = years.data?.items.find((year) => year.isActive) ?? null;
-
-  const canSeeAllGroups = session.permissions.some(
-    (grant) => grant.permission === 'academics:write' && grant.scope === 'all',
+  /**
+   * Год и группы запрашиваем по правам роли.
+   *
+   * Контекст монтируется над всеми экранами, поэтому раньше запросы уходили безусловно — и
+   * у ученика с представителем каждый получал `403` на любом экране, хотя ни год, ни группы
+   * им не нужны: свои группы они получают вместе с расписанием.
+   */
+  const canReadAcademics = session.permissions.some(
+    (grant) => grant.permission === 'academics:read',
   );
+  const canSeeAllGroups = session.permissions.some(
+    (grant) => grant.permission === 'academics:read' && grant.scope === 'all',
+  );
+  /** Назначения нужны, когда группу берут из них: администратору её даёт справочник групп. */
+  const needsAssignments = session.permissions.some(
+    (grant) => grant.permission === 'assignments:read',
+  );
+
+  const years = useAcademicYears({ enabled: canReadAcademics });
+  const activeYear = years.data?.items.find((year) => year.isActive) ?? null;
 
   const allGroups = useGroups(
     canSeeAllGroups && activeYear !== null ? { academicYearId: activeYear.id } : {},
+    { enabled: canSeeAllGroups },
   );
-  const mine = useAssignments();
+  const mine = useAssignments({}, { enabled: needsAssignments && !canSeeAllGroups });
   /**
    * Группы из расписания: ученику и родителю справочник групп недоступен, а свои
    * группы они получают вместе с расписанием. Без этого их список групп пуст, и
