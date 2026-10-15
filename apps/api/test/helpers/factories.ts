@@ -97,6 +97,23 @@ export function httpClient(baseUrl: string): ApiClient {
   };
 }
 
+/**
+ * Логин из метки прогона.
+ *
+ * Логин допускает только строчные латинские буквы, цифры, точку, дефис и подчёркивание
+ * (политика учётных записей). Метка прогона в тестах бывает на русском («АН»), и фабрика
+ * сама приводит её к допустимому виду — иначе создание пользователя падало на валидации.
+ * Если после очистки не осталось букв, добавляем счётчик, чтобы логин не оказался пустым.
+ */
+function usernameSlug(run: string): string {
+  const cleaned = run
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]/g, '')
+    .replace(/^[-._]+|[-._]+$/g, '');
+
+  return cleaned === '' ? String(Date.now()).slice(-6) : cleaned;
+}
+
 /** Ошибка подготовки данных: сразу видно, какой шаг не прошёл. */
 async function expectStatus(
   response: ApiResponse,
@@ -309,6 +326,8 @@ export async function createLessonContext(
     yearEndsOn: string;
     groupName?: string;
     subjectName?: string;
+    /** Имя ученика: тесты иногда проверяют его в ответе. */
+    studentName?: string;
     /** Пароли: политика требует длину и отсутствие логина в пароле. */
     teacherPassword?: string;
     studentPassword?: string;
@@ -342,8 +361,11 @@ export async function createLessonContext(
     name: input.subjectName ?? `Предмет ${input.run}`,
   });
 
+  /** Логины — из допустимых символов: метка прогона бывает русской. */
+  const slug = usernameSlug(input.run);
+
   const teacher = await createTeacher(context, {
-    username: `prepod-${input.run}`,
+    username: `prepod-${slug}`,
     fullName: `Преподаватель ${input.run}`,
     password: input.teacherPassword ?? 'kolledzh-prepodavatel-2025',
   });
@@ -367,8 +389,8 @@ export async function createLessonContext(
 
   if (input.withStudent === true) {
     const student = await createStudentWithAccount(context, {
-      fullName: `Ученик ${input.run}`,
-      username: `uchenik-${input.run}`,
+      fullName: input.studentName ?? `Ученик ${input.run}`,
+      username: `uchenik-${slug}`,
       password: input.studentPassword ?? 'kolledzh-uchenik-2025',
     });
 

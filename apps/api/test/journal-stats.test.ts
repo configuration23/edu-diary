@@ -1,13 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import {
-  ADMIN_PASSWORD,
-  completeSetup,
-  createTestApp,
-  createUserAndLogin,
-  type TestApp,
-} from './helpers/api';
+import { ADMIN_PASSWORD, completeSetup, createTestApp, type TestApp } from './helpers/api';
 import { createTestDatabase, hasTestDatabase, type TestDatabase } from './helpers/database';
+import { createLessonContext, factories, injectClient } from './helpers/factories';
 
 const describeWithDatabase = describe.skipIf(!hasTestDatabase);
 
@@ -39,8 +34,6 @@ describeWithDatabase('аналитика журнала', () => {
   let adminCookie: string;
   let teacherCookie: string;
   let groupId: string;
-  let subjectId: string;
-  let teacherUserId: string;
   let studentId: string;
   let lessonId: string;
   let homeReasonId: string;
@@ -75,90 +68,28 @@ describeWithDatabase('аналитика журнала', () => {
       admin: { username: 'admin', fullName: 'Администратор Системы', password: ADMIN_PASSWORD },
     }));
 
-    const years = await testApp.app.inject({
-      method: 'GET',
-      url: '/api/academic-years',
-      headers: auth(),
-    });
-    const year = (
-      years.json() as { items: Array<{ id: string; startsOn: string; endsOn: string }> }
-    ).items[0];
-
-    const teacher = await createUserAndLogin(testApp.app, adminCookie, {
-      username: 'prepod-analitika',
-      fullName: 'Преподаватель Аналитики',
-      password: 'kolledzh-analitika-2025',
-      roles: ['teacher'],
-    });
-    teacherUserId = teacher.id;
-    teacherCookie = teacher.cookie;
-
-    const group = await testApp.app.inject({
-      method: 'POST',
-      url: '/api/groups',
-      headers: auth(),
-      payload: {
-        academicYearId: year?.id ?? '',
-        name: 'АН-11',
-        startsOn: year?.startsOn ?? shiftDays(-100),
-        endsOn: year?.endsOn ?? shiftDays(100),
-      },
-    });
-    expect(group.statusCode, group.body).toBe(201);
-    groupId = (group.json() as Json).id as string;
-
-    const subject = await testApp.app.inject({
-      method: 'POST',
-      url: '/api/subjects',
-      headers: auth(),
-      payload: { name: 'Аналитика', shortName: 'АН', kind: 'mandatory' },
-    });
-    expect(subject.statusCode, subject.body).toBe(201);
-    subjectId = (subject.json() as Json).id as string;
-
-    const student = await testApp.app.inject({
-      method: 'POST',
-      url: '/api/students',
-      headers: auth(),
-      payload: {
-        fullName: 'Ученик Аналитики',
-        account: { username: 'uchenik-analitika', password: 'kolledzh-analitika-2025' },
-      },
-    });
-    expect(student.statusCode, student.body).toBe(201);
-    studentId = (student.json() as Json).id as string;
-
-    await testApp.app.inject({
-      method: 'POST',
-      url: `/api/groups/${groupId}/enrollments`,
-      headers: auth(),
-      payload: { studentId, joinedOn: shiftDays(-120) },
+    /**
+     * Данные готовит фабрика: год, группа, предмет, преподаватель, назначение, ученик с
+     * зачислением и занятие — одним вызовом. Порядок создания (год раньше группы,
+     * назначение раньше занятия) живёт в фабрике, а не здесь.
+     */
+    const created = await createLessonContext(factories(injectClient(testApp.app), adminCookie), {
+      run: 'АН',
+      yearStartsOn: shiftDays(-200),
+      yearEndsOn: shiftDays(200),
+      groupName: 'АН-11',
+      subjectName: 'Аналитика',
+      studentName: 'Ученик Аналитики',
+      teacherPassword: 'kolledzh-analitika-2025',
+      studentPassword: 'kolledzh-analitika-2025',
+      withStudent: true,
+      lessonDate: shiftDays(-1),
     });
 
-    const assignment = await testApp.app.inject({
-      method: 'POST',
-      url: '/api/assignments',
-      headers: auth(),
-      payload: { teacherUserId, subjectId, studyGroupId: groupId, startsOn: shiftDays(-180) },
-    });
-    expect(assignment.statusCode, assignment.body).toBe(201);
-
-    const lesson = await testApp.app.inject({
-      method: 'POST',
-      url: '/api/lessons',
-      headers: auth(),
-      payload: {
-        studyGroupId: groupId,
-        subjectId,
-        teacherUserId,
-        lessonDate: shiftDays(-1),
-        pairNumber: 1,
-        timeStart: '08:30',
-        timeEnd: '10:00',
-      },
-    });
-    expect(lesson.statusCode, lesson.body).toBe(201);
-    lessonId = (lesson.json() as Json).id as string;
+    groupId = created.group.id;
+    teacherCookie = created.teacher.cookie;
+    studentId = created.student?.id ?? '';
+    lessonId = created.lesson?.id ?? '';
 
     const reasons = await testApp.app.inject({
       method: 'GET',
