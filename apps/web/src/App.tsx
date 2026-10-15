@@ -3,6 +3,7 @@ import { RouterProvider, createRootRoute, createRoute, createRouter } from '@tan
 import type { ReactNode } from 'react';
 
 import { AppLayout } from './components/AppLayout';
+import { NotFoundPage, PageGuard } from './components/PageGuard';
 import { AcademicContextProvider, useAcademicContext } from './components/AcademicContext';
 import { AppearanceProvider } from './components/AppearanceContext';
 import { Alert } from './components/ui';
@@ -55,7 +56,15 @@ function withSession(render: (session: SessionResponseDto) => ReactNode): () => 
     const session = useSession();
 
     if (session.data == null) return <Splash />;
-    return render(session.data);
+
+    /**
+     * Гейт доступа: экран не монтируется, если раздел роли не положен.
+     *
+     * Раньше закрытый раздел открывался по прямой ссылке — экран рисовался, запросы
+     * уходили и получали `403`. Правила берутся из общего списка (`lib/access`), того же,
+     * что питает меню: видимость пункта и доступ к адресу не могут разойтись.
+     */
+    return <PageGuard session={session.data}>{render(session.data)}</PageGuard>;
   };
 }
 
@@ -93,25 +102,25 @@ const usersRoute = createRoute({
 const privacyRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/privacy',
-  component: PrivacyScreen,
+  component: withSession(() => <PrivacyScreen />),
 });
 
 const auditRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/audit',
-  component: AuditScreen,
+  component: withSession(() => <AuditScreen />),
 });
 
 const securityRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/security',
-  component: SecurityScreen,
+  component: withSession(() => <SecurityScreen />),
 });
 
 const academicsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/academics',
-  component: AcademicsScreen,
+  component: withSession(() => <AcademicsScreen />),
 });
 
 const groupsRoute = createRoute({
@@ -131,7 +140,7 @@ const groupsRoute = createRoute({
 const catalogsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/catalogs',
-  component: CatalogsScreen,
+  component: withSession(() => <CatalogsScreen />),
 });
 
 const assignmentsRoute = createRoute({
@@ -160,6 +169,11 @@ const substitutionsRoute = createRoute({
   validateSearch: (search: Record<string, unknown>) => ({
     lessonId: typeof search.lessonId === 'string' ? search.lessonId : undefined,
   }),
+  /*
+    Замены — единственный маршрут, который сам читает сессию (он берёт ещё и поиск из
+    адреса). Гейт навешиваем внутри него: без этого раздел открывался по прямой ссылке,
+    как и остальные закрытые экраны.
+  */
   component: () => <SubstitutionsRoute />,
 });
 
@@ -185,7 +199,7 @@ const analyticsRoute = createRoute({
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/settings',
-  component: SettingsScreen,
+  component: withSession(() => <SettingsScreen />),
 });
 
 /** Замены: группа берётся из контекста, право — из сессии. */
@@ -201,11 +215,13 @@ function SubstitutionsRoute() {
   );
 
   return (
-    <SubstitutionsScreen
-      groupId={selectedGroupId}
-      canManage={canManage}
-      initialLessonId={search.lessonId ?? null}
-    />
+    <PageGuard session={session.data}>
+      <SubstitutionsScreen
+        groupId={selectedGroupId}
+        canManage={canManage}
+        initialLessonId={search.lessonId ?? null}
+      />
+    </PageGuard>
   );
 }
 
@@ -228,7 +244,12 @@ const routeTree = rootRoute.addChildren([
   settingsRoute,
 ]);
 
-const router = createRouter({ routeTree, defaultPreload: false });
+const router = createRouter({
+  routeTree,
+  defaultPreload: false,
+  /** Неизвестный адрес выглядит так же, как закрытый раздел (решение владельца). */
+  defaultNotFoundComponent: NotFoundPage,
+});
 
 declare module '@tanstack/react-router' {
   interface Register {
