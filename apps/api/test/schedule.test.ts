@@ -327,14 +327,18 @@ describeWithDatabase('расписание и уроки', () => {
     });
     expect(link.statusCode).toBe(201);
 
-    // Расписание своей группы ученик видит по фильтру группы. Проверяем в конце:
-    // к этому моменту занятие уже создано предыдущими тестами.
+    /**
+     * Шаблон занятий ученику не отдаём: это конструктор расписания, и экран раздела ему
+     * закрыт. Раньше маршрут требовал область `own`, и шаблон уходил ученику по прямому
+     * запросу, хотя в интерфейсе раздела не было. Готовые занятия ученик получает через
+     * `/lessons`, а свои группы — через `/schedule/my-groups`.
+     */
     const studentView = await testApp.app.inject({
       method: 'GET',
       url: `/api/schedule?studyGroupId=${groupId}`,
       headers: { cookie: studentCookie },
     });
-    expect(studentView.statusCode).toBe(200);
+    expect(studentView.statusCode).toBe(403);
 
     const parentGroups = await testApp.app.inject({
       method: 'GET',

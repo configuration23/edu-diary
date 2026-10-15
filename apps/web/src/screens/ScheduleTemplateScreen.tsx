@@ -460,9 +460,13 @@ export function ScheduleTemplateScreen({ session }: { session: SessionResponseDt
 
   // Пары для выбора — только заведённые в звонках: остальные всё равно нельзя заполнить.
   const pairs = pairsFromBells(bells.data?.items);
-  const users = useTeachers();
   const [editingId, setEditingId] = useState<string | null>(null);
   const editable = canManageSchedule(session);
+  /**
+   * Учётные записи запрашиваем только те, кто правит расписание: у преподавателя права
+   * users:read нет, и список всё равно не нужен — правка ему недоступна.
+   */
+  const users = useTeachers({ enabled: editable });
 
   const items = entries.data?.items ?? [];
 

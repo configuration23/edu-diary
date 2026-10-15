@@ -217,9 +217,17 @@ export function registerScheduleRoutes(
     },
   );
 
+  /**
+   * Шаблон повторяющихся занятий: конструктор расписания.
+   *
+   * Область `assigned` — только те, кто составляет расписание (администратор и
+   * преподаватель). С областью `own` маршрут отдавал шаблон ученику и представителю: экран
+   * раздела им закрыт, но данные по прямому запросу уходили. Готовые занятия ученик видит
+   * через `/lessons`, ему шаблон не нужен.
+   */
   app.get(
     '/schedule',
-    { preHandler: requirePermission('schedule:read', 'own') },
+    { preHandler: requirePermission('schedule:read', 'assigned') },
     async (request) => {
       const query = listScheduleQuerySchema.parse(request.query);
       const groups = await visibleGroupIds(request, 'schedule:read');

@@ -281,4 +281,117 @@ test.describe.serial('Этап 1: настройка, вход, права', () 
       screens.length,
     );
   });
+
+  /**
+   * Прямые ссылки в закрытые разделы.
+   *
+   * Дефект, найденный владельцем: раздел, скрытый из меню, открывался по адресу — экран
+   * монтировался, запросы уходили и получали `403`, а человек видел заголовок и фильтры
+   * чужого раздела. Ученику, например, открывался шаблон занятий группы с данными.
+   *
+   * Решение владельца: на «нет такого адреса» и на «есть, но прав нет» отвечаем
+   * **одинаково** — иначе разные ответы рассказывают, какие разделы существуют.
+   *
+   * Проверяем обе стороны: закрытое не открывается, **а разрешённое работает** — иначе
+   * гейт можно «починить» так, что он закроет всё.
+   */
+  test('закрытые разделы не открываются по прямой ссылке', async ({ page }) => {
+    /** Текст отказа: один и тот же для неизвестного адреса и для закрытого раздела. */
+    const NOT_FOUND = 'Страница не найдена';
+
+    const forbidden = async (path: string): Promise<void> => {
+      await page.goto(path);
+      await expect(
+        page.getByText(NOT_FOUND),
+        `закрытый адрес ${path} должен отвечать отказом`,
+      ).toBeVisible();
+    };
+
+    const allowed = async (path: string): Promise<void> => {
+      await page.goto(path);
+      await expect(
+        page.getByText(NOT_FOUND),
+        `разрешённый адрес ${path} не должен отвечать отказом`,
+      ).toHaveCount(0);
+    };
+
+    // Администратор: доступно всё, включая разделы, закрытые остальным.
+    await ensureSession(page, ADMIN.username, ADMIN.password);
+    for (const path of ['/', '/users', '/audit', '/security', '/settings', '/schedule/template']) {
+      await allowed(path);
+    }
+
+    // Неизвестный адрес отвечает так же, как закрытый раздел: различий быть не должно.
+    await forbidden('/такого-раздела-нет');
+
+    // Учётная запись с уникальным логином: повторный прогон не должен упираться в занятый.
+    const studentUsername = `uchenik-dostupa-${String(Date.now()).slice(-6)}`;
+
+    const created = await page.request.post('/api/students', {
+      data: {
+        fullName: 'Ученик Доступа',
+        account: { username: studentUsername, password: 'kolledzh-dostupa-2025' },
+      },
+    });
+    expect(created.ok(), await created.text()).toBe(true);
+
+    // Ученик: доступны расписание, оценки и посещение; закрыто всё служебное.
+    await page.getByRole('button', { name: 'Выйти' }).click();
+    await expect(page.getByLabel('Логин')).toBeVisible();
+    await login(page, studentUsername, 'kolledzh-dostupa-2025');
+    /**
+     * Убеждаемся, что вход состоялся: иначе проверки ниже падали бы на экране входа, а не
+     * на гейте, и причину пришлось бы искать по скриншоту.
+     */
+    await expect(page.getByRole('link', { name: 'Обзор' })).toBeVisible();
+
+    for (const path of ['/', '/schedule', '/analytics']) {
+      await allowed(path);
+    }
+
+    for (const path of [
+      '/users',
+      '/audit',
+      '/security',
+      '/settings',
+      '/academics',
+      '/groups',
+      '/catalogs',
+      '/assignments',
+      '/schedule/template',
+      '/substitutions',
+      '/lessons',
+    ]) {
+      await forbidden(path);
+    }
+
+    /**
+     * На **разрешённых** экранах ученик не должен получать `403` и `400`.
+     *
+     * Владелец видел иное: контекст учебного процесса запрашивал год, группы и назначения
+     * безусловно, поэтому ученик получал по три отказа `403` на каждом экране, а в
+     * «Оценках и посещении» уходили запросы без ученика и получали `400`. Повтор ошибок
+     * тоже убран: `retry` теперь только для `5xx`.
+     */
+    const forbiddenResponses: string[] = [];
+    page.on('response', (response) => {
+      const url = new URL(response.url());
+      if (!url.pathname.startsWith('/api/')) return;
+      const status = response.status();
+      if (status === 403 || status === 400) {
+        forbiddenResponses.push(`${String(status)} ${url.pathname}`);
+      }
+    });
+
+    for (const path of ['/', '/schedule', '/analytics']) {
+      await allowed(path);
+      // Ждём ответы: проверка ниже смотрит, что успело прийти.
+      await page.waitForTimeout(800);
+    }
+
+    expect(
+      forbiddenResponses,
+      `отказы на разрешённых экранах: ${forbiddenResponses.join(' | ')}`,
+    ).toEqual([]);
+  });
 });
