@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Alert, Button, Card, Field, FilePicker, TextInput } from '../components/ui';
 import { errorMessage } from '../lib/api-client';
 import { useAppearance, useBranding, useUpdateAppearance, useUpdateBranding } from '../lib/queries';
+import { StorageSettingsCard } from '../components/StorageSettingsCard';
 
 /**
  * Настройки заведения: название, короткое имя, подпись и логотип.
@@ -244,6 +245,13 @@ export function SettingsScreen() {
       </Card>
 
       <AppearanceForm />
+
+      {/*
+        Хранилище файлов — **системная** настройка: адрес хранилища и ключи доступа. Здесь же
+        кнопка проверки подключения: она пишет настоящий файл, поэтому администратор узнаёт о
+        проблеме сразу, а не когда ученик не сможет приложить решение.
+      */}
+      <StorageSettingsCard />
     </div>
   );
 }

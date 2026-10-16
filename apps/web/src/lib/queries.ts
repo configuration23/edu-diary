@@ -50,9 +50,12 @@ import {
   subjectSchema,
   suggestUsernameResponseSchema,
   userSummarySchema,
+  storageSettingsSchema,
+  storageTestResultSchema,
   type LessonDto,
   type SessionResponseDto,
   type SetupStatusResponseDto,
+  type UpdateStorageSettingsRequest,
 } from '@edu-diary/contracts';
 import {
   useMutation,
@@ -1305,5 +1308,47 @@ export function useUpdateBranding() {
       void client.invalidateQueries({ queryKey: ['branding'] });
       void client.invalidateQueries({ queryKey: ['setup'] });
     },
+  });
+}
+
+/**
+ * Настройки хранилища файлов.
+ *
+ * Это **системные** настройки: адрес хранилища и ключи доступа. Доступны только
+ * администратору — директору видеть их незачем (разделение «бизнес и системные настройки»
+ * записано в `BACKLOG.md`).
+ */
+export function useStorageSettings(enabled = true) {
+  return useQuery({
+    queryKey: ['storage-settings'],
+    enabled,
+    queryFn: () => apiRequest('/api/settings/storage', storageSettingsSchema),
+  });
+}
+
+export function useUpdateStorageSettings() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdateStorageSettingsRequest) =>
+      apiRequest('/api/settings/storage', storageSettingsSchema, { method: 'PUT', body: input }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ['storage-settings'] });
+    },
+  });
+}
+
+/**
+ * Проверка подключения к хранилищу.
+ *
+ * Мутация, а не запрос: проверка **пишет настоящий файл** в хранилище, поэтому повторять её
+ * при каждом обновлении окна нельзя. Идентификатор ответа не нужен — важен результат.
+ */
+export function useTestStorage() {
+  return useMutation({
+    mutationFn: (input: UpdateStorageSettingsRequest) =>
+      apiRequest('/api/settings/storage/test', storageTestResultSchema, {
+        method: 'POST',
+        body: input,
+      }),
   });
 }
