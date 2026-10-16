@@ -138,7 +138,7 @@ describeWithDatabase('сдача решения', () => {
     const file = await testApp.app.inject({
       method: 'POST',
       /** kind=submission: файл решения — это не материал задания, и таблицы у них разные. */
-      url: '/api/homework/files?kind=submission',
+      url: '/api/homework/submission-files',
       headers: {
         cookie: studentCookie,
         'content-type': `multipart/form-data; boundary=${boundary}`,
@@ -167,11 +167,10 @@ describeWithDatabase('сдача решения', () => {
     expect(own.isLate).toBe(true);
     expect(own.text).toBe('Ответ во вложении');
     /**
-     * Вложение решения пока **не привязывается** — незавершённая часть шага: сдача, пометка
-     * опоздания и запрет второй попытки работают, а файл к решению не присоединяется.
-     * Тест оставлен и помечен явно, чтобы дефект не потерялся.
+     * Вложение решения привязано к сдаче: файл загружается **до** отправки, поэтому
+     * проверяем, что он не потерялся.
      */
-    expect((own.files as Json[]).length).toBeGreaterThanOrEqual(0);
+    expect((own.files as Json[]).length).toBe(1);
   });
 
   it('вторая попытка не принимается: попытка одна', async () => {
@@ -187,17 +186,14 @@ describeWithDatabase('сдача решения', () => {
     expect(second.body).toContain('уже отправлено');
   });
 
-  /**
-   * НЕЗАВЕРШЕНО: список сдавших отвечает отказом. Проверка «учитель видит сдавшего»
-   * помечена как ожидающая: дефект в правах на список, а не в самой сдаче.
-   */
-  it.skip('учитель видит сдавшего, а чужой ученик — нет', async () => {
+  it('учитель видит сдавшего, а чужой ученик — нет', async () => {
     const list = await testApp.app.inject({
       method: 'GET',
       url: `/api/homework/${assignmentId}/submissions`,
       headers: auth(teacherCookie),
     });
 
+    console.log('СПИСОК СДАВШИХ:', list.statusCode, list.body.slice(0, 200));
     expect(list.statusCode, list.body).toBe(200);
     const items = (list.json() as { items: Json[] }).items;
     expect(items.length).toBe(1);

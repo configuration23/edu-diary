@@ -389,7 +389,12 @@ export async function createLessonContext(
   } = { year, group, subject, teacher, assignment };
 
   if (input.withStudent === true) {
-    const studentPassword = input.studentPassword ?? 'kolledzh-uchenik-2025';
+    /**
+     * Пароль не должен содержать логин: политика это проверяет, а метка прогона бывает
+     * короткой («ПРОБА2» → proba2), и тогда пароль по умолчанию её содержит. Поэтому
+     * по умолчанию берём пароль, который от логина не зависит.
+     */
+    const studentPassword = input.studentPassword ?? 'kolledzh-reshenie-2025';
     const studentUsername = `uchenik-${slug}`;
 
     const student = await createStudentWithAccount(context, {

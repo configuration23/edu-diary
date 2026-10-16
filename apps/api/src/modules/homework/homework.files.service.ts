@@ -2,7 +2,7 @@ import { checkFile, extensionOf } from '@edu-diary/domain';
 
 import { AppError } from '../../shared/errors';
 import { detectType, objectKey, type StorageAdapter } from '../storage';
-import type { AssignmentFileRepository, PendingFileRecord } from './homework.files.repository';
+import type { PendingFileRecord } from './homework.files.repository';
 
 /**
  * Приём вложений.
@@ -59,11 +59,14 @@ export interface FileService {
 }
 
 export function createFileService(dependencies: {
-  repository: AssignmentFileRepository;
   /** Адаптер берём на каждый вызов: администратор может сменить хранилище без перезапуска. */
   adapter: () => Promise<StorageAdapter>;
 }): FileService {
-  const { repository, adapter } = dependencies;
+  /**
+   * Репозиторий в зависимостях — только для чтения готового файла. Куда записать метаданные,
+   * решает вызывающий: материалы задания и файлы решения — разные таблицы.
+   */
+  const { adapter } = dependencies;
 
   return {
     async upload(input) {
@@ -96,7 +99,14 @@ export function createFileService(dependencies: {
       const storage = await adapter();
       await storage.put({ key, body: input.body, mimeType });
 
-      const created = await repository.createPending({
+      /**
+       * Пишем в **переданный** репозиторий, а не в тот, что у сервиса.
+       *
+       * Здесь и была ошибка: материалы задания и файлы решения уходили в одну таблицу,
+       * потому что сервис использовал свой репозиторий из зависимостей и не смотрел на
+       * `input.repository`. Из-за этого файл решения не находился при привязке к сдаче.
+       */
+      const created = await input.repository.createPending({
         storageKey: key,
         originalName: input.fileName,
         sizeBytes: input.body.length,

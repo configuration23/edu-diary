@@ -136,7 +136,6 @@ export function createHomeworkModule(dependencies: HomeworkModuleDependencies) {
   const submissions = createSubmissionService({ repository: submissionRepository });
 
   const files = createFileService({
-    repository: fileRepository,
     adapter: dependencies.storageAdapter,
   });
 
@@ -341,6 +340,15 @@ export function createHomeworkModule(dependencies: HomeworkModuleDependencies) {
     app.get('/homework/:assignmentId/submissions', async (request) => {
       const { assignmentId } = request.params as { assignmentId: string };
       const viewer = viewerOf(request);
+
+      /**
+       * Список сдавших — **только проверяющим**. У ученика есть homework:write, но с
+       * областью own: это отправка решения, а не проверка. Без этой проверки ученик
+       * получал бы работы всего класса.
+       */
+      if (staffScopeOf(viewer) === undefined && !viewer.permissions.has('homework:review')) {
+        throw new AppError('FORBIDDEN', 'Недостаточно прав: homework:review');
+      }
 
       const assignment = await service.getForLesson({
         viewer,
