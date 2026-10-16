@@ -482,7 +482,7 @@ export function createHomeworkModule(dependencies: HomeworkModuleDependencies) {
       const body = updateHomeworkRequestSchema.parse(request.body);
       const viewer = viewerOf(request);
 
-      await service.updateAssignment({
+      const change = await service.updateAssignment({
         viewer,
         assignmentId,
         ...(body.text === undefined ? {} : { text: body.text }),
@@ -498,8 +498,19 @@ export function createHomeworkModule(dependencies: HomeworkModuleDependencies) {
         ...(body.fileIds === undefined ? {} : { fileIds: body.fileIds }),
       });
 
+      /**
+       * В аудит пишем **до и после**: спор «я этого не менял» решается фактами. Полный текст
+       * задания не сохраняем — в журнале, который хранится долго, достаточно факта правки и
+       * длины; для разбора этого хватает.
+       */
       await audit.record(
-        { action: 'update', entityKind: 'homework_assignment', entityId: assignmentId },
+        {
+          action: 'update',
+          entityKind: 'homework_assignment',
+          entityId: assignmentId,
+          before: change.before,
+          after: change.after,
+        },
         actorFromRequest(request),
       );
 
@@ -509,10 +520,19 @@ export function createHomeworkModule(dependencies: HomeworkModuleDependencies) {
     app.delete('/homework/:assignmentId', async (request) => {
       const { assignmentId } = request.params as { assignmentId: string };
 
-      await service.removeAssignment({ viewer: viewerOf(request), assignmentId });
+      const removed = await service.removeAssignment({ viewer: viewerOf(request), assignmentId });
 
+      /**
+       * Удаление **мягкое**: задание скрывается, но история и сдачи остаются. В аудите
+       * сохраняем снимок — по нему видно, что именно убрали.
+       */
       await audit.record(
-        { action: 'delete', entityKind: 'homework_assignment', entityId: assignmentId },
+        {
+          action: 'delete',
+          entityKind: 'homework_assignment',
+          entityId: assignmentId,
+          before: removed.removed,
+        },
         actorFromRequest(request),
       );
 

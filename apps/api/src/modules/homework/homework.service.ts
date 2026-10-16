@@ -53,6 +53,19 @@ export interface HomeworkDetail {
   studentCount: number;
 }
 
+/**
+ * Снимок задания для аудита.
+ *
+ * Для спора «это не я задавал» нужны факты: какие были урок и срок и менялся ли текст.
+ * Полный текст задания в аудит не пишем: он уходит в журнал, который хранится долго, а для
+ * разбора достаточно факта правки и длины.
+ */
+export interface HomeworkSnapshot {
+  lessonId: string;
+  dueLessonId: string;
+  textLength: number;
+}
+
 /** Ближайший урок для списка выбора срока. */
 export interface DueLessonOption {
   lessonId: string;
@@ -75,8 +88,11 @@ export interface HomeworkService {
     assignmentId: string;
     text?: string;
     dueLessonId?: string;
-  }): Promise<void>;
-  removeAssignment(input: { viewer: HomeworkViewer; assignmentId: string }): Promise<void>;
+  }): Promise<{ before: HomeworkSnapshot; after: HomeworkSnapshot }>;
+  removeAssignment(input: {
+    viewer: HomeworkViewer;
+    assignmentId: string;
+  }): Promise<{ removed: HomeworkSnapshot }>;
   /**
    * Что видно в уроке.
    *
@@ -287,10 +303,26 @@ export function createHomeworkService(dependencies: HomeworkServiceDependencies)
         }
       }
 
+      const before = snapshotOf(assignment);
+
       await repository.updateAssignment(input.assignmentId, {
         ...(input.text === undefined ? {} : { text: input.text }),
         ...(input.dueLessonId === undefined ? {} : { dueLessonId: input.dueLessonId }),
       });
+
+      /**
+       * Снимок «после» строим из **того, что просили изменить**, а не повторным чтением: так
+       * в аудите видно именно намерение правки, и лишнего запроса не нужно.
+       */
+      return {
+        before,
+        after: {
+          lessonId: before.lessonId,
+          dueLessonId: input.dueLessonId ?? before.dueLessonId,
+          /** Текст не меняли — длина остаётся прежней; меняли — берём новую. */
+          textLength: input.text === undefined ? before.textLength : input.text.length,
+        },
+      };
     },
 
     async removeAssignment(input) {
@@ -299,6 +331,8 @@ export function createHomeworkService(dependencies: HomeworkServiceDependencies)
 
       await requireManage(input.viewer, assignment.lessonId);
       await repository.softDeleteAssignment(input.assignmentId, input.viewer.userId);
+
+      return { removed: snapshotOf(assignment) };
     },
 
     async getForLesson(input) {
@@ -352,6 +386,15 @@ export function createHomeworkService(dependencies: HomeworkServiceDependencies)
         pairNumber: lesson.pairNumber,
       }));
     },
+  };
+}
+
+/** Снимок задания для аудита. */
+function snapshotOf(assignment: AssignmentWithContext): HomeworkSnapshot {
+  return {
+    lessonId: assignment.lessonId,
+    dueLessonId: assignment.dueLessonId,
+    textLength: assignment.text.length,
   };
 }
 

@@ -5,6 +5,8 @@ import {
   useCreateHomework,
   useHomeworkSubmissions,
   useLessonHomework,
+  useRemoveHomework,
+  useUpdateHomework,
   useUploadHomeworkFile,
 } from '../lib/queries';
 import { Alert, Badge, Button, Card, EmptyState, Field, TextInput } from './ui';
@@ -40,6 +42,8 @@ export function HomeworkCard({
 }) {
   const homework = useLessonHomework(lessonId);
   const create = useCreateHomework();
+  const update = useUpdateHomework();
+  const remove = useRemoveHomework();
   const upload = useUploadHomeworkFile();
 
   const assignedHere = homework.data?.assignedHere ?? [];
@@ -53,6 +57,8 @@ export function HomeworkCard({
   const [link, setLink] = useState('');
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [error, setError] = useState<string | null>(null);
+  /** Какое задание правим: правка идёт на месте, отдельного экрана не нужно. */
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const formatSize = (bytes: number): string =>
     bytes < 1024 * 1024
@@ -100,6 +106,29 @@ export function HomeworkCard({
                 assignment={assignment}
                 canManage={canManage}
                 formatSize={formatSize}
+                dueOptions={dueOptions}
+                isEditing={editingId === assignment.id}
+                onEdit={() => setEditingId(assignment.id)}
+                onCancel={() => setEditingId(null)}
+                saving={update.isPending}
+                onSave={async (input) => {
+                  setError(null);
+                  try {
+                    await update.mutateAsync({ assignmentId: assignment.id, ...input });
+                    setEditingId(null);
+                  } catch (caught) {
+                    setError(errorMessage(caught));
+                  }
+                }}
+                removing={remove.isPending}
+                onRemove={async () => {
+                  setError(null);
+                  try {
+                    await remove.mutateAsync(assignment.id);
+                  } catch (caught) {
+                    setError(errorMessage(caught));
+                  }
+                }}
                 submissions={
                   assignment.id === assignedHere[0]?.id ? submissions.data?.items : undefined
                 }
@@ -239,15 +268,88 @@ function AssignmentBlock({
   assignment,
   canManage,
   formatSize,
+  dueOptions,
+  isEditing,
+  onEdit,
+  onCancel,
+  onSave,
+  saving,
+  onRemove,
+  removing,
   submissions,
 }: {
   assignment: HomeworkAssignmentSummaryDto;
   canManage: boolean;
   formatSize: (bytes: number) => string;
+  dueOptions: { lessonId: string; lessonDate: string; pairNumber: number }[];
+  isEditing: boolean;
+  onEdit: () => void;
+  onCancel: () => void;
+  onSave: (input: { text: string; dueLessonId: string }) => Promise<void>;
+  saving: boolean;
+  onRemove: () => Promise<void>;
+  removing: boolean;
   submissions:
     | { studentName: string; isLate: boolean; files: { id: string; originalName: string }[] }[]
     | undefined;
 }) {
+  const [text, setText] = useState(assignment.text);
+  const [dueLessonId, setDueLessonId] = useState(assignment.dueLessonId);
+  const [confirming, setConfirming] = useState(false);
+
+  /**
+   * Правка идёт **на месте**: отдельный экран для двух полей был бы лишним шагом. Форма
+   * появляется вместо текста задания, а кнопки меняются на «Сохранить» и «Отмена».
+   */
+  if (isEditing) {
+    return (
+      <form
+        className="flex flex-col gap-2 rounded-md border border-slate-300 bg-slate-50 p-3"
+        onSubmit={async (event) => {
+          event.preventDefault();
+          await onSave({ text, dueLessonId });
+        }}
+      >
+        <Field label="Что задано">
+          <textarea
+            className="min-h-20 rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+            value={text}
+            onChange={(event) => setText(event.target.value)}
+          />
+        </Field>
+
+        <Field label="К какому уроку">
+          <select
+            className="w-full max-w-md rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+            value={dueLessonId}
+            onChange={(event) => setDueLessonId(event.target.value)}
+          >
+            <option value={assignment.dueLessonId}>
+              {assignment.dueLessonDate} · текущий срок
+            </option>
+            {dueOptions.map((option) => (
+              <option key={option.lessonId} value={option.lessonId}>
+                {option.lessonDate} · {option.pairNumber}-я пара
+              </option>
+            ))}
+          </select>
+          <span className="text-xs text-slate-500">
+            Ученик увидит задание в новом уроке-сроке и во всех промежуточных.
+          </span>
+        </Field>
+
+        <div className="flex flex-wrap gap-2">
+          <Button type="submit" disabled={saving}>
+            {saving ? 'Сохраняем…' : 'Сохранить'}
+          </Button>
+          <Button type="button" tone="secondary" onClick={onCancel}>
+            Отмена
+          </Button>
+        </div>
+      </form>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-2 rounded-md border border-slate-200 p-3">
       <p className="whitespace-pre-wrap text-sm">{assignment.text}</p>
@@ -263,6 +365,40 @@ function AssignmentBlock({
           сдали {assignment.submittedCount} из {assignment.studentCount}
         </Badge>
       </div>
+
+      {canManage && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button type="button" tone="secondary" onClick={onEdit}>
+            Править
+          </Button>
+
+          {confirming ? (
+            <>
+              <span className="text-sm text-red-700">
+                Убрать задание у группы? Сдачи останутся в журнале.
+              </span>
+              <Button
+                type="button"
+                tone="danger"
+                onClick={async () => {
+                  await onRemove();
+                  setConfirming(false);
+                }}
+                disabled={removing}
+              >
+                {removing ? 'Убираем…' : 'Да, убрать'}
+              </Button>
+              <Button type="button" tone="secondary" onClick={() => setConfirming(false)}>
+                Отмена
+              </Button>
+            </>
+          ) : (
+            <Button type="button" tone="danger" onClick={() => setConfirming(true)}>
+              Удалить
+            </Button>
+          )}
+        </div>
+      )}
 
       {assignment.links.length > 0 && (
         <ul className="flex flex-col gap-1 text-sm">

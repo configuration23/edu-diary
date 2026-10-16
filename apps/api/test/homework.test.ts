@@ -391,4 +391,118 @@ describeWithDatabase('домашние задания', () => {
     const parsed = lessonHomeworkResponseSchema.safeParse(lesson.json());
     expect(parsed.success, JSON.stringify(parsed.error?.issues)).toBe(true);
   });
+
+  it('учитель правит задание: изменение записывается в аудит с «до» и «после»', async () => {
+    /**
+     * Спор «я этого не менял» решается фактами. Поэтому проверяем не только то, что задание
+     * изменилось, но и то, что в аудите остались **прежнее и новое** состояния.
+     */
+    const created = await testApp.app.inject({
+      method: 'POST',
+      url: '/api/homework',
+      headers: auth(teacherCookie),
+      payload: { lessonId, text: 'Задание до правки', dueLessonId },
+    });
+    expect(created.statusCode, created.body).toBe(201);
+    const assignmentId = (created.json() as Json).id as string;
+
+    const updated = await testApp.app.inject({
+      method: 'PATCH',
+      url: `/api/homework/${assignmentId}`,
+      headers: auth(teacherCookie),
+      payload: { text: 'Задание после правки' },
+    });
+    expect(updated.statusCode, updated.body).toBe(200);
+
+    const lesson = await testApp.app.inject({
+      method: 'GET',
+      url: `/api/homework/lesson/${lessonId}`,
+      headers: auth(teacherCookie),
+    });
+    const items = (lesson.json() as { assignedHere: Json[] }).assignedHere;
+    expect(items.find((item) => item.id === assignmentId)?.text).toBe('Задание после правки');
+
+    /** Аудит: запись должна содержать и прежнее состояние, и новое. */
+    const audit = await testApp.app.inject({
+      method: 'GET',
+      url: `/api/audit?entityKind=homework_assignment&entityId=${assignmentId}`,
+      headers: auth(adminCookie),
+    });
+    expect(audit.statusCode, audit.body).toBe(200);
+
+    const entries = (audit.json() as { items: Json[] }).items;
+    const edit = entries.find((entry) => entry.action === 'update');
+    expect(edit, JSON.stringify(entries)).toBeDefined();
+    expect(edit?.before).toMatchObject({ dueLessonId });
+    expect(edit?.after).toMatchObject({ dueLessonId });
+  });
+
+  it('учитель убирает задание: оно скрывается, а запись в аудите остаётся', async () => {
+    const created = await testApp.app.inject({
+      method: 'POST',
+      url: '/api/homework',
+      headers: auth(teacherCookie),
+      payload: { lessonId, text: 'Задание под удаление', dueLessonId },
+    });
+    expect(created.statusCode, created.body).toBe(201);
+    const assignmentId = (created.json() as Json).id as string;
+
+    const removed = await testApp.app.inject({
+      method: 'DELETE',
+      url: `/api/homework/${assignmentId}`,
+      headers: auth(teacherCookie),
+    });
+    expect(removed.statusCode, removed.body).toBe(200);
+
+    const lesson = await testApp.app.inject({
+      method: 'GET',
+      url: `/api/homework/lesson/${lessonId}`,
+      headers: auth(teacherCookie),
+    });
+    const items = (lesson.json() as { assignedHere: Json[] }).assignedHere;
+    expect(items.some((item) => item.id === assignmentId)).toBe(false);
+
+    /** Удаление **мягкое**: задание скрыто у группы, но запись в аудите осталась. */
+    const audit = await testApp.app.inject({
+      method: 'GET',
+      url: `/api/audit?entityKind=homework_assignment&entityId=${assignmentId}`,
+      headers: auth(adminCookie),
+    });
+    const entries = (audit.json() as { items: Json[] }).items;
+    expect(entries.some((entry) => entry.action === 'delete')).toBe(true);
+  });
+
+  it('чужое задание не правится и не удаляется', async () => {
+    const created = await testApp.app.inject({
+      method: 'POST',
+      url: '/api/homework',
+      headers: auth(teacherCookie),
+      payload: { lessonId, text: 'Задание чужого преподавателя', dueLessonId },
+    });
+    const assignmentId = (created.json() as Json).id as string;
+
+    const stranger = await testApp.app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username: 'prepod-chuzhoy', password: 'kolledzh-chuzhoy-2025' },
+    });
+    const cookie = stranger.cookies.find((item) => item.name === 'edu_diary_session');
+    const strangerCookie = cookie === undefined ? '' : `${cookie.name}=${cookie.value}`;
+
+    /** Ответ тот же, что на несуществующее задание: чужие задания не выдают себя. */
+    const patch = await testApp.app.inject({
+      method: 'PATCH',
+      url: `/api/homework/${assignmentId}`,
+      headers: auth(strangerCookie),
+      payload: { text: 'Правка чужого задания' },
+    });
+    expect(patch.statusCode, patch.body).toBe(404);
+
+    const remove = await testApp.app.inject({
+      method: 'DELETE',
+      url: `/api/homework/${assignmentId}`,
+      headers: auth(strangerCookie),
+    });
+    expect(remove.statusCode, remove.body).toBe(404);
+  });
 });

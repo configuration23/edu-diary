@@ -1471,3 +1471,57 @@ export function useSubmitHomework() {
     },
   });
 }
+
+/**
+ * Правка задания.
+ *
+ * Изменения записываются в аудит: спор «я этого не менял» решается фактами.
+ */
+export function useUpdateHomework() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      assignmentId: string;
+      text?: string;
+      /** Урок-срок: `null` — оставить прежний. */
+      dueLessonId?: string | null;
+      links?: { url: string; title?: string | null }[];
+      fileIds?: string[];
+    }) =>
+      apiRequest(`/api/homework/${input.assignmentId}`, z.object({ ok: z.boolean() }), {
+        method: 'PATCH',
+        body: {
+          ...(input.text === undefined ? {} : { text: input.text }),
+          ...(input.dueLessonId === null || input.dueLessonId === undefined
+            ? {}
+            : { dueLessonId: input.dueLessonId }),
+          ...(input.links === undefined ? {} : { links: input.links }),
+          ...(input.fileIds === undefined ? {} : { fileIds: input.fileIds }),
+        },
+      }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ['homework-lesson'] });
+      void client.invalidateQueries({ queryKey: ['my-homework'] });
+    },
+  });
+}
+
+/**
+ * Удаление задания.
+ *
+ * Удаление **мягкое**: задание скрывается у учеников, но история и сдачи остаются. Поэтому
+ * подтверждение обязательно — случайное нажатие не должно убирать задание у группы.
+ */
+export function useRemoveHomework() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (assignmentId: string) =>
+      apiRequest(`/api/homework/${assignmentId}`, z.object({ ok: z.boolean() }), {
+        method: 'DELETE',
+      }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ['homework-lesson'] });
+      void client.invalidateQueries({ queryKey: ['my-homework'] });
+    },
+  });
+}
