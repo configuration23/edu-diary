@@ -89,9 +89,17 @@ export function registerStorageSettingsRoutes(
         {
           action: 'update',
           entityKind: 'setting',
-          entityId: 'storage',
-          /** Значения ключей в аудит не пишем: только факт смены и состав изменений. */
-          after: { changed: writes.map(([key]) => key) },
+          /**
+           * entityId не задаём: колонка имеет тип uuid, а настройка опознаётся ключом,
+           * а не идентификатором. Слово «storage» в этой колонке давало ошибку базы
+           * 22P02 и отказ 500 при сохранении настроек.
+           */
+          entityId: null,
+          /**
+           * Значения ключей в аудит не пишем: только факт смены и состав изменений. Ключи
+           * настроек — это и есть «идентификатор» настройки, поэтому они здесь.
+           */
+          after: { keys: writes.map(([key]) => key) },
         },
         actorFromRequest(request),
       );
@@ -133,8 +141,9 @@ export function registerStorageSettingsRoutes(
         {
           action: 'storage_test',
           entityKind: 'setting',
-          entityId: 'storage',
-          after: { ok: result.ok, step: result.step },
+          /** Тот же случай: настройка опознаётся ключом, а не uuid. */
+          entityId: null,
+          after: { provider: body.provider ?? 'текущий', ok: result.ok, step: result.step },
         },
         actorFromRequest(request),
       );

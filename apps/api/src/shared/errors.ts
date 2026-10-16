@@ -107,6 +107,20 @@ export function toErrorResponse(error: unknown): { statusCode: number; body: Err
     }
   }
 
+  /**
+   * Необработанная ошибка.
+   *
+   * Пишем её в журнал: клиенту причину не показываем (это может раскрыть устройство
+   * системы), но без записи в журнал разбирать такие отказы нечем — видно только «внутренняя
+   * ошибка» без единой зацепки.
+   */
+  console.error('НЕОБРАБОТАННАЯ ОШИБКА:', error);
+
+  /** Причина вложена отдельно: у ошибок драйвера базы именно в ней код и подробность. */
+  if (typeof error === 'object' && error !== null) {
+    console.error('ПРИЧИНА:', (error as { cause?: unknown }).cause ?? null);
+  }
+
   return {
     statusCode: HTTP_STATUS_BY_CODE.INTERNAL_ERROR,
     body: {
