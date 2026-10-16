@@ -19,6 +19,7 @@ export interface NewsRecord {
   publishedOn: Date;
   visibleUntil: Date | null;
   imageFileId: string | null;
+  imagePosition: string;
   sortOrder: number;
   createdBy: string | null;
   updatedBy: string | null;
@@ -39,6 +40,7 @@ export interface NewsRepository {
     publishedOn: Date;
     visibleUntil: Date | null;
     imageFileId: string | null;
+    imagePosition: string;
     actorUserId: string;
   }): Promise<NewsRecord>;
   update(
@@ -49,6 +51,7 @@ export interface NewsRepository {
       publishedOn?: Date;
       visibleUntil?: Date | null;
       imageFileId?: string | null;
+      imagePosition?: string;
       actorUserId: string;
     },
   ): Promise<void>;
@@ -115,6 +118,7 @@ export function createNewsRepository(db: Database): NewsRepository {
           publishedOn: input.publishedOn,
           visibleUntil: input.visibleUntil,
           imageFileId: input.imageFileId,
+          imagePosition: input.imagePosition,
           createdBy: input.actorUserId,
           updatedBy: input.actorUserId,
         })
@@ -139,6 +143,7 @@ export function createNewsRepository(db: Database): NewsRepository {
            */
           ...(input.visibleUntil === undefined ? {} : { visibleUntil: input.visibleUntil }),
           ...(input.imageFileId === undefined ? {} : { imageFileId: input.imageFileId }),
+          ...(input.imagePosition === undefined ? {} : { imagePosition: input.imagePosition }),
           updatedBy: input.actorUserId,
           updatedAt: new Date(),
         })

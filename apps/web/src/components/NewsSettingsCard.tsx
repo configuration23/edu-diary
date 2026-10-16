@@ -35,6 +35,8 @@ interface Draft {
   visibleUntil: string;
   imageFileId: string | null;
   imageName: string | null;
+  /** Где показать картинку: сверху текста или снизу. */
+  imagePosition: 'top' | 'bottom';
 }
 
 function emptyDraft(): Draft {
@@ -46,6 +48,8 @@ function emptyDraft(): Draft {
     visibleUntil: '',
     imageFileId: null,
     imageName: null,
+    /** По умолчанию сверху: обычный случай не должен требовать выбора. */
+    imagePosition: 'top',
   };
 }
 
@@ -59,6 +63,7 @@ function draftOf(item: NewsItemDto): Draft {
     imageFileId: null,
     /** Уже прикреплённую картинку не перезагружаем: показываем имя, меняем только по желанию. */
     imageName: item.imageName,
+    imagePosition: item.imagePosition,
   };
 }
 
@@ -86,6 +91,7 @@ export function NewsSettingsCard() {
       /** Пустое поле — **снять срок**, то есть показывать бессрочно. */
       visibleUntil: draft.visibleUntil === '' ? null : draft.visibleUntil,
       ...(draft.imageFileId === null ? {} : { imageFileId: draft.imageFileId }),
+      imagePosition: draft.imagePosition,
     };
 
     try {
@@ -184,6 +190,25 @@ export function NewsSettingsCard() {
               {draft.imageName === null
                 ? 'Размер и тип проверяет сервер. Файл хранится там же, где вложения заданий.'
                 : `Прикреплено: ${draft.imageName}`}
+            </span>
+          </Field>
+
+          <Field label="Где показать картинку">
+            <select
+              className="w-full max-w-xs rounded-md border border-slate-300 px-3 py-2 text-sm"
+              value={draft.imagePosition}
+              onChange={(event) =>
+                setDraft({
+                  ...draft,
+                  imagePosition: event.target.value === 'bottom' ? 'bottom' : 'top',
+                })
+              }
+            >
+              <option value="top">Сверху текста</option>
+              <option value="bottom">Снизу текста</option>
+            </select>
+            <span className="text-xs text-slate-500">
+              Выбор сохраняется вместе с новостью и действует и на «Обзоре», и в свёрнутом виде.
             </span>
           </Field>
 

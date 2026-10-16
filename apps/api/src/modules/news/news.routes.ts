@@ -145,6 +145,7 @@ export function createNewsModule(dependencies: {
           ...(body.publishedOn === undefined ? {} : { publishedOn: body.publishedOn }),
           ...(body.visibleUntil === undefined ? {} : { visibleUntil: body.visibleUntil ?? null }),
           ...(body.imageFileId === undefined ? {} : { imageFileId: body.imageFileId ?? null }),
+          ...(body.imagePosition === undefined ? {} : { imagePosition: body.imagePosition }),
         });
 
         await dependencies.audit.record(
@@ -177,6 +178,7 @@ export function createNewsModule(dependencies: {
           ...(body.publishedOn === undefined ? {} : { publishedOn: body.publishedOn }),
           ...(body.visibleUntil === undefined ? {} : { visibleUntil: body.visibleUntil ?? null }),
           ...(body.imageFileId === undefined ? {} : { imageFileId: body.imageFileId ?? null }),
+          ...(body.imagePosition === undefined ? {} : { imagePosition: body.imagePosition }),
         });
 
         /** В аудит пишем **до и после**: спор «я это не менял» решается фактами. */

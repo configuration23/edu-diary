@@ -32,6 +32,8 @@ export interface NewsView {
   visibleUntil: string | null;
   imageUrl: string | null;
   imageName: string | null;
+  /** Где показать картинку: `top` — сверху текста, `bottom` — снизу. */
+  imagePosition: string;
   createdAt: string;
 }
 
@@ -44,6 +46,7 @@ export interface NewsService {
     publishedOn?: string;
     visibleUntil?: string | null;
     imageFileId?: string | null;
+    imagePosition?: string;
   }): Promise<{ id: string }>;
   update(input: {
     viewer: NewsViewer;
@@ -53,6 +56,7 @@ export interface NewsService {
     publishedOn?: string;
     visibleUntil?: string | null;
     imageFileId?: string | null;
+    imagePosition?: string;
   }): Promise<{ before: NewsView; after: NewsView }>;
   remove(input: { viewer: NewsViewer; id: string }): Promise<{ removed: NewsView }>;
   /** Картинка по идентификатору файла: нужна маршруту выдачи. */
@@ -103,6 +107,7 @@ export function createNewsService(dependencies: {
     visibleUntil: record.visibleUntil === null ? null : toIsoDate(record.visibleUntil),
     imageUrl: imageUrlOf(record.imageFileId),
     imageName,
+    imagePosition: record.imagePosition,
     createdAt: record.createdAt.toISOString(),
   });
 
@@ -180,6 +185,8 @@ export function createNewsService(dependencies: {
             ? null
             : parseDate(input.visibleUntil, 'срок показа'),
         imageFileId: input.imageFileId ?? null,
+        /** По умолчанию сверху: обычный случай не должен требовать выбора. */
+        imagePosition: input.imagePosition ?? 'top',
         actorUserId: input.viewer.userId,
       });
 
@@ -204,6 +211,7 @@ export function createNewsService(dependencies: {
                 input.visibleUntil === null ? null : parseDate(input.visibleUntil, 'срок показа'),
             }),
         ...(input.imageFileId === undefined ? {} : { imageFileId: input.imageFileId }),
+        ...(input.imagePosition === undefined ? {} : { imagePosition: input.imagePosition }),
         actorUserId: input.viewer.userId,
       });
 

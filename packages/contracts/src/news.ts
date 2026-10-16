@@ -10,6 +10,15 @@ import { isoDateSchema, uuidSchema } from './common';
  * предыдущие — **свёрнутыми до заголовка**.
  */
 
+/**
+ * Положение картинки относительно текста.
+ *
+ * `top` — сверху, `bottom` — снизу. Отдельная схема, а не `z.enum` по месту: значение проверяется
+ * в трёх местах (ответ, создание, правка), и список допустимых значений должен быть один.
+ */
+export const newsImagePositionSchema = z.enum(['top', 'bottom']);
+export type NewsImagePosition = z.infer<typeof newsImagePositionSchema>;
+
 export const newsItemSchema = z.object({
   id: uuidSchema,
   title: z.string(),
@@ -24,6 +33,8 @@ export const newsItemSchema = z.object({
    */
   imageUrl: z.string().nullable(),
   imageName: z.string().nullable(),
+  /** Где показать картинку: `top` — сверху текста, `bottom` — снизу. */
+  imagePosition: newsImagePositionSchema,
   createdAt: z.string(),
 });
 export type NewsItemDto = z.infer<typeof newsItemSchema>;
@@ -44,6 +55,8 @@ const newsBodySchema = z.object({
   visibleUntil: isoDateSchema.nullish(),
   /** Идентификатор **уже загруженной** картинки: файл передаётся до сохранения новости. */
   imageFileId: uuidSchema.nullish(),
+  /** По умолчанию — сверху: так картинка видна сразу, это обычный случай. */
+  imagePosition: newsImagePositionSchema.optional(),
 });
 
 export const createNewsRequestSchema = newsBodySchema;

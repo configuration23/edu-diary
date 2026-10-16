@@ -45,9 +45,14 @@ export function NewsArticle({ item }: { item: NewsItemDto }) {
           : `${formatDay(item.publishedOn)} · до ${formatDay(item.visibleUntil)}`
       }
     >
+      {/**
+       * Картинка сверху или снизу — выбор автора новости (решение владельца). Фото с линейки
+       * уместнее сверху, а схему или таблицу — под текстом, поэтому вариантов два, а не один.
+       */}
       <div className="flex flex-col gap-4">
+        {item.imagePosition === 'top' && <NewsImage item={item} />}
         <p className="whitespace-pre-wrap text-slate-800">{item.body}</p>
-        <NewsImage item={item} />
+        {item.imagePosition === 'bottom' && <NewsImage item={item} />}
       </div>
     </Card>
   );
@@ -85,8 +90,9 @@ export function NewsCollapsedItem({ item }: { item: NewsItemDto }) {
 
       {open && (
         <div className="flex flex-col gap-3 px-1 pt-1 pb-4 pl-5">
+          {item.imagePosition === 'top' && <NewsImage item={item} />}
           <p className="whitespace-pre-wrap text-sm text-slate-800">{item.body}</p>
-          <NewsImage item={item} />
+          {item.imagePosition === 'bottom' && <NewsImage item={item} />}
         </div>
       )}
     </li>

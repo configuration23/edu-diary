@@ -27,8 +27,12 @@ const item: NewsItemDto = {
   visibleUntil: null,
   imageUrl: null,
   imageName: null,
+  imagePosition: 'top',
   createdAt: '2026-10-05T10:00:00.000Z',
 };
+
+const IMAGE_URL = '/api/news/images/00000000-0000-7000-8000-000000000002';
+const IMAGE_NAME = 'линейка.jpg';
 
 describe('новости', () => {
   it('свежая новость показывается целиком', () => {
@@ -54,15 +58,31 @@ describe('новости', () => {
     expect(withoutImage).not.toContain('<img');
 
     const withImage = render(
-      <NewsArticle
-        item={{
-          ...item,
-          imageUrl: '/api/news/images/00000000-0000-7000-8000-000000000002',
-          imageName: 'линейка.jpg',
-        }}
-      />,
+      <NewsArticle item={{ ...item, imageUrl: IMAGE_URL, imageName: IMAGE_NAME }} />,
     );
-    expect(withImage).toContain('/api/news/images/00000000-0000-7000-8000-000000000002');
-    expect(withImage).toContain('линейка.jpg');
+    expect(withImage).toContain(IMAGE_URL);
+    expect(withImage).toContain(IMAGE_NAME);
+  });
+
+  it('картинка встаёт сверху или снизу текста — по выбору автора', () => {
+    /**
+     * Решение владельца: у новости есть **опция**, где показать картинку. Проверяем порядок в
+     * разметке: фото с линейки уместнее сверху, а схема или таблица — под текстом. Если однажды
+     * выбор перестанет применяться, картинка окажется не там, и это будет видно.
+     */
+    const top = render(
+      <NewsArticle item={{ ...item, imageUrl: IMAGE_URL, imagePosition: 'top' }} />,
+    );
+    const bottom = render(
+      <NewsArticle item={{ ...item, imageUrl: IMAGE_URL, imagePosition: 'bottom' }} />,
+    );
+
+    const bodyIndex = (html: string) => html.indexOf('В четверг в 18:00');
+    const imageIndex = (html: string) => html.indexOf('<img');
+
+    expect(imageIndex(top)).toBeGreaterThanOrEqual(0);
+    expect(imageIndex(top)).toBeLessThan(bodyIndex(top));
+
+    expect(imageIndex(bottom)).toBeGreaterThan(bodyIndex(bottom));
   });
 });

@@ -1626,6 +1626,7 @@ export function useCreateNews() {
       publishedOn?: string;
       visibleUntil?: string | null;
       imageFileId?: string | null;
+      imagePosition?: 'top' | 'bottom';
     }) =>
       apiRequest('/api/news', z.object({ id: z.uuid() }), {
         method: 'POST',
@@ -1635,6 +1636,7 @@ export function useCreateNews() {
           ...(input.publishedOn === undefined ? {} : { publishedOn: input.publishedOn }),
           ...(input.visibleUntil === undefined ? {} : { visibleUntil: input.visibleUntil }),
           ...(input.imageFileId === undefined ? {} : { imageFileId: input.imageFileId }),
+          ...(input.imagePosition === undefined ? {} : { imagePosition: input.imagePosition }),
         },
       }),
     onSuccess: () => {
@@ -1653,6 +1655,7 @@ export function useUpdateNews() {
       publishedOn?: string;
       visibleUntil?: string | null;
       imageFileId?: string | null;
+      imagePosition?: 'top' | 'bottom';
     }) =>
       apiSend(`/api/news/${input.id}`, {
         method: 'PATCH',
@@ -1662,6 +1665,7 @@ export function useUpdateNews() {
           ...(input.publishedOn === undefined ? {} : { publishedOn: input.publishedOn }),
           ...(input.visibleUntil === undefined ? {} : { visibleUntil: input.visibleUntil }),
           ...(input.imageFileId === undefined ? {} : { imageFileId: input.imageFileId }),
+          ...(input.imagePosition === undefined ? {} : { imagePosition: input.imagePosition }),
         },
       }),
     onSuccess: () => {
