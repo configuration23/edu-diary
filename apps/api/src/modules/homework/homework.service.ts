@@ -107,6 +107,14 @@ export interface HomeworkService {
     links?: readonly { url: string; title: string | null }[];
     /** Файлы, которые нужно **добавить** к заданию. */
     fileIds?: readonly string[];
+    /**
+     * Какие из **уже приложенных** файлов оставить.
+     *
+     * Передаётся полный список: так «убрать файл» выражается отсутствием в списке, и сервис
+     * сам решает, что помечать удалённым. Отдельного «удали файл X» нет намеренно — иначе
+     * форму пришлось бы учить двум разным операциям.
+     */
+    keepFileIds?: readonly string[];
   }): Promise<{ before: HomeworkSnapshot; after: HomeworkSnapshot }>;
   removeAssignment(input: {
     viewer: HomeworkViewer;
@@ -249,8 +257,12 @@ export function createHomeworkService(dependencies: HomeworkServiceDependencies)
     for (const assignment of assignments) {
       details.push({
         assignment,
+        /**
+         * Помеченные удалёнными **не показываем**: файл убран, и в задании его быть не
+         * должно. Пометка остаётся в базе — по ней видно, что файл был.
+         */
         files: files
-          .filter((file) => file.assignmentId === assignment.id)
+          .filter((file) => file.assignmentId === assignment.id && file.deletedAt === null)
           .map((file) => ({
             id: file.id,
             originalName: file.originalName,
@@ -360,9 +372,34 @@ export function createHomeworkService(dependencies: HomeworkServiceDependencies)
         await repository.replaceLinks(input.assignmentId, input.links);
       }
 
-      /** Файлы **добавляются**: убрать уже приложенный файл нельзя — файлы мы не удаляем. */
+      /** Файлы **добавляются**: уже приложенные остаются, если их не убрали в форме. */
       if (input.fileIds !== undefined && input.fileIds.length > 0) {
         await repository.addFiles(input.assignmentId, input.fileIds);
+      }
+
+      /**
+       * Убранные в форме файлы помечаем удалёнными. Файлы **не стираем**: в базе остаётся
+       * пометка, и видно, что файл был и его убрали. Так же сделано с отметками (ADR-011).
+       *
+       * Помечаем **только уже привязанные** к заданию файлы: без этого, зная чужой
+       * идентификатор, можно было бы пометить файл другого задания — проверка стоит в
+       * запросе репозитория.
+       */
+      let removedCount = 0;
+
+      if (input.keepFileIds !== undefined) {
+        const keep = new Set([...input.keepFileIds, ...(input.fileIds ?? [])]);
+        const removed = existingFiles
+          .filter((file) => file.deletedAt === null && !keep.has(file.id))
+          .map((file) => file.id);
+
+        removedCount = removed.length;
+
+        await repository.softDeleteFiles({
+          assignmentId: input.assignmentId,
+          fileIds: removed,
+          actorUserId: input.viewer.userId,
+        });
       }
 
       /**
@@ -377,7 +414,7 @@ export function createHomeworkService(dependencies: HomeworkServiceDependencies)
           /** Текст не меняли — длина остаётся прежней; меняли — берём новую. */
           textLength: input.text === undefined ? before.textLength : input.text.length,
           links: input.links === undefined ? before.links : input.links.length,
-          files: before.files + (input.fileIds?.length ?? 0),
+          files: Math.max(0, before.files - removedCount + (input.fileIds?.length ?? 0)),
         },
       };
     },

@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { ADMIN_PASSWORD, completeSetup, createTestApp, type TestApp } from './helpers/api';
@@ -504,5 +505,60 @@ describeWithDatabase('домашние задания', () => {
       headers: auth(strangerCookie),
     });
     expect(remove.statusCode, remove.body).toBe(404);
+  });
+
+  it('убрать файл из задания: файл помечается, а не стирается', async () => {
+    /**
+     * Решение владельца: файлы **не стираем**, ставим пометку — как с отметками в журнале.
+     * Поэтому проверяем две вещи: файл исчез из задания и он **остался в базе** помеченным.
+     */
+    const material = multipartBody('убрать.txt', Buffer.from('файл под удаление'));
+    const upload = await testApp.app.inject({
+      method: 'POST',
+      url: '/api/homework/files',
+      headers: {
+        cookie: teacherCookie,
+        'content-type': `multipart/form-data; boundary=${material.boundary}`,
+      },
+      payload: material.body,
+    });
+    expect(upload.statusCode, upload.body).toBe(201);
+    const fileId = (upload.json() as Json).id as string;
+
+    const created = await testApp.app.inject({
+      method: 'POST',
+      url: '/api/homework',
+      headers: auth(teacherCookie),
+      payload: { lessonId, text: 'Задание с файлом под удаление', fileIds: [fileId] },
+    });
+    expect(created.statusCode, created.body).toBe(201);
+    const assignmentId = (created.json() as Json).id as string;
+
+    /** В форме учитель снимает галочку: `keepFileIds` пустой — файл убран. */
+    const updated = await testApp.app.inject({
+      method: 'PATCH',
+      url: `/api/homework/${assignmentId}`,
+      headers: auth(teacherCookie),
+      payload: { keepFileIds: [] },
+    });
+    expect(updated.statusCode, updated.body).toBe(200);
+
+    const lesson = await testApp.app.inject({
+      method: 'GET',
+      url: `/api/homework/lesson/${lessonId}`,
+      headers: auth(teacherCookie),
+    });
+    const items = (lesson.json() as { assignedHere: Json[] }).assignedHere;
+    const assignment = items.find((item) => item.id === assignmentId);
+
+    expect(assignment, JSON.stringify(items)).toBeDefined();
+    expect(assignment?.files).toEqual([]);
+
+    /** Файл **не стёрт**: он помечен удалённым, и это видно в базе. */
+    const rows = await database.db.orm.execute(
+      sql`select deleted_at from homework_assignment_file where id = ${fileId}`,
+    );
+    const row = (rows as unknown as { deleted_at: string | null }[])[0];
+    expect(row?.deleted_at).not.toBeNull();
   });
 });

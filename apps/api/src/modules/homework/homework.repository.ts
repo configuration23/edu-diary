@@ -88,6 +88,17 @@ export interface HomeworkRepository {
     viewerUserId: string;
   }): Promise<Set<string>>;
   addFiles(assignmentId: string, fileIds: readonly string[]): Promise<void>;
+  /**
+   * Пометить вложения задания удалёнными.
+   *
+   * Файлы **не стираем** (решение владельца): в базе остаётся пометка, и видно, что файл был
+   * и его убрали. Так же сделано с отметками (ADR-011).
+   */
+  softDeleteFiles(input: {
+    assignmentId: string;
+    fileIds: readonly string[];
+    actorUserId: string;
+  }): Promise<void>;
   listFiles(assignmentIds: readonly string[]): Promise<AssignmentFileRecord[]>;
   replaceLinks(
     assignmentId: string,
@@ -237,10 +248,33 @@ export function createHomeworkRepository(db: Executor): HomeworkRepository {
     async listFiles(assignmentIds) {
       if (assignmentIds.length === 0) return [];
 
+      /**
+       * Показываем и **помеченные удалёнными**: интерфейс должен видеть, что файл был и его
+       * убрали. Отбор «что показывать» делает сервис — так правило в одном месте.
+       */
       return db
         .select()
         .from(homeworkAssignmentFile)
         .where(inArray(homeworkAssignmentFile.assignmentId, [...assignmentIds]));
+    },
+
+    async softDeleteFiles(input) {
+      if (input.fileIds.length === 0) return;
+
+      /**
+       * Условие «файл принадлежит этому заданию» стоит **в запросе**: иначе, зная чужой
+       * идентификатор, можно было бы пометить удалённым файл другого задания.
+       */
+      await db
+        .update(homeworkAssignmentFile)
+        .set({ deletedAt: new Date(), deletedBy: input.actorUserId })
+        .where(
+          and(
+            eq(homeworkAssignmentFile.assignmentId, input.assignmentId),
+            inArray(homeworkAssignmentFile.id, [...input.fileIds]),
+            isNull(homeworkAssignmentFile.deletedAt),
+          ),
+        );
     },
 
     async replaceLinks(assignmentId, links) {

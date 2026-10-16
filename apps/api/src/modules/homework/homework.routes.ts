@@ -520,6 +520,7 @@ export function createHomeworkModule(dependencies: HomeworkModuleDependencies) {
               })),
             }),
         ...(body.fileIds === undefined ? {} : { fileIds: body.fileIds }),
+        ...(body.keepFileIds === undefined ? {} : { keepFileIds: body.keepFileIds }),
       });
 
       /**

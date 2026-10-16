@@ -106,6 +106,14 @@ export const updateHomeworkRequestSchema = z.object({
     .max(20)
     .optional(),
   fileIds: z.array(uuidSchema).max(20).optional(),
+  /**
+   * Какие из **уже приложенных** файлов оставить.
+   *
+   * Передаётся полный список: «убрать файл» выражается отсутствием в нём. Отдельного
+   * «удали файл X» нет намеренно — иначе форме пришлось бы знать две разные операции.
+   * Файлы при этом **не стираются**: ставится пометка, как с отметками.
+   */
+  keepFileIds: z.array(uuidSchema).max(20).optional(),
 });
 export type UpdateHomeworkRequest = z.infer<typeof updateHomeworkRequestSchema>;
 

@@ -292,6 +292,8 @@ function AssignmentBlock({
     dueLessonId: string;
     links: { url: string }[];
     fileIds: string[];
+    /** Какие из уже приложенных файлов оставить. */
+    keepFileIds: string[];
   }) => Promise<void>;
   /** Загрузка файла при правке: файл прикладывается к уже существующему заданию. */
   onUpload: (file: File) => Promise<UploadedFile>;
@@ -309,8 +311,15 @@ function AssignmentBlock({
    * ради неё незачем. Существующую ссылку подставляем в поле при открытии правки.
    */
   const [link, setLink] = useState(assignment.links[0]?.url ?? '');
-  /** Новые файлы: уже приложенные остаются, потому что файлы мы не удаляем. */
+  /** Новые файлы, которые добавляем к заданию. */
   const [newFiles, setNewFiles] = useState<UploadedFile[]>([]);
+  /**
+   * Файлы, которые учитель **убрал** из задания.
+   *
+   * Файл не стирается: он помечается удалённым, как отметки в журнале. Поэтому в форме
+   * написано «убрать» — так честнее по отношению к тому, что произойдёт.
+   */
+  const [removedFiles, setRemovedFiles] = useState<string[]>([]);
   const [confirming, setConfirming] = useState(false);
 
   /**
@@ -329,6 +338,10 @@ function AssignmentBlock({
             /** Пустое поле — ссылок не будет: список заменяем целиком. */
             links: link.trim() === '' ? [] : [{ url: link.trim() }],
             fileIds: newFiles.map((file) => file.id),
+            /** Оставляем те, у которых галочка не снята. */
+            keepFileIds: assignment.files
+              .filter((file) => !removedFiles.includes(file.id))
+              .map((file) => file.id),
           });
         }}
       >
@@ -391,13 +404,44 @@ function AssignmentBlock({
             }}
           />
           <span className="text-xs text-slate-500">
-            Файлы **добавляются**: уже приложенные остаются, потому что файлы мы не удаляем.
+            Размер и тип проверяет сервер. Исполняемые файлы, скрипты, HTML и SVG запрещены всегда.
           </span>
         </Field>
 
+        {/*
+          Список файлов задания с кнопкой «убрать».
+
+          Файл не стирается: ставится **пометка**, как с отметками в журнале. Поэтому в форме
+          написано «убрать», а не «удалить» — так честнее по отношению к тому, что произойдёт.
+        */}
         {assignment.files.length > 0 && (
-          <div className="text-xs text-slate-500">
-            Уже приложено: {assignment.files.map((file) => file.originalName).join(', ')}
+          <div className="flex flex-col gap-1 text-sm">
+            <span className="text-xs text-slate-500">Файлы задания:</span>
+            {assignment.files.map((file) => (
+              <label key={file.id} className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={!removedFiles.includes(file.id)}
+                  onChange={(event) =>
+                    setRemovedFiles((current) =>
+                      event.target.checked
+                        ? current.filter((id) => id !== file.id)
+                        : [...current, file.id],
+                    )
+                  }
+                />
+                <span
+                  className={removedFiles.includes(file.id) ? 'text-slate-400 line-through' : ''}
+                >
+                  {file.originalName}
+                </span>
+                <span className="text-slate-500">{formatSize(file.sizeBytes)}</span>
+              </label>
+            ))}
+            <span className="text-xs text-slate-500">
+              Снятая галочка помечает файл убранным: он исчезнет из задания, но останется в истории
+              — файлы мы не стираем.
+            </span>
           </div>
         )}
 

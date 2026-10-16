@@ -1488,6 +1488,8 @@ export function useUpdateHomework() {
       dueLessonId?: string | null;
       links?: { url: string; title?: string | null }[];
       fileIds?: string[];
+      /** Какие из уже приложенных файлов оставить: отсутствие в списке — «убрать». */
+      keepFileIds?: string[];
     }) =>
       apiRequest(`/api/homework/${input.assignmentId}`, z.object({ ok: z.boolean() }), {
         method: 'PATCH',
@@ -1498,6 +1500,7 @@ export function useUpdateHomework() {
             : { dueLessonId: input.dueLessonId }),
           ...(input.links === undefined ? {} : { links: input.links }),
           ...(input.fileIds === undefined ? {} : { fileIds: input.fileIds }),
+          ...(input.keepFileIds === undefined ? {} : { keepFileIds: input.keepFileIds }),
         },
       }),
     onSuccess: () => {
