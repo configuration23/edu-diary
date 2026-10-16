@@ -134,6 +134,14 @@ test.describe.serial('Этап 1: настройка, вход, права', () 
   test('пользователь меняет свой пароль и входит с новым', async ({ page }) => {
     await ensureSession(page, TEACHER.username, TEACHER.password);
 
+    /**
+     * Смена пароля теперь в **профиле** (Этап 6, решение владельца): раньше была на «Обзоре». Идём
+     * туда **через имя в шапке** — заодно проверяем, что этот вход работает, а не только прямой
+     * адрес.
+     */
+    await page.getByRole('link', { name: TEACHER.fullName }).click();
+    await expect(page.getByRole('heading', { name: 'Профиль' })).toBeVisible();
+
     await page.getByLabel('Текущий пароль').fill(TEACHER.password);
     await page.getByLabel('Новый пароль', { exact: true }).fill(TEACHER.newPassword);
     await page.getByLabel('Повтор нового пароля').fill(TEACHER.newPassword);
@@ -145,7 +153,14 @@ test.describe.serial('Этап 1: настройка, вход, права', () 
     await expect(page.getByRole('button', { name: 'Войти' })).toBeVisible();
 
     await login(page, TEACHER.username, TEACHER.newPassword);
-    await expect(page.getByText(TEACHER.fullName)).toBeVisible();
+
+    /**
+     * Имя теперь встречается **дважды**: ссылка в шапке и поле в профиле. Поэтому проверяем
+     * именно значение в профиле — иначе проверка «вход удался» ловила бы шапку, которая есть и
+     * до входа.
+     */
+    await page.getByRole('link', { name: TEACHER.fullName }).click();
+    await expect(page.getByRole('main').getByText(TEACHER.fullName)).toBeVisible();
   });
 
   test('просмотр карточки ученика и выгрузка попадают в аудит доступа', async ({ request }) => {

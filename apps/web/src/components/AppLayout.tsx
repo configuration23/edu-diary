@@ -62,7 +62,17 @@ export function AppLayout({
               контекст (`AcademicContext`) целы: чтобы вернуть переключатель, достаточно
               поставить его сюда обратно.
             */}
-            <span className="text-slate-600">{session.user.fullName}</span>
+            {/*
+              Имя ведёт в профиль: человек ищет свои данные там, где видит своё имя. Ссылка, а не
+              кнопка, — работает средней кнопкой мыши и открывается в новой вкладке.
+            */}
+            <Link
+              to="/profile"
+              className="rounded-md px-2 py-1 text-slate-700 hover:bg-slate-100"
+              activeProps={{ className: 'rounded-md px-2 py-1 bg-slate-900 text-white' }}
+            >
+              {session.user.fullName}
+            </Link>
             {session.user.roles.map((role) => (
               <Badge key={role.code}>{role.title}</Badge>
             ))}

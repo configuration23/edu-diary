@@ -7,6 +7,7 @@ import { AcademicsScreen } from '../src/screens/AcademicsScreen';
 import { AssignmentsScreen } from '../src/screens/AssignmentsScreen';
 import { CatalogsScreen } from '../src/screens/CatalogsScreen';
 import { GroupsScreen } from '../src/screens/GroupsScreen';
+import { ProfileScreen } from '../src/screens/ProfileScreen';
 import { SettingsScreen } from '../src/screens/SettingsScreen';
 import { StudentsCard } from '../src/screens/StudentsCard';
 import { UsersScreen } from '../src/screens/UsersScreen';
@@ -141,7 +142,12 @@ describe('экраны Этапа 2 монтируются', () => {
     expect(html).toContain('Группы и ученики');
   });
 
-  it('обзор: блок версии вместо обещаний этапов', () => {
+  it('обзор: только состояние системы, без данных учётной записи', () => {
+    /**
+     * Смена пароля, «Ваш доступ» и «О версии» уехали в **профиль** (Этап 6, решение владельца), а
+     * сама страница остаётся пустой до новостей заведения. Проверяем именно это: на «Обзоре» нет
+     * данных учётной записи, иначе разделение ролей страниц разъехалось бы молча.
+     */
     const html = renderWithQueries(
       <DashboardScreen
         session={{
@@ -160,10 +166,36 @@ describe('экраны Этапа 2 монтируются', () => {
       />,
     );
 
-    expect(html).toContain('О версии');
-    expect(html).toContain('Версия API');
-    expect(html).toContain('Версия интерфейса');
-    expect(html).toContain('Схема БД (миграций)');
+    expect(html).not.toContain('Смена пароля');
+    expect(html).not.toContain('Ваш доступ');
+    expect(html).not.toContain('Схема БД (миграций)');
     expect(html).not.toContain('Что дальше');
+  });
+
+  it('профиль: данные учётной записи, смена пароля, права и версия', () => {
+    /** Всё, что убрано с «Обзора», должно быть **найдено** в профиле, а не потеряно. */
+    const html = renderWithQueries(
+      <ProfileScreen
+        session={{
+          user: {
+            id: 'u-1',
+            username: 'admin',
+            fullName: 'Админ Системы',
+            email: 'admin@example.ru',
+            phone: '+7 900 000-00-00',
+            isActive: true,
+            mustChangePassword: false,
+            roles: [{ code: 'admin', title: 'Администратор' }],
+          },
+          permissions: [{ permission: 'users:read', scope: 'all' }],
+        }}
+      />,
+    );
+
+    expect(html).toContain('Данные профиля');
+    expect(html).toContain('admin@example.ru');
+    expect(html).toContain('Смена пароля');
+    expect(html).toContain('Ваш доступ');
+    expect(html).toContain('Схема БД (миграций)');
   });
 });

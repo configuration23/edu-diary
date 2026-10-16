@@ -21,6 +21,7 @@ import { LessonsScreen } from './screens/LessonsScreen';
 import { GradesAttendanceScreen } from './screens/GradesAttendanceScreen';
 import { MyHomeworkScreen } from './screens/MyHomeworkScreen';
 import { SubmittedWorksScreen } from './screens/SubmittedWorksScreen';
+import { ProfileScreen } from './screens/ProfileScreen';
 import { PrivacyScreen } from './screens/PrivacyScreen';
 import { ScheduleScreen } from './screens/ScheduleScreen';
 import { SubstitutionsScreen } from './screens/SubstitutionsScreen';
@@ -214,6 +215,13 @@ const homeworkRoute = createRoute({
   component: withSession(() => <MyHomeworkScreen />),
 });
 
+/** Профиль: данные учётной записи, смена пароля и права. */
+const profileRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/profile',
+  component: withSession((session) => <ProfileScreen session={session} />),
+});
+
 /** «Сданные работы»: проверяющий видит таблицу класса по заданиям. */
 const submittedRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -267,6 +275,7 @@ const routeTree = rootRoute.addChildren([
   substitutionsRoute,
   homeworkRoute,
   submittedRoute,
+  profileRoute,
   analyticsRoute,
   lessonsRoute,
   lessonJournalRoute,

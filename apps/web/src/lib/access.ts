@@ -36,6 +36,11 @@ export function hasScope(
 }
 
 export const NAVIGATION: NavigationItem[] = [
+  /**
+   * Профиль доступен **каждому вошедшему**: это свои данные, свой пароль и свои права. Права на
+   * раздел не требуется — требовать их было бы странно.
+   */
+  { to: '/profile', label: 'Профиль', visible: () => true },
   { to: '/', label: 'Обзор', visible: () => true },
   {
     to: '/academics',
