@@ -14,6 +14,9 @@ import { createGuardiansRepository } from './modules/iam/iam.guardians.repositor
 import { createUsersRepository } from './modules/iam/iam.users.repository';
 import type { UsersService } from './modules/iam/iam.users.service';
 import { createHomeworkModule } from './modules/homework';
+import { createHomeworkRepository } from './modules/homework/homework.repository';
+import { createAssignmentFileRepository } from './modules/homework/homework.files.repository';
+import { createStorageService } from './modules/storage';
 import {
   buildJournalService,
   createJournalModule,
@@ -280,6 +283,12 @@ export async function buildApp({
     },
   };
 
+  /** Хранилище файлов: адаптер по настройкам, ключи S3 расшифровываются ключом окружения. */
+  const storageService = createStorageService(settings, env.storageEncryptionKey);
+
+  /** Вложения заданий: отдельный репозиторий, потому что файл живёт до сохранения задания. */
+  const homeworkFiles = createAssignmentFileRepository(db.orm);
+  const homeworkRepository = createHomeworkRepository(db.orm);
   const schedule = buildScheduleService({
     db,
     audit,
@@ -527,6 +536,34 @@ ull: он сам
         return value ?? 14;
       },
       /** Группы ученика и его представителей: ученик видит задания только своих групп. */
+      storageAdapter: () => storageService.adapter(),
+      storageLimits: () => storageService.readSettings(),
+      /**
+       * Право на файл: администратору — любой, преподавателю — файл своего урока, ученику и
+       * представителю — файл задания своей группы. Чужой файл отвечает 404 (см. маршрут).
+       */
+      async mayReadFile({ viewerUserId, scope, fileId }) {
+        const file = await homeworkFiles.findById(fileId);
+        if (file === null || file.assignmentId === null) {
+          // Незавершённая загрузка: видеть её может только автор.
+          return file !== null && file.uploadedBy === viewerUserId;
+        }
+
+        const assignment = await homeworkRepository.findAssignment(file.assignmentId);
+        if (assignment === null) return false;
+
+        /**
+         * Преподавателю файл доступен, если это **его** урок: чужое занятие он не видит и
+         * здесь — правило то же, что в журнале. Администратору (ll) доступно всё.
+         */
+        if (scope === 'all' || scope === 'assigned') {
+          if (scope === 'all') return true;
+          return homeworkRepository.isTeacherOfLesson(assignment.lessonId, viewerUserId);
+        }
+
+        const groups = await scheduleCatalog.groupsOfViewer(viewerUserId);
+        return groups.some((group) => group.id === assignment.studyGroupId);
+      },
       groupIdsOfViewer: async (userId) => {
         const groups = await scheduleCatalog.groupsOfViewer(userId);
         return groups.map((group) => group.id);
@@ -537,7 +574,9 @@ ull: он сам
   await app.register(createAuditModule({ audit }), { prefix: '/api' });
   await app.register(createSecurityModule({ security, audit }), { prefix: '/api' });
   await app.register(createPrivacyModule({ privacy }), { prefix: '/api' });
-  await app.register(createSettingsModule({ db, settings, audit }), { prefix: '/api' });
+  await app.register(createSettingsModule({ db, settings, audit, storage: storageService }), {
+    prefix: '/api',
+  });
 
   return app;
 }

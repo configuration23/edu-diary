@@ -36,7 +36,8 @@ export interface AssignmentWithContext {
 
 export interface AssignmentFileRecord {
   id: string;
-  assignmentId: string;
+  /** Пусто у файла, загруженного до сохранения задания. */
+  assignmentId: string | null;
   storageKey: string;
   originalName: string;
   sizeBytes: number;
@@ -99,6 +100,8 @@ export interface HomeworkRepository {
   }): Promise<{ id: string }[]>;
   countStudents(studyGroupId: string, onDate: string): Promise<number>;
   countSubmissions(assignmentIds: readonly string[]): Promise<Map<string, number>>;
+  /** Ведёт ли этот преподаватель урок: по нему проверяется право на файл задания. */
+  isTeacherOfLesson(lessonId: string, userId: string): Promise<boolean>;
 }
 
 export function createHomeworkRepository(db: Executor): HomeworkRepository {
@@ -289,6 +292,16 @@ export function createHomeworkRepository(db: Executor): HomeworkRepository {
         .groupBy(homeworkSubmission.assignmentId);
 
       return new Map(rows.map((row) => [row.assignmentId, row.total]));
+    },
+
+    async isTeacherOfLesson(lessonId, userId) {
+      const rows = await db
+        .select({ id: lessonTable.id })
+        .from(lessonTable)
+        .where(and(eq(lessonTable.id, lessonId), eq(lessonTable.teacherUserId, userId)))
+        .limit(1);
+
+      return rows.length > 0;
     },
   };
 }

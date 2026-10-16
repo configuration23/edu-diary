@@ -21,6 +21,21 @@ export interface StorageSettings {
   allowedExtensions: readonly string[];
 }
 
+/**
+ * Значения S3 из формы проверки.
+ *
+ * Нужны, чтобы проверить подключение **до** сохранения: иначе ошибку в адресе или ключах
+ * администратор увидит только тогда, когда ученик не сможет приложить файл.
+ */
+export interface S3Overrides {
+  endpoint: string;
+  bucket: string;
+  region: string;
+  accessKey: string;
+  secretKey: string;
+  localPath: string;
+}
+
 export function createStorageService(settings: SettingsService, encryptionKey: string) {
   /** Разобрать список расширений из настройки: строка через запятую. */
   function parseExtensions(value: unknown): readonly string[] {
@@ -52,19 +67,32 @@ export function createStorageService(settings: SettingsService, encryptionKey: s
    * Если S3 выбран, но настроен неполно, честно сообщаем об этом: молчаливое падение на
    * каждом файле хуже, чем понятная ошибка при сохранении настроек.
    */
-  const adapter = async (): Promise<StorageAdapter> => {
-    const provider = (await settings.get<string>(SETTING_KEYS.storageProvider)) ?? 'local';
+  /**
+   * Адаптер по настройкам.
+   *
+   * `overrides` — значения **из формы**: администратор должен иметь возможность проверить
+   * адрес и ключи до сохранения, иначе ошибку в них он увидит только на живом файле.
+   */
+  const adapter = async (
+    overrides: Partial<StorageSettings> & Partial<S3Overrides> = {},
+  ): Promise<StorageAdapter> => {
+    const provider =
+      overrides.provider ?? (await settings.get<string>(SETTING_KEYS.storageProvider)) ?? 'local';
 
     if (provider !== 's3') {
-      const path = (await settings.get<string>(SETTING_KEYS.storageLocalPath)) ?? '';
+      const path =
+        overrides.localPath ?? (await settings.get<string>(SETTING_KEYS.storageLocalPath)) ?? '';
       return createLocalStorage(path);
     }
 
-    const endpoint = (await settings.get<string>(SETTING_KEYS.storageS3Endpoint)) ?? '';
-    const bucket = (await settings.get<string>(SETTING_KEYS.storageS3Bucket)) ?? '';
-    const region = (await settings.get<string>(SETTING_KEYS.storageS3Region)) ?? 'us-east-1';
-    const storedAccessKey = (await settings.get<string>(SETTING_KEYS.storageS3AccessKey)) ?? '';
-    const storedSecretKey = (await settings.get<string>(SETTING_KEYS.storageS3SecretKey)) ?? '';
+    const read = async (fromForm: string | undefined, key: string): Promise<string> =>
+      fromForm ?? (await settings.get<string>(key)) ?? '';
+
+    const endpoint = await read(overrides.endpoint, SETTING_KEYS.storageS3Endpoint);
+    const bucket = await read(overrides.bucket, SETTING_KEYS.storageS3Bucket);
+    const region = (await read(overrides.region, SETTING_KEYS.storageS3Region)) || 'us-east-1';
+    const storedAccessKey = await read(overrides.accessKey, SETTING_KEYS.storageS3AccessKey);
+    const storedSecretKey = await read(overrides.secretKey, SETTING_KEYS.storageS3SecretKey);
 
     /** Секреты читаем через расшифровку: в базе они лежат зашифрованными. */
     const accessKeyId = isEncrypted(storedAccessKey)

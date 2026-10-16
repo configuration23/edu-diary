@@ -233,7 +233,7 @@ export async function createTeacher(
 export async function createStudentWithAccount(
   context: FactoryContext,
   input: { fullName: string; username: string; password: string },
-): Promise<{ id: string }> {
+): Promise<{ id: string; username: string; password: string }> {
   const response = await context.client.request({
     method: 'POST',
     url: '/api/students',
@@ -245,7 +245,7 @@ export async function createStudentWithAccount(
   });
 
   await expectStatus(response, [201], 'Ученик не создан');
-  return { id: idOf(response) };
+  return { id: idOf(response), username: input.username, password: input.password };
 }
 
 export async function enrollStudent(
@@ -409,7 +409,7 @@ export async function createLessonContext(
      * фабрика. Угадывать логин в тесте нельзя — он зависит от метки прогона, и один раз
      * это уже сломало проверку.
      */
-    result.student = { ...student, username: studentUsername, password: studentPassword };
+    result.student = student;
   }
 
   if (input.lessonDate !== undefined) {

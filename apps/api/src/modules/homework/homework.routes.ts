@@ -1,18 +1,24 @@
+import multipart from '@fastify/multipart';
 import type { FastifyInstance } from 'fastify';
 
+import type { AccessScope } from '@edu-diary/domain';
 import {
   createHomeworkRequestSchema,
   homeworkAssignmentSummarySchema,
   listHomeworkQuerySchema,
   listHomeworkResponseSchema,
+  uploadFileResponseSchema,
   updateHomeworkRequestSchema,
   type HomeworkAssignmentSummaryDto,
 } from '@edu-diary/contracts';
 
 import { actorFromRequest } from '../../shared/actor';
+import { AppError } from '../../shared/errors';
 import { authOf } from '../../shared/guards';
 import type { AuditService } from '../audit';
 import type { LessonRecord } from '../schedule';
+import { createAssignmentFileRepository } from './homework.files.repository';
+import { createFileService } from './homework.files.service';
 import { createHomeworkRepository } from './homework.repository';
 import {
   createHomeworkService,
@@ -20,6 +26,15 @@ import {
   type HomeworkViewer,
 } from './homework.service';
 import type { Database } from '../../shared/db/client';
+import type { StorageAdapter } from '../storage';
+
+/**
+ * Верхняя граница размера при разборе запроса.
+ *
+ * Совпадает с максимально допустимой настройкой (50 МБ). Точный предел проверяет домен —
+ * здесь мы лишь бережём память сервера от заведомо чрезмерных загрузок.
+ */
+const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 
 /**
  * Домашние задания: маршруты.
@@ -42,6 +57,22 @@ ull, если его нет: сервис сам решает, отвечать 
   maxDurationDays: () => Promise<number>;
   /** Группы ученика и его представителей: ученик видит только их. */
   groupIdsOfViewer: (viewerUserId: string) => Promise<string[]>;
+  /** Текущий адаптер хранилища: администратор может сменить его без перезапуска. */
+  storageAdapter: () => Promise<StorageAdapter>;
+  /** Предельный размер файла и белый список типов — из настроек. */
+  storageLimits: () => Promise<{ maxFileMb: number; allowedExtensions: readonly string[] }>;
+  /**
+   * Можно ли выдать файл этому смотрящему.
+   *
+   * Проверка вынесена в приложение: она требует и урока, и состава группы, а модуль заданий
+   * не должен знать про зачисления (ARCHITECTURE.md §3).
+   */
+  mayReadFile: (input: {
+    viewerUserId: string;
+    /** Область права на проверку: ll — администратор, иначе только свой урок. */
+    scope: AccessScope | undefined;
+    fileId: string;
+  }) => Promise<boolean>;
 }
 
 function toSummary(
@@ -74,12 +105,97 @@ export function createHomeworkModule(dependencies: HomeworkModuleDependencies) {
     maxDurationDays: dependencies.maxDurationDays,
   });
 
+  const fileRepository = createAssignmentFileRepository(db.orm);
+
+  const files = createFileService({
+    repository: fileRepository,
+    adapter: dependencies.storageAdapter,
+  });
+
+  /** Наличие права: область проверяет сервис там, где это важно. */
+  const has = (viewer: HomeworkViewer, permission: string): boolean =>
+    viewer.permissions.has(permission);
+
   const viewerOf = (request: Parameters<typeof authOf>[0]): HomeworkViewer => {
     const auth = authOf(request);
     return { userId: auth.userId, permissions: auth.permissions };
   };
 
   return async function homeworkModule(app: FastifyInstance): Promise<void> {
+    /**
+     * Приём вложений.
+     *
+     * Ограничение размера ставим и на разборе (`fileSize`), чтобы сервер не держал в памяти
+     * лишнее, и в домене — по настройке. Два уровня не дублируют друг друга: первый бережёт
+     * память, второй отвечает за правило.
+     */
+    await app.register(multipart, {
+      limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 },
+    });
+
+    app.post('/homework/files', async (request, reply) => {
+      const viewer = viewerOf(request);
+      if (!has(viewer, 'homework:write')) {
+        throw new AppError('FORBIDDEN', 'Недостаточно прав: homework:write');
+      }
+
+      const file = await request.file();
+      if (file === undefined) throw new AppError('VALIDATION_FAILED', 'Файл не передан');
+
+      const body = await file.toBuffer();
+      const limits = await dependencies.storageLimits();
+
+      const uploaded = await files.upload({
+        fileName: file.filename,
+        body,
+        uploadedBy: viewer.userId,
+        maxFileMb: limits.maxFileMb,
+        allowedExtensions: limits.allowedExtensions,
+      });
+
+      // 201: файл создан. Ответ содержит идентификатор, который потом привяжут к заданию.
+      reply.status(201);
+      return uploadFileResponseSchema.parse(uploaded);
+    });
+
+    /**
+     * Выдача вложения.
+     *
+     * Файл отдаётся **только через API**: прямой ссылки на хранилище нет, и загруженное не
+     * достать в обход прав. Чужой файл отвечает `404` — как несуществующий, чтобы разница не
+     * выдавала чужое задание.
+     */
+    app.get('/homework/files/:fileId', async (request, reply) => {
+      const { fileId } = request.params as { fileId: string };
+      const viewer = viewerOf(request);
+
+      const file = await fileRepository.findById(fileId);
+      if (file === null) throw new AppError('NOT_FOUND', 'Файл не найден');
+
+      const allowed = await dependencies.mayReadFile({
+        viewerUserId: viewer.userId,
+        scope:
+          viewer.permissions.get('homework:review') ?? viewer.permissions.get('homework:write'),
+        fileId,
+      });
+
+      if (!allowed) throw new AppError('NOT_FOUND', 'Файл не найден');
+
+      const body = await files.read(file.storageKey);
+      if (body === null) throw new AppError('NOT_FOUND', 'Файл не найден');
+
+      return (
+        reply
+          .header('content-type', file.mimeType)
+          /** Имя в `filename*`: пробелы и кириллица иначе ломают заголовок. */
+          .header(
+            'content-disposition',
+            `attachment; filename*=UTF-8''${encodeURIComponent(file.originalName)}`,
+          )
+          .send(body)
+      );
+    });
+
     /** Задание урока: экран журнала. */
     app.get('/homework/lesson/:lessonId', async (request) => {
       const { lessonId } = request.params as { lessonId: string };

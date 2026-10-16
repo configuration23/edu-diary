@@ -1,0 +1,2 @@
+ALTER TABLE "homework_assignment_file" ALTER COLUMN "assignment_id" DROP NOT NULL;--> statement-breakpoint
+CREATE INDEX "homework_assignment_file_uploaded_by_idx" ON "homework_assignment_file" USING btree ("uploaded_by");

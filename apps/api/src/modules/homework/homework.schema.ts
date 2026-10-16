@@ -153,11 +153,20 @@ export const homeworkAssignmentFile = pgTable(
   'homework_assignment_file',
   {
     ...attachmentColumns,
-    assignmentId: uuid('assignment_id')
-      .notNull()
-      .references(() => homeworkAssignment.id, { onDelete: 'cascade' }),
+    /**
+     * Может быть пустым: файл загружается **до** сохранения задания — иначе пришлось бы
+     * держать форму открытой, пока передаётся большой файл. Такой файл ещё ни к чему не
+     * привязан, и «забрать» его может только тот, кто загрузил.
+     */
+    assignmentId: uuid('assignment_id').references(() => homeworkAssignment.id, {
+      onDelete: 'cascade',
+    }),
   },
-  (table) => [index('homework_assignment_file_assignment_idx').on(table.assignmentId)],
+  (table) => [
+    index('homework_assignment_file_assignment_idx').on(table.assignmentId),
+    /** Незавершённые загрузки ищем по автору: по ним видно, что форма была закрыта. */
+    index('homework_assignment_file_uploaded_by_idx').on(table.uploadedBy),
+  ],
 );
 
 /** Файлы решения: то, что приложил ученик. */
