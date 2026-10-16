@@ -52,6 +52,7 @@ import {
   userSummarySchema,
   lessonHomeworkFlagsResponseSchema,
   listAssignmentSubmissionsResponseSchema,
+  listNewsResponseSchema,
   lessonHomeworkResponseSchema,
   listHomeworkResponseSchema,
   submissionStateSchema,
@@ -1573,5 +1574,109 @@ export function useSubmittedWorks(
     queryKey: ['submitted-works', query],
     queryFn: () =>
       apiRequest(`/api/homework/submissions${query}`, listAssignmentSubmissionsResponseSchema),
+  });
+}
+
+/**
+ * Новости заведения (Этап 6).
+ *
+ * Читают **все вошедшие**, публикует администратор. Список отдаётся от свежих к старым, поэтому
+ * «последняя новость» — это первая в списке: интерфейс не выбирает её сам.
+ */
+export function useNews(input: { forEditing?: boolean } = {}) {
+  const query = toQueryString({ forEditing: input.forEditing === true ? 'true' : undefined });
+
+  return useQuery({
+    queryKey: ['news', query],
+    queryFn: () => apiRequest(`/api/news${query}`, listNewsResponseSchema),
+  });
+}
+
+/** Загрузка картинки: файл передаётся **до** сохранения новости, как и вложения заданий. */
+export function useUploadNewsImage() {
+  return useMutation({
+    mutationFn: async (file: File) => {
+      const body = new FormData();
+      body.append('file', file);
+
+      const response = await fetch('/api/news/images', {
+        method: 'POST',
+        body,
+        credentials: 'same-origin',
+      });
+
+      if (!response.ok) {
+        const parsed = (await response.json().catch(() => null)) as {
+          error?: { message?: string };
+        } | null;
+        throw new Error(parsed?.error?.message ?? 'Не удалось загрузить картинку');
+      }
+
+      return uploadFileResponseSchema.parse(await response.json());
+    },
+  });
+}
+
+export function useCreateNews() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      title: string;
+      body: string;
+      publishedOn?: string;
+      visibleUntil?: string | null;
+      imageFileId?: string | null;
+    }) =>
+      apiRequest('/api/news', z.object({ id: z.uuid() }), {
+        method: 'POST',
+        body: {
+          title: input.title,
+          body: input.body,
+          ...(input.publishedOn === undefined ? {} : { publishedOn: input.publishedOn }),
+          ...(input.visibleUntil === undefined ? {} : { visibleUntil: input.visibleUntil }),
+          ...(input.imageFileId === undefined ? {} : { imageFileId: input.imageFileId }),
+        },
+      }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ['news'] });
+    },
+  });
+}
+
+export function useUpdateNews() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      id: string;
+      title?: string;
+      body?: string;
+      publishedOn?: string;
+      visibleUntil?: string | null;
+      imageFileId?: string | null;
+    }) =>
+      apiSend(`/api/news/${input.id}`, {
+        method: 'PATCH',
+        body: {
+          ...(input.title === undefined ? {} : { title: input.title }),
+          ...(input.body === undefined ? {} : { body: input.body }),
+          ...(input.publishedOn === undefined ? {} : { publishedOn: input.publishedOn }),
+          ...(input.visibleUntil === undefined ? {} : { visibleUntil: input.visibleUntil }),
+          ...(input.imageFileId === undefined ? {} : { imageFileId: input.imageFileId }),
+        },
+      }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ['news'] });
+    },
+  });
+}
+
+/** Удаление **мягкое**: новость скрывается, но остаётся в истории и аудите. */
+export function useRemoveNews() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiSend(`/api/news/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ['news'] });
+    },
   });
 }

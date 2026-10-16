@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Alert, Button, Card, Field, FilePicker, TextInput } from '../components/ui';
 import { errorMessage } from '../lib/api-client';
 import { useAppearance, useBranding, useUpdateAppearance, useUpdateBranding } from '../lib/queries';
+import { NewsSettingsCard } from '../components/NewsSettingsCard';
 import { StorageSettingsCard } from '../components/StorageSettingsCard';
 
 /**
@@ -247,9 +248,15 @@ export function SettingsScreen() {
       <AppearanceForm />
 
       {/*
+        Новости заведения: публикуются здесь, здесь же правятся и убираются. Список показывает и
+        подготовленные, и просроченные — иначе новость, поставленную на будущее, не найти.
+      */}
+      <NewsSettingsCard />
+
+      {/*
         Хранилище файлов — **системная** настройка: адрес хранилища и ключи доступа. Здесь же
         кнопка проверки подключения: она пишет настоящий файл, поэтому администратор узнаёт о
-        проблеме сразу, а не когда ученик не сможет приложить решение.
+        проблеме сразу, а когда ученик не сможет приложить решение — уже поздно.
       */}
       <StorageSettingsCard />
     </div>

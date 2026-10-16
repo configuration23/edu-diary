@@ -1,19 +1,54 @@
 import type { SessionResponseDto } from '@edu-diary/contracts';
 
+import { Card } from '../components/ui';
+import { Page, PageHeader, QueryState } from '../components/layout';
+import { useNews } from '../lib/queries';
+import { NewsArticle, NewsCollapsedItem } from '../components/NewsList';
+
 /**
- * «Обзор» — **страница пустая** по решению владельца.
+ * «Обзор» — новости заведения.
  *
- * Всё, что здесь было, разошлось по местам:
- * - данные учётной записи, смена пароля, «Ваш доступ», «О версии» и **состояние системы** —
- *   в **профиль**: это не обзор заведения;
- * - название пункта меню **«Обзор» остаётся**, меняется содержимое.
+ * Решения владельца: последняя новость показывается **полностью**, предыдущие **сворачиваются до
+ * одной строки** — виден только заголовок. Разворачиваются нажатием.
  *
- * Дальше страница станет **новостями заведения**: последняя новость показывается целиком,
- * предыдущие — свёрнутыми до заголовка (решение владельца, `PHASE-6-PLAN.md`).
+ * Название пункта меню **«Обзор» остаётся**: владелец подтвердил, что менялось содержимое, а не
+ * название.
  *
- * Пока новостей нет, страница намеренно **пустая, а не с заглушками**: «здесь скоро что-то будет»
- * читается как недоделка, а пустая страница — как «новостей нет», и это правда.
+ * Список приходит от свежих к старым, поэтому «последняя» — это первая: интерфейс ничего не
+ * выбирает сам и не может разойтись с порядком на сервере.
  */
 export function DashboardScreen(_props: { session: SessionResponseDto }) {
-  return null;
+  const news = useNews();
+
+  const items = news.data?.items ?? [];
+  const [latest, ...previous] = items;
+
+  return (
+    <Page>
+      <PageHeader
+        title="Новости заведения"
+        description="Что нового в колледже. Предыдущие новости свёрнуты — нажмите, чтобы прочитать."
+      />
+
+      <QueryState
+        isLoading={news.isLoading}
+        error={news.error}
+        isEmpty={items.length === 0}
+        emptyText="Новостей пока нет."
+        onRetry={() => void news.refetch()}
+      >
+        {latest !== undefined && <NewsArticle item={latest} />}
+
+        {previous.length > 0 && (
+          <Card title="Ранее">
+            <ul className="flex flex-col">
+              {previous.map((item) => (
+                <NewsCollapsedItem key={item.id} item={item} />
+              ))}
+            </ul>
+          </Card>
+        )}
+      </QueryState>
+    </Page>
+  );
 }
