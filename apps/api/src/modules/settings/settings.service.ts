@@ -31,8 +31,6 @@ export const SETTING_KEYS = {
   storageMaxFileMb: 'storage.max_file_mb',
   /** Белый список расширений; ядро запретов настройкой не обходится. */
   storageAllowedTypes: 'storage.allowed_types',
-  /** Предельная длительность продолжительного задания в днях. */
-  homeworkMaxDurationDays: 'homework.max_duration_days',
 } as const;
 
 const SETTING_KEY_PATTERN = /^[a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+$/;
