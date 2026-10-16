@@ -169,16 +169,24 @@ export const homeworkAssignmentFile = pgTable(
   ],
 );
 
-/** Файлы решения: то, что приложил ученик. */
+/**
+ * Файлы решения: то, что приложил ученик.
+ *
+ * submissionId **может быть пустым**: ученик прикладывает файл до отправки решения, иначе
+ * форма ждала бы передачи файла. «Забрать» такой файл может только тот, кто его загрузил.
+ */
 export const homeworkSubmissionFile = pgTable(
   'homework_submission_file',
   {
     ...attachmentColumns,
-    submissionId: uuid('submission_id')
-      .notNull()
-      .references(() => homeworkSubmission.id, { onDelete: 'cascade' }),
+    submissionId: uuid('submission_id').references(() => homeworkSubmission.id, {
+      onDelete: 'cascade',
+    }),
   },
-  (table) => [index('homework_submission_file_submission_idx').on(table.submissionId)],
+  (table) => [
+    index('homework_submission_file_submission_idx').on(table.submissionId),
+    index('homework_submission_file_uploaded_by_idx').on(table.uploadedBy),
+  ],
 );
 
 /** Ссылки: и в задании, и в решении их может быть несколько. */

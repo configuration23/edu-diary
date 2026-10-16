@@ -536,6 +536,42 @@ ull: он сам
         return value ?? 14;
       },
       /** Группы ученика и его представителей: ученик видит задания только своих групп. */
+      /**
+       * Чьё это задание и чей ученик смотрит.
+       *
+       * Ученик получает задание своей группы; представитель видит работу ребёнка, но **не**
+       * сдаёт за него — поэтому studentId возвращается только для собственной карточки.
+       */
+      async resolveStudentAccess({ viewerUserId, scope: staffScope, assignmentId }) {
+        const assignment = await homeworkRepository.findAssignment(assignmentId);
+        if (assignment === null) return null;
+
+        const staffAllowed =
+          staffScope === 'all' ||
+          (staffScope === 'assigned' &&
+            (await homeworkRepository.isTeacherOfLesson(assignment.lessonId, viewerUserId)));
+
+        const own = await academicsRepository.findStudentByUserId(viewerUserId);
+        const children = await guardiansRepository.studentIdsOfGuardian(viewerUserId);
+        const visibleStudents = new Set<string>([...(own === null ? [] : [own.id]), ...children]);
+
+        const isOwnGroup = (await scheduleCatalog.groupsOfViewer(viewerUserId)).some(
+          (group) => group.id === assignment.studyGroupId,
+        );
+
+        if (!staffAllowed && !isOwnGroup) return null;
+        if (visibleStudents.size === 0 && !staffAllowed) return null;
+
+        /** Сдавать может только ученик со своей карточкой; представитель — только смотрит. */
+        const canSubmitAs = own !== null && isOwnGroup ? own.id : null;
+
+        return { assignment, studentId: canSubmitAs };
+      },
+      /** Урок задания: по нему проверяется право на список сдавших. */
+      async findAssignmentLesson(assignmentId) {
+        const assignment = await homeworkRepository.findAssignment(assignmentId);
+        return assignment?.lessonId ?? null;
+      },
       storageAdapter: () => storageService.adapter(),
       storageLimits: () => storageService.readSettings(),
       /**

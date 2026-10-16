@@ -1,5 +1,5 @@
 import multipart from '@fastify/multipart';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 import type { AccessScope } from '@edu-diary/domain';
 import {
@@ -7,6 +7,8 @@ import {
   homeworkAssignmentSummarySchema,
   listHomeworkQuerySchema,
   listHomeworkResponseSchema,
+  listSubmissionsResponseSchema,
+  submitHomeworkRequestSchema,
   uploadFileResponseSchema,
   updateHomeworkRequestSchema,
   type HomeworkAssignmentSummaryDto,
@@ -18,8 +20,11 @@ import { authOf } from '../../shared/guards';
 import type { AuditService } from '../audit';
 import type { LessonRecord } from '../schedule';
 import { createAssignmentFileRepository } from './homework.files.repository';
-import { createFileService } from './homework.files.service';
-import { createHomeworkRepository } from './homework.repository';
+import { createSubmissionFileRepository } from './homework.submission-files.repository';
+import { createSubmissionRepository } from './homework.submissions.repository';
+import { createSubmissionService } from './homework.submissions.service';
+import { createFileService, type FileSink } from './homework.files.service';
+import { createHomeworkRepository, type AssignmentWithContext } from './homework.repository';
 import {
   createHomeworkService,
   type HomeworkDetail,
@@ -67,9 +72,28 @@ ull, если его нет: сервис сам решает, отвечать 
    * Проверка вынесена в приложение: она требует и урока, и состава группы, а модуль заданий
    * не должен знать про зачисления (ARCHITECTURE.md §3).
    */
+  /**
+   * Чьё это задание и чей это ученик.
+   *
+   * Проверка вынесена в приложение: она требует уроков и состава группы, а модуль заданий не
+   * должен знать про зачисления. `null` означает «смотрящему это задание не положено» —
+   * ответ в этом случае не отличается от «задание не найдено».
+   */
+  resolveStudentAccess: (input: {
+    viewerUserId: string;
+    /** Область права смотрящего: `all` — администратор, `assigned` — свой урок. */
+    scope: AccessScope | undefined;
+    assignmentId: string;
+  }) => Promise<{
+    assignment: AssignmentWithContext;
+    /** Карточка ученика смотрящего: у представителя её нет — он только смотрит. */
+    studentId: string | null;
+  } | null>;
+  /** Урок задания: нужен, чтобы проверить право преподавателя на список сдавших. */
+  findAssignmentLesson: (assignmentId: string) => Promise<string | null>;
   mayReadFile: (input: {
     viewerUserId: string;
-    /** Область права на проверку: ll — администратор, иначе только свой урок. */
+    /** Область права на проверку: `all` — администратор, иначе только свой урок. */
     scope: AccessScope | undefined;
     fileId: string;
   }) => Promise<boolean>;
@@ -107,10 +131,29 @@ export function createHomeworkModule(dependencies: HomeworkModuleDependencies) {
 
   const fileRepository = createAssignmentFileRepository(db.orm);
 
+  const submissionRepository = createSubmissionRepository(db.orm);
+  const submissionFileRepository = createSubmissionFileRepository(db.orm);
+  const submissions = createSubmissionService({ repository: submissionRepository });
+
   const files = createFileService({
     repository: fileRepository,
     adapter: dependencies.storageAdapter,
   });
+
+  /**
+   * Область права **проверяющего**.
+   *
+   * У ученика homework:write есть, но с областью own — это отправка решения, а не
+   * проверка. Поэтому own здесь не считается: иначе ученик получил бы доступ к списку
+   * сдавших и к чужим работам.
+   */
+  const staffScopeOf = (viewer: HomeworkViewer): AccessScope | undefined => {
+    const review = viewer.permissions.get('homework:review');
+    if (review === 'assigned' || review === 'all') return review;
+
+    const write = viewer.permissions.get('homework:write');
+    return write === 'assigned' || write === 'all' ? write : undefined;
+  };
 
   /** Наличие права: область проверяет сервис там, где это важно. */
   const has = (viewer: HomeworkViewer, permission: string): boolean =>
@@ -133,7 +176,19 @@ export function createHomeworkModule(dependencies: HomeworkModuleDependencies) {
       limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 },
     });
 
-    app.post('/homework/files', async (request, reply) => {
+    /**
+     * Приём файла.
+     *
+     * Маршруты **разные**: материал задания прикладывает преподаватель, файл решения —
+     * ученик, и это документы разного автора с разными таблицами. Один маршрут с признаком
+     * в запросе оказался ненадёжным: при разборе multipart строка запроса читается не так,
+     * как в обычном запросе, и файл уходил не в ту таблицу.
+     */
+    const receiveFile = async (
+      request: FastifyRequest,
+      reply: FastifyReply,
+      repository: FileSink,
+    ) => {
       const viewer = viewerOf(request);
       if (!has(viewer, 'homework:write')) {
         throw new AppError('FORBIDDEN', 'Недостаточно прав: homework:write');
@@ -142,21 +197,29 @@ export function createHomeworkModule(dependencies: HomeworkModuleDependencies) {
       const file = await request.file();
       if (file === undefined) throw new AppError('VALIDATION_FAILED', 'Файл не передан');
 
-      const body = await file.toBuffer();
       const limits = await dependencies.storageLimits();
-
       const uploaded = await files.upload({
         fileName: file.filename,
-        body,
+        body: await file.toBuffer(),
         uploadedBy: viewer.userId,
         maxFileMb: limits.maxFileMb,
         allowedExtensions: limits.allowedExtensions,
+        repository,
       });
 
-      // 201: файл создан. Ответ содержит идентификатор, который потом привяжут к заданию.
+      // 201: файл создан. Ответ содержит идентификатор, который потом привяжут к документу.
       reply.status(201);
       return uploadFileResponseSchema.parse(uploaded);
-    });
+    };
+
+    app.post('/homework/files', async (request, reply) =>
+      receiveFile(request, reply, fileRepository),
+    );
+
+    /** Файл решения: та же проверка размера и типа, но метаданные идут в свою таблицу. */
+    app.post('/homework/submission-files', async (request, reply) =>
+      receiveFile(request, reply, submissionFileRepository),
+    );
 
     /**
      * Выдача вложения.
@@ -174,8 +237,7 @@ export function createHomeworkModule(dependencies: HomeworkModuleDependencies) {
 
       const allowed = await dependencies.mayReadFile({
         viewerUserId: viewer.userId,
-        scope:
-          viewer.permissions.get('homework:review') ?? viewer.permissions.get('homework:write'),
+        scope: staffScopeOf(viewer),
         fileId,
       });
 
@@ -194,6 +256,102 @@ export function createHomeworkModule(dependencies: HomeworkModuleDependencies) {
           )
           .send(body)
       );
+    });
+
+    /**
+     * Сдача решения.
+     *
+     * Состояние и отправка разделены: ученик сначала видит, сдано ли уже и какой срок, и
+     * только потом отправляет. Одна попытка — проверяется на сервере, а не в интерфейсе:
+     * повторное нажатие при медленной сети не должно создавать второе решение.
+     */
+    app.get('/homework/:assignmentId/submission', async (request) => {
+      const { assignmentId } = request.params as { assignmentId: string };
+      const viewer = viewerOf(request);
+
+      const access = await dependencies.resolveStudentAccess({
+        viewerUserId: viewer.userId,
+        scope:
+          viewer.permissions.get('homework:review') ?? viewer.permissions.get('homework:write'),
+        assignmentId,
+      });
+
+      if (access === null) throw new AppError('NOT_FOUND', 'Задание не найдено');
+
+      const own =
+        access.studentId === null
+          ? null
+          : await submissions.findOwn({
+              assignmentId,
+              studentId: access.studentId,
+              dueOn: access.assignment.dueOn,
+            });
+
+      return {
+        own,
+        dueOn: access.assignment.dueOn,
+        /** Сдавать может только ученик, у которого есть карточка, и только один раз. */
+        canSubmit: access.studentId !== null && own === null,
+      };
+    });
+
+    app.post('/homework/:assignmentId/submission', async (request, reply) => {
+      const { assignmentId } = request.params as { assignmentId: string };
+      const body = submitHomeworkRequestSchema.parse(request.body);
+      const viewer = viewerOf(request);
+
+      const access = await dependencies.resolveStudentAccess({
+        viewerUserId: viewer.userId,
+        scope:
+          viewer.permissions.get('homework:review') ?? viewer.permissions.get('homework:write'),
+        assignmentId,
+      });
+
+      /**
+       * Задание не своей группы, чужое задание и несуществующее отвечают одинаково: иначе по
+       * разнице ответов можно было бы узнать о чужих заданиях.
+       */
+      if (access === null || access.studentId === null) {
+        throw new AppError('NOT_FOUND', 'Задание не найдено');
+      }
+
+      const created = await submissions.submit({
+        assignment: access.assignment,
+        studentId: access.studentId,
+        viewerUserId: viewer.userId,
+        text: body.text,
+        fileIds: body.fileIds,
+      });
+
+      await audit.record(
+        {
+          action: 'create',
+          entityKind: 'homework_submission',
+          entityId: created.id,
+          after: { assignmentId },
+        },
+        actorFromRequest(request),
+      );
+
+      reply.status(201);
+      return { id: created.id };
+    });
+
+    /** Список сдавших: для учителя урока и администратора. */
+    app.get('/homework/:assignmentId/submissions', async (request) => {
+      const { assignmentId } = request.params as { assignmentId: string };
+      const viewer = viewerOf(request);
+
+      const assignment = await service.getForLesson({
+        viewer,
+        lessonId: (await dependencies.findAssignmentLesson(assignmentId)) ?? '',
+      });
+
+      if (assignment === null) throw new AppError('NOT_FOUND', 'Задание не найдено');
+
+      const items = await submissions.list({ assignment: assignment.assignment });
+
+      return listSubmissionsResponseSchema.parse({ items, total: items.length });
     });
 
     /** Задание урока: экран журнала. */

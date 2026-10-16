@@ -20,10 +20,31 @@ import type { AssignmentFileRepository, PendingFileRecord } from './homework.fil
 
 export interface UploadInput {
   fileName: string;
+  /**
+   * Куда записать метаданные: материалы задания и файлы решения — разные таблицы, потому что
+   * это документы разного автора. Общий у них только приём: дальше пути расходятся.
+   */
+  repository: FileSink;
   body: Buffer;
   uploadedBy: string;
   maxFileMb: number;
   allowedExtensions: readonly string[];
+}
+
+/**
+ * Минимум, нужный приёмy файла: записать метаданные и найти их обратно.
+ *
+ * Общий интерфейс для материалов задания и файлов решения: сервису приёма не нужно знать,
+ * к какому документу файл привяжут потом.
+ */
+export interface FileSink {
+  createPending(input: {
+    storageKey: string;
+    originalName: string;
+    sizeBytes: number;
+    mimeType: string;
+    uploadedBy: string;
+  }): Promise<{ id: string }>;
 }
 
 export interface FileService {
