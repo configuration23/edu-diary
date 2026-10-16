@@ -11,6 +11,7 @@ import { SubjectDot, lessonMarker, subjectColor } from '../lib/appearance';
 import { errorMessage } from '../lib/api-client';
 import { hasBells, pairsFromBells } from '../lib/schedule-pairs';
 import { useLessonMarks } from '../lib/journal-queries';
+import { useHomeworkFlags } from '../lib/queries';
 import { useBells, useLessons, useScheduleGroups } from '../lib/queries';
 
 /**
@@ -92,6 +93,8 @@ function LessonCard({
   grades,
   attendance,
   learnerView,
+  homework,
+  showAssigned,
 }: {
   lesson: LessonDto;
   showGroup: boolean;
@@ -104,6 +107,10 @@ function LessonCard({
    * расписания («По плану», «Правка вручную») — нет: это внутренние пометки.
    */
   learnerView: boolean;
+  /** Отметка о домашнем задании: есть ли оно на эту дату и сдано ли. */
+  homework: { assignedHere: number; dueHere: number; submittedHere: number } | undefined;
+  /** Показывать ли «задавал здесь»: это нужно преподавателю, а не ученику. */
+  showAssigned: boolean;
 }) {
   const status = STATUS[lesson.status] ?? { label: lesson.status, tone: 'neutral' as const };
 
@@ -133,6 +140,40 @@ function LessonCard({
       {learnerView && (
         <span className="absolute top-2 right-2">
           <LessonGrades grades={grades} />
+        </span>
+      )}
+
+      {/*
+        Отметка о домашнем задании.
+
+        Ученику — «задано» и «сдано»: в расписании должно быть видно, что на эту дату есть
+        работа. Преподавателю — «задавал здесь»: он видит, что уже ставил дз на этот урок.
+        Показываем **значком**, а не текстом: плитка узкая, а расписание читают глазами.
+      */}
+      {homework !== undefined && !learnerView && showAssigned && homework.assignedHere > 0 && (
+        <span
+          className="absolute top-2 left-2 rounded bg-amber-100 px-1 text-[11px] font-medium text-amber-900"
+          title={`На этом уроке задано: ${String(homework.assignedHere)}`}
+        >
+          ДЗ
+        </span>
+      )}
+
+      {homework !== undefined && learnerView && homework.dueHere > 0 && (
+        <span
+          className={`absolute top-2 left-2 rounded px-1 text-[11px] font-medium ${
+            homework.submittedHere >= homework.dueHere
+              ? 'bg-emerald-100 text-emerald-900'
+              : 'bg-amber-100 text-amber-900'
+          }`}
+          title={
+            homework.submittedHere >= homework.dueHere
+              ? 'Задание сдано'
+              : `Задано на эту дату: ${String(homework.dueHere)}`
+          }
+        >
+          {/* Галочка — «сдано», «ДЗ» — «задано, но не сдано». */}
+          {homework.submittedHere >= homework.dueHere ? '✓' : 'ДЗ'}
         </span>
       )}
 
@@ -248,6 +289,16 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
 
   const items = lessons.data?.items ?? [];
   const marks = useLessonMarks(showMarks ? items.map((lesson) => lesson.id) : []);
+
+  /**
+   * Отметки о домашнем задании.
+   *
+   * В расписании не нужен текст задания — нужно видеть, **есть ли оно**: ученику, что задано
+   * на эту дату, преподавателю, что он в этот день уже ставил. Одним запросом на период.
+   */
+  const homeworkFlags = useHomeworkFlags(items.map((lesson) => lesson.id));
+  const homeworkOf = (lessonId: string) =>
+    homeworkFlags.data?.items.find((item) => item.lessonId === lessonId);
 
   /** Отметки по занятию: в плитке нужны и оценки, и посещаемость. */
   const gradesOf = (lessonId: string) =>
@@ -421,6 +472,12 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
                     grades={gradesOf(lesson.id)}
                     attendance={attendanceOf(lesson.id)}
                     learnerView={showMarks}
+                    /**
+                     * Отметка о домашнем задании: у преподавателя — «задавал здесь», у
+                     * ученика и представителя — «задано на эту дату» и «уже сдано».
+                     */
+                    homework={homeworkOf(lesson.id)}
+                    showAssigned={!showMarks}
                   />
                 ))}
               </div>
@@ -524,6 +581,19 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
                                   ) : (
                                     <span />
                                   )}
+                                  {/*
+                                    Домашнее задание: значок рядом с оценками. Ученику «ДЗ»
+                                    или «✓» (сдано), преподавателю «ДЗ» — он в этот день
+                                    задавал.
+                                  */}
+                                  {homeworkOf(lesson.id) !== undefined &&
+                                    (showMarks
+                                      ? homeworkOf(lesson.id)!.dueHere > 0
+                                      : homeworkOf(lesson.id)!.assignedHere > 0) && (
+                                      <span className="rounded bg-amber-100 px-1 text-[11px] font-medium text-amber-900">
+                                        ДЗ
+                                      </span>
+                                    )}
                                   {showMarks && <LessonGradesCount grades={gradesOf(lesson.id)} />}
                                 </span>
                               </span>

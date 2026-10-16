@@ -64,6 +64,10 @@ export interface HomeworkSnapshot {
   lessonId: string;
   dueLessonId: string;
   textLength: number;
+  /** Сколько ссылок приложено: правку ссылок иначе в аудите не увидеть. */
+  links: number;
+  /** Сколько файлов приложено. */
+  files: number;
 }
 
 /** Ближайший урок для списка выбора срока. */
@@ -71,6 +75,17 @@ export interface DueLessonOption {
   lessonId: string;
   lessonDate: string;
   pairNumber: number;
+}
+
+/** Отметка о задании для расписания: только счётчики. */
+export interface LessonHomeworkFlag {
+  lessonId: string;
+  /** Задано **на** этом уроке: преподаватель видит, что уже ставил. */
+  assignedHere: number;
+  /** Нужно сдать **к** этому уроку: ученик видит, что задано на эту дату. */
+  dueHere: number;
+  /** Сколько заданий к этому уроку ученик уже сдал. */
+  submittedHere: number;
 }
 
 export interface HomeworkService {
@@ -88,6 +103,10 @@ export interface HomeworkService {
     assignmentId: string;
     text?: string;
     dueLessonId?: string;
+    /** Новый набор ссылок: `undefined` — не менять, пустой список — убрать все. */
+    links?: readonly { url: string; title: string | null }[];
+    /** Файлы, которые нужно **добавить** к заданию. */
+    fileIds?: readonly string[];
   }): Promise<{ before: HomeworkSnapshot; after: HomeworkSnapshot }>;
   removeAssignment(input: {
     viewer: HomeworkViewer;
@@ -111,6 +130,17 @@ export interface HomeworkService {
   }): Promise<HomeworkDetail[]>;
   /** Ближайшие уроки того же предмета и группы: из них учитель выбирает срок. */
   listDueOptions(input: { lesson: LessonRecord; limit?: number }): Promise<DueLessonOption[]>;
+  /**
+   * Отметки о задании для **расписания**.
+   *
+   * В расписании не нужен текст задания — нужно видеть, есть ли оно: ученику, что задано на
+   * эту дату, преподавателю, что он в этот день уже ставил. Поэтому отдаём только счётчики, а
+   * не сами задания: иначе расписание тянуло бы весь текст на каждое занятие недели.
+   */
+  listFlags(input: {
+    viewer: HomeworkViewer;
+    lessonIds: readonly string[];
+  }): Promise<LessonHomeworkFlag[]>;
 }
 
 export interface HomeworkServiceDependencies {
@@ -303,12 +333,37 @@ export function createHomeworkService(dependencies: HomeworkServiceDependencies)
         }
       }
 
-      const before = snapshotOf(assignment);
+      /**
+       * Считаем ссылки и файлы **до** правки: без этого в аудите не видно, что учитель
+       * поправил ссылку или приложил картинку, — а именно это он и меняет чаще всего.
+       */
+      const [existingFiles, existingLinks] = await Promise.all([
+        repository.listFiles([input.assignmentId]),
+        repository.listLinks([input.assignmentId]),
+      ]);
+
+      const before = snapshotOf(assignment, {
+        links: existingLinks.length,
+        files: existingFiles.filter((file) => file.deletedAt === null).length,
+      });
 
       await repository.updateAssignment(input.assignmentId, {
         ...(input.text === undefined ? {} : { text: input.text }),
         ...(input.dueLessonId === undefined ? {} : { dueLessonId: input.dueLessonId }),
       });
+
+      /**
+       * Ссылки **заменяются целиком**: учитель правит список, а не отдельные ссылки, и так
+       * видно, что в задании осталось. Пустой список означает «ссылок нет».
+       */
+      if (input.links !== undefined) {
+        await repository.replaceLinks(input.assignmentId, input.links);
+      }
+
+      /** Файлы **добавляются**: убрать уже приложенный файл нельзя — файлы мы не удаляем. */
+      if (input.fileIds !== undefined && input.fileIds.length > 0) {
+        await repository.addFiles(input.assignmentId, input.fileIds);
+      }
 
       /**
        * Снимок «после» строим из **того, что просили изменить**, а не повторным чтением: так
@@ -321,6 +376,8 @@ export function createHomeworkService(dependencies: HomeworkServiceDependencies)
           dueLessonId: input.dueLessonId ?? before.dueLessonId,
           /** Текст не меняли — длина остаётся прежней; меняли — берём новую. */
           textLength: input.text === undefined ? before.textLength : input.text.length,
+          links: input.links === undefined ? before.links : input.links.length,
+          files: before.files + (input.fileIds?.length ?? 0),
         },
       };
     },
@@ -386,15 +443,58 @@ export function createHomeworkService(dependencies: HomeworkServiceDependencies)
         pairNumber: lesson.pairNumber,
       }));
     },
+
+    async listFlags(input) {
+      if (!has(input.viewer, 'homework:read')) {
+        throw new AppError('FORBIDDEN', 'Недостаточно прав: homework:read');
+      }
+
+      if (input.lessonIds.length === 0) return [];
+
+      const [assigned, due] = await Promise.all([
+        repository.listByLessonIdsAssigned(input.lessonIds),
+        repository.listByDueLessonIds(input.lessonIds),
+      ]);
+
+      /** Сколько заданий к этому уроку ученик уже сдал: ему важно видеть «сдано». */
+      const submitted = await repository.countSubmissionsByViewer({
+        assignmentIds: due.map((assignment) => assignment.id),
+        viewerUserId: input.viewer.userId,
+      });
+
+      const assignedCount = new Map<string, number>();
+      for (const assignment of assigned) {
+        assignedCount.set(assignment.lessonId, (assignedCount.get(assignment.lessonId) ?? 0) + 1);
+      }
+
+      const dueCount = new Map<string, number>();
+      for (const assignment of due) {
+        dueCount.set(assignment.dueLessonId, (dueCount.get(assignment.dueLessonId) ?? 0) + 1);
+      }
+
+      return input.lessonIds.map((lessonId) => ({
+        lessonId,
+        assignedHere: assignedCount.get(lessonId) ?? 0,
+        dueHere: dueCount.get(lessonId) ?? 0,
+        submittedHere: due
+          .filter((assignment) => assignment.dueLessonId === lessonId)
+          .filter((assignment) => submitted.has(assignment.id)).length,
+      }));
+    },
   };
 }
 
 /** Снимок задания для аудита. */
-function snapshotOf(assignment: AssignmentWithContext): HomeworkSnapshot {
+function snapshotOf(
+  assignment: AssignmentWithContext,
+  counts: { links: number; files: number } = { links: 0, files: 0 },
+): HomeworkSnapshot {
   return {
     lessonId: assignment.lessonId,
     dueLessonId: assignment.dueLessonId,
     textLength: assignment.text.length,
+    links: counts.links,
+    files: counts.files,
   };
 }
 

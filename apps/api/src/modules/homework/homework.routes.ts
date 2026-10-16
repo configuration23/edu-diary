@@ -6,6 +6,7 @@ import {
   createHomeworkRequestSchema,
   homeworkAssignmentSummarySchema,
   listHomeworkQuerySchema,
+  lessonHomeworkFlagsResponseSchema,
   lessonHomeworkResponseSchema,
   listHomeworkResponseSchema,
   listSubmissionsResponseSchema,
@@ -374,6 +375,29 @@ export function createHomeworkModule(dependencies: HomeworkModuleDependencies) {
       const items = await submissions.list({ assignment: access.assignment });
 
       return listSubmissionsResponseSchema.parse({ items, total: items.length });
+    });
+
+    /**
+     * Отметки о домашнем задании для расписания.
+     *
+     * В расписании не нужен текст: нужно видеть, **есть ли задание** — ученику, что задано на
+     * эту дату, преподавателю, что он в этот день уже ставил. Отдельный маршрут со списком
+     * уроков: так расписание получает отметки **одним запросом**, а не по уроку за раз.
+     */
+    app.get('/homework/lesson-flags', async (request) => {
+      const query = request.query as { lessonIds?: string | string[] };
+      /** При одном значении Fastify отдаёт строку, а не массив: приводим сами. */
+      const lessonIds = Array.isArray(query.lessonIds)
+        ? query.lessonIds
+        : query.lessonIds === undefined
+          ? []
+          : [query.lessonIds];
+
+      if (lessonIds.length === 0) return lessonHomeworkFlagsResponseSchema.parse({ items: [] });
+
+      const items = await service.listFlags({ viewer: viewerOf(request), lessonIds });
+
+      return lessonHomeworkFlagsResponseSchema.parse({ items });
     });
 
     /**

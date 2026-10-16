@@ -50,6 +50,7 @@ import {
   subjectSchema,
   suggestUsernameResponseSchema,
   userSummarySchema,
+  lessonHomeworkFlagsResponseSchema,
   lessonHomeworkResponseSchema,
   listHomeworkResponseSchema,
   submissionStateSchema,
@@ -1523,5 +1524,31 @@ export function useRemoveHomework() {
       void client.invalidateQueries({ queryKey: ['homework-lesson'] });
       void client.invalidateQueries({ queryKey: ['my-homework'] });
     },
+  });
+}
+
+/**
+ * Отметки о домашнем задании для расписания.
+ *
+ * Одним запросом на все уроки периода: иначе расписание делало бы запрос на каждое занятие.
+ * Текст задания здесь не нужен — только «есть ли оно».
+ */
+export function useHomeworkFlags(lessonIds: string[]) {
+  /**
+   * Идентификаторы уходят **повторяющимся параметром** (`?lessonIds=a&lessonIds=b`).
+   *
+   * `URLSearchParams.set` склеил бы массив в одну строку через запятую, и сервер получил бы
+   * одно значение вместо списка. Поэтому строку собираем сами.
+   */
+  const query =
+    lessonIds.length === 0
+      ? ''
+      : `?${lessonIds.map((id) => `lessonIds=${encodeURIComponent(id)}`).join('&')}`;
+
+  return useQuery({
+    queryKey: ['homework-flags', query],
+    enabled: lessonIds.length > 0,
+    queryFn: () =>
+      apiRequest(`/api/homework/lesson-flags${query}`, lessonHomeworkFlagsResponseSchema),
   });
 }

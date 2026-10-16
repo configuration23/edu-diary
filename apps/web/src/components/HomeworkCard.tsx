@@ -120,6 +120,7 @@ export function HomeworkCard({
                     setError(errorMessage(caught));
                   }
                 }}
+                onUpload={async (file) => upload.mutateAsync({ file, kind: 'assignment' })}
                 removing={remove.isPending}
                 onRemove={async () => {
                   setError(null);
@@ -273,6 +274,7 @@ function AssignmentBlock({
   onEdit,
   onCancel,
   onSave,
+  onUpload,
   saving,
   onRemove,
   removing,
@@ -285,7 +287,14 @@ function AssignmentBlock({
   isEditing: boolean;
   onEdit: () => void;
   onCancel: () => void;
-  onSave: (input: { text: string; dueLessonId: string }) => Promise<void>;
+  onSave: (input: {
+    text: string;
+    dueLessonId: string;
+    links: { url: string }[];
+    fileIds: string[];
+  }) => Promise<void>;
+  /** Загрузка файла при правке: файл прикладывается к уже существующему заданию. */
+  onUpload: (file: File) => Promise<UploadedFile>;
   saving: boolean;
   onRemove: () => Promise<void>;
   removing: boolean;
@@ -295,6 +304,13 @@ function AssignmentBlock({
 }) {
   const [text, setText] = useState(assignment.text);
   const [dueLessonId, setDueLessonId] = useState(assignment.dueLessonId);
+  /**
+   * Ссылку правим **одним полем**: в интерфейсе задания ссылка одна, и возиться со списком
+   * ради неё незачем. Существующую ссылку подставляем в поле при открытии правки.
+   */
+  const [link, setLink] = useState(assignment.links[0]?.url ?? '');
+  /** Новые файлы: уже приложенные остаются, потому что файлы мы не удаляем. */
+  const [newFiles, setNewFiles] = useState<UploadedFile[]>([]);
   const [confirming, setConfirming] = useState(false);
 
   /**
@@ -307,7 +323,13 @@ function AssignmentBlock({
         className="flex flex-col gap-2 rounded-md border border-slate-300 bg-slate-50 p-3"
         onSubmit={async (event) => {
           event.preventDefault();
-          await onSave({ text, dueLessonId });
+          await onSave({
+            text,
+            dueLessonId,
+            /** Пустое поле — ссылок не будет: список заменяем целиком. */
+            links: link.trim() === '' ? [] : [{ url: link.trim() }],
+            fileIds: newFiles.map((file) => file.id),
+          });
         }}
       >
         <Field label="Что задано">
@@ -337,6 +359,66 @@ function AssignmentBlock({
             Ученик увидит задание в новом уроке-сроке и во всех промежуточных.
           </span>
         </Field>
+
+        <Field label="Ссылка">
+          <TextInput
+            value={link}
+            onChange={(event) => setLink(event.target.value)}
+            placeholder="адрес ссылки"
+          />
+          <span className="text-xs text-slate-500">
+            Ссылки заменяются целиком: то, что осталось в поле, и будет в задании. Очистите поле,
+            чтобы убрать ссылку.
+          </span>
+        </Field>
+
+        {assignment.links.length > 0 && (
+          <div className="text-xs text-slate-500">
+            Сейчас в задании: {assignment.links.map((item) => item.title ?? item.url).join(', ')}
+          </div>
+        )}
+
+        <Field label="Добавить файл">
+          <input
+            type="file"
+            className="text-sm"
+            onChange={async (event) => {
+              const file = event.target.files?.[0];
+              if (file === undefined) return;
+              const uploaded = await onUpload(file);
+              setNewFiles((current) => [...current, uploaded]);
+              event.target.value = '';
+            }}
+          />
+          <span className="text-xs text-slate-500">
+            Файлы **добавляются**: уже приложенные остаются, потому что файлы мы не удаляем.
+          </span>
+        </Field>
+
+        {assignment.files.length > 0 && (
+          <div className="text-xs text-slate-500">
+            Уже приложено: {assignment.files.map((file) => file.originalName).join(', ')}
+          </div>
+        )}
+
+        {newFiles.length > 0 && (
+          <ul className="flex flex-col gap-1 text-sm">
+            {newFiles.map((file) => (
+              <li key={file.id} className="flex items-center gap-2">
+                <span>{file.originalName}</span>
+                <button
+                  type="button"
+                  className="text-xs text-red-700 underline"
+                  onClick={() =>
+                    setNewFiles((current) => current.filter((item) => item.id !== file.id))
+                  }
+                >
+                  убрать
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
 
         <div className="flex flex-wrap gap-2">
           <Button type="submit" disabled={saving}>

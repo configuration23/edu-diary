@@ -154,3 +154,26 @@ export const lessonHomeworkResponseSchema = z.object({
   dueOptions: z.array(dueLessonOptionSchema),
 });
 export type LessonHomeworkResponse = z.infer<typeof lessonHomeworkResponseSchema>;
+
+/**
+ * Отметка о домашнем задании для расписания.
+ *
+ * В расписании не нужен текст задания — нужно видеть, **есть ли оно**:
+ * - ученику — что на эту дату задано (и сдано ли уже);
+ * - преподавателю — что он в этот день дз задавал.
+ */
+export const lessonHomeworkFlagSchema = z.object({
+  lessonId: uuidSchema,
+  /** Задано **на** этом уроке: преподаватель видит, что уже ставил. */
+  assignedHere: z.number().int().nonnegative(),
+  /** Нужно сдать **к** этому уроку: ученик видит, что задано на эту дату. */
+  dueHere: z.number().int().nonnegative(),
+  /** Сколько заданий к этому уроку ученик уже сдал. */
+  submittedHere: z.number().int().nonnegative(),
+});
+export type LessonHomeworkFlagDto = z.infer<typeof lessonHomeworkFlagSchema>;
+
+export const lessonHomeworkFlagsResponseSchema = z.object({
+  items: z.array(lessonHomeworkFlagSchema),
+});
+export type LessonHomeworkFlagsResponse = z.infer<typeof lessonHomeworkFlagsResponseSchema>;

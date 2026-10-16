@@ -1,7 +1,7 @@
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 
 import type { Executor } from '../../shared/db/client';
-import { studyGroup, subject } from '../academics';
+import { student, studyGroup, subject } from '../academics';
 import { lesson as lessonTable } from '../schedule';
 import {
   homeworkAssignment,
@@ -75,6 +75,18 @@ export interface HomeworkRepository {
    * Так ученик получает свои задания на дату: список уроков дня даёт вызывающая сторона.
    */
   listByDueLessonIds(dueLessonIds: readonly string[]): Promise<AssignmentWithContext[]>;
+  /** Задания, **заданные** на этих уроках: отметка для расписания. */
+  listByLessonIdsAssigned(lessonIds: readonly string[]): Promise<AssignmentWithContext[]>;
+  /**
+   * Какие из этих заданий сдал **сам смотрящий**.
+   *
+   * Нужно ученику: в расписании он должен видеть не только «задано», но и «сдано». Берём
+   * именно его сдачи, а не общий счётчик, — иначе чужие работы попадали бы в отметку.
+   */
+  countSubmissionsByViewer(input: {
+    assignmentIds: readonly string[];
+    viewerUserId: string;
+  }): Promise<Set<string>>;
   addFiles(assignmentId: string, fileIds: readonly string[]): Promise<void>;
   listFiles(assignmentIds: readonly string[]): Promise<AssignmentFileRecord[]>;
   replaceLinks(
@@ -180,6 +192,39 @@ export function createHomeworkRepository(db: Executor): HomeworkRepository {
       );
     },
 
+    async listByLessonIdsAssigned(lessonIds) {
+      if (lessonIds.length === 0) return [];
+
+      return base().where(
+        and(
+          inArray(homeworkAssignment.lessonId, [...lessonIds]),
+          isNull(homeworkAssignment.deletedAt),
+        ),
+      );
+    },
+
+    async countSubmissionsByViewer(input) {
+      if (input.assignmentIds.length === 0) return new Set<string>();
+
+      /**
+       * Соединяем сдачу с **карточкой ученика этого пользователя**: у смотрящего должна быть
+       * своя карточка, иначе сдавать ему нечем. Так «сдано» в расписании относится именно к
+       * нему, а не к классу.
+       */
+      const rows = await db
+        .select({ assignmentId: homeworkSubmission.assignmentId })
+        .from(homeworkSubmission)
+        .innerJoin(student, eq(student.id, homeworkSubmission.studentId))
+        .where(
+          and(
+            inArray(homeworkSubmission.assignmentId, [...input.assignmentIds]),
+            eq(student.userId, input.viewerUserId),
+            isNull(homeworkSubmission.deletedAt),
+          ),
+        );
+
+      return new Set(rows.map((row) => row.assignmentId));
+    },
     async addFiles(assignmentId, fileIds) {
       if (fileIds.length === 0) return;
 
