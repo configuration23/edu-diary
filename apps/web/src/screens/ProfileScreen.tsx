@@ -1,7 +1,9 @@
 import { useHealth } from '../lib/queries';
 import { CLIENT_VERSION } from '../lib/version';
+import { isSystemAdmin } from '../lib/access';
 import { Badge, formatDateTime } from '../components/ui';
 import { ChangePasswordCard } from '../components/ChangePasswordCard';
+import { SystemStatus, type HealthState } from '../components/SystemStatus';
 import { Page, PageHeader, Section } from '../components/layout';
 import type { SessionResponseDto } from '@edu-diary/contracts';
 
@@ -41,10 +43,27 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
+/** Состояние связи с сервером: загрузка, ответ сервера или недоступность. */
+function healthState(query: ReturnType<typeof useHealth>): HealthState {
+  if (query.isLoading) return { kind: 'loading' };
+  if (query.isError || query.data === undefined) {
+    return { kind: 'unreachable', message: 'сервер не ответил' };
+  }
+
+  return { kind: 'ready', health: query.data };
+}
+
 export function ProfileScreen({ session }: { session: SessionResponseDto }) {
   const health = useHealth();
   const api = health.data;
   const client = CLIENT_VERSION;
+
+  /**
+   * Технические сведения — **только системному администратору** (решение владельца): состояние
+   * сервера, версии и схема базы нужны при разборе сбоя, а не в личной странице преподавателя.
+   * Будущему директору они тоже не нужны и могут только путать.
+   */
+  const showSystemInfo = isSystemAdmin(session);
 
   return (
     <Page width="form">
@@ -107,40 +126,55 @@ export function ProfileScreen({ session }: { session: SessionResponseDto }) {
         </p>
       </Section>
 
-      <Section
-        title="О версии"
-        description="Версия приложения меняется вместе с закрытым этапом роадмапа."
-      >
-        <ul className="grid gap-1 text-sm text-slate-700 sm:grid-cols-2">
-          <li className="flex justify-between gap-3 border-b border-slate-100 py-1">
-            <span>Версия API</span>
-            <span className="font-mono">{api?.version ?? 'недоступна'}</span>
-          </li>
-          <li className="flex justify-between gap-3 border-b border-slate-100 py-1">
-            <span>Версия интерфейса</span>
-            <span className="font-mono">{client}</span>
-          </li>
-          <li className="flex justify-between gap-3 border-b border-slate-100 py-1">
-            <span>Схема БД (миграций)</span>
-            <span className="font-mono">{api?.checks.migrations.applied ?? '—'}</span>
-          </li>
-          <li className="flex justify-between gap-3 border-b border-slate-100 py-1">
-            <span>Запущен</span>
-            <span>{api === undefined ? '—' : formatDateTime(api.startedAt)}</span>
-          </li>
-        </ul>
+      {/*
+        Технические блоки — **только системному администратору**.
 
-        {/*
-          Расхождение версий — частая причина «странного» поведения: браузер держит старую
-          сборку. Поэтому подсказка конкретная, вплоть до сочетания клавиш.
-        */}
-        {api !== undefined && api.version !== client && (
-          <p className="text-sm text-amber-800">
-            Версии API и интерфейса различаются: скорее всего, браузер держит старую сборку —
-            обновите страницу с очисткой кеша (Ctrl+Shift+R).
-          </p>
-        )}
-      </Section>
+        Состояние системы пришло сюда с «Обзора»: владелец справедливо заметил, что «Сервер и база
+        данных доступны» — не обзор заведения. Но и в личной странице преподавателя ему не место:
+        поэтому блок показывается только тому, кто разбирает сбои.
+      */}
+      {showSystemInfo && (
+        <>
+          <Section title="Система">
+            <SystemStatus state={healthState(health)} />
+          </Section>
+
+          <Section
+            title="О версии"
+            description="Версия приложения меняется вместе с закрытым этапом роадмапа."
+          >
+            <ul className="grid gap-1 text-sm text-slate-700 sm:grid-cols-2">
+              <li className="flex justify-between gap-3 border-b border-slate-100 py-1">
+                <span>Версия API</span>
+                <span className="font-mono">{api?.version ?? 'недоступна'}</span>
+              </li>
+              <li className="flex justify-between gap-3 border-b border-slate-100 py-1">
+                <span>Версия интерфейса</span>
+                <span className="font-mono">{client}</span>
+              </li>
+              <li className="flex justify-between gap-3 border-b border-slate-100 py-1">
+                <span>Схема БД (миграций)</span>
+                <span className="font-mono">{api?.checks.migrations.applied ?? '—'}</span>
+              </li>
+              <li className="flex justify-between gap-3 border-b border-slate-100 py-1">
+                <span>Запущен</span>
+                <span>{api === undefined ? '—' : formatDateTime(api.startedAt)}</span>
+              </li>
+            </ul>
+
+            {/*
+              Расхождение версий — частая причина «странного» поведения: браузер держит старую
+              сборку. Поэтому подсказка конкретная, вплоть до сочетания клавиш.
+            */}
+            {api !== undefined && api.version !== client && (
+              <p className="text-sm text-amber-800">
+                Версии API и интерфейса различаются: скорее всего, браузер держит старую сборку —
+                обновите страницу с очисткой кеша (Ctrl+Shift+R).
+              </p>
+            )}
+          </Section>
+        </>
+      )}
     </Page>
   );
 }

@@ -142,11 +142,11 @@ describe('экраны Этапа 2 монтируются', () => {
     expect(html).toContain('Группы и ученики');
   });
 
-  it('обзор: только состояние системы, без данных учётной записи', () => {
+  it('обзор: пустая страница, ни данных учётной записи, ни состояния системы', () => {
     /**
-     * Смена пароля, «Ваш доступ» и «О версии» уехали в **профиль** (Этап 6, решение владельца), а
-     * сама страница остаётся пустой до новостей заведения. Проверяем именно это: на «Обзоре» нет
-     * данных учётной записи, иначе разделение ролей страниц разъехалось бы молча.
+     * Всё содержимое «Обзора» разошлось по местам (Этап 6): данные учётной записи и состояние
+     * системы — в профиль, а страница ждёт новостей заведения. Проверяем обе стороны, иначе
+     * разделение разъедется молча.
      */
     const html = renderWithQueries(
       <DashboardScreen
@@ -169,10 +169,11 @@ describe('экраны Этапа 2 монтируются', () => {
     expect(html).not.toContain('Смена пароля');
     expect(html).not.toContain('Ваш доступ');
     expect(html).not.toContain('Схема БД (миграций)');
+    expect(html).not.toContain('Сервер и база данных');
     expect(html).not.toContain('Что дальше');
   });
 
-  it('профиль: данные учётной записи, смена пароля, права и версия', () => {
+  it('профиль администратора: данные, пароль, права, состояние системы и версия', () => {
     /** Всё, что убрано с «Обзора», должно быть **найдено** в профиле, а не потеряно. */
     const html = renderWithQueries(
       <ProfileScreen
@@ -187,7 +188,7 @@ describe('экраны Этапа 2 монтируются', () => {
             mustChangePassword: false,
             roles: [{ code: 'admin', title: 'Администратор' }],
           },
-          permissions: [{ permission: 'users:read', scope: 'all' }],
+          permissions: [{ permission: 'settings:write', scope: 'all' }],
         }}
       />,
     );
@@ -196,6 +197,36 @@ describe('экраны Этапа 2 монтируются', () => {
     expect(html).toContain('admin@example.ru');
     expect(html).toContain('Смена пароля');
     expect(html).toContain('Ваш доступ');
+    expect(html).toContain('О версии');
     expect(html).toContain('Схема БД (миграций)');
+  });
+
+  it('профиль преподавателя: технических сведений нет', () => {
+    /**
+     * Решение владельца: «О версии» и состояние системы видит **только администратор**. Проверяем
+     * на роли без общесистемных настроек — иначе блоки утекали бы всем, у кого есть профиль.
+     */
+    const html = renderWithQueries(
+      <ProfileScreen
+        session={{
+          user: {
+            id: 'u-2',
+            username: 'prepod',
+            fullName: 'Преподаватель Электронный',
+            email: null,
+            phone: null,
+            isActive: true,
+            mustChangePassword: false,
+            roles: [{ code: 'teacher', title: 'Преподаватель' }],
+          },
+          permissions: [{ permission: 'grades:write', scope: 'assigned' }],
+        }}
+      />,
+    );
+
+    expect(html).toContain('Данные профиля');
+    expect(html).toContain('Смена пароля');
+    expect(html).not.toContain('О версии');
+    expect(html).not.toContain('Сервер и база данных');
   });
 });
