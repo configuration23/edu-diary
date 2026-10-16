@@ -87,6 +87,17 @@ export const PERMISSIONS: readonly PermissionDefinition[] = [
     scopeHint: 'assigned',
   },
   { code: 'homework:review', title: 'Проверка решений', scopeHint: 'assigned' },
+  /**
+   * Новости заведения.
+   *
+   * `news:read` со всей областью выдаётся **всем ролям**: новости видны каждому вошедшему, включая
+   * ученика и законного представителя.
+   *
+   * `news:write` — **администратору**; завожу отдельным правом, а не «по роли администратора»,
+   * чтобы будущая **роль директора** получила публикацию одной строкой, без правок кода.
+   */
+  { code: 'news:read', title: 'Просмотр новостей заведения', scopeHint: 'all' },
+  { code: 'news:write', title: 'Публикация и правка новостей', scopeHint: 'all' },
   { code: 'analytics:read', title: 'Просмотр аналитики', scopeHint: 'assigned' },
   { code: 'analytics:export', title: 'Выгрузки и печать', scopeHint: 'assigned' },
 ];
@@ -149,6 +160,8 @@ export const SYSTEM_ROLES: readonly SystemRoleDefinition[] = [
       { permission: 'homework:read', scope: 'assigned' },
       { permission: 'homework:write', scope: 'assigned' },
       { permission: 'homework:review', scope: 'assigned' },
+      /** Новости заведения видят все вошедшие, поэтому право есть и у преподавателя. */
+      { permission: 'news:read', scope: 'all' },
       { permission: 'analytics:read', scope: 'assigned' },
       { permission: 'analytics:export', scope: 'assigned' },
     ],
@@ -174,6 +187,7 @@ export const SYSTEM_ROLES: readonly SystemRoleDefinition[] = [
       { permission: 'grades:read', scope: 'own' },
       { permission: 'attendance:read', scope: 'own' },
       { permission: 'homework:read', scope: 'own' },
+      { permission: 'news:read', scope: 'all' },
       /**
        * homework:write у ученика — это **отправка решения**, а не постановка задания.
        * Ставить задание вправе только область ssigned (преподаватель своего урока) и
@@ -195,6 +209,7 @@ export const SYSTEM_ROLES: readonly SystemRoleDefinition[] = [
       { permission: 'grades:read', scope: 'own' },
       { permission: 'attendance:read', scope: 'own' },
       { permission: 'homework:read', scope: 'own' },
+      { permission: 'news:read', scope: 'all' },
       { permission: 'analytics:read', scope: 'own' },
     ],
   },

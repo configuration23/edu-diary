@@ -14,6 +14,7 @@ import { createGuardiansRepository } from './modules/iam/iam.guardians.repositor
 import { createUsersRepository } from './modules/iam/iam.users.repository';
 import type { UsersService } from './modules/iam/iam.users.service';
 import { createHomeworkModule } from './modules/homework';
+import { createNewsModule } from './modules/news';
 import { createHomeworkRepository } from './modules/homework/homework.repository';
 import { createAssignmentFileRepository } from './modules/homework/homework.files.repository';
 import { createStorageService } from './modules/storage';
@@ -500,6 +501,23 @@ export async function buildApp({
    * поиск урока (по нему определяются права), уроки группы на дату и предельная
    * длительность задания из настроек.
    */
+  /**
+   * Новости заведения (Этап 6).
+   *
+   * Адаптер хранилища берём **тот же**, что у домашних заданий: картинки лежат там же, где
+   * вложения заданий, и переключаются вместе с ними одной настройкой хранилища.
+   */
+  await app.register(
+    createNewsModule({
+      db,
+      audit,
+      storageAdapter: () => storageService.adapter(),
+      storageLimits: () => storageService.readSettings(),
+    }),
+    /** Префикс обязателен: без него маршруты встанут в корень и не найдутся клиентом. */
+    { prefix: '/api' },
+  );
+
   await app.register(
     createHomeworkModule({
       db,
