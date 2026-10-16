@@ -19,6 +19,7 @@ import { LoginScreen } from './screens/LoginScreen';
 import { LessonJournalScreen } from './screens/LessonJournalScreen';
 import { LessonsScreen } from './screens/LessonsScreen';
 import { GradesAttendanceScreen } from './screens/GradesAttendanceScreen';
+import { MyHomeworkScreen } from './screens/MyHomeworkScreen';
 import { PrivacyScreen } from './screens/PrivacyScreen';
 import { ScheduleScreen } from './screens/ScheduleScreen';
 import { SubstitutionsScreen } from './screens/SubstitutionsScreen';
@@ -205,6 +206,13 @@ const lessonJournalRoute = createRoute({
   component: withSession((session) => <LessonJournalScreen session={session} />),
 });
 
+/** «Мои задания»: ученик и представитель видят задания своих групп. */
+const homeworkRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/homework',
+  component: withSession(() => <MyHomeworkScreen />),
+});
+
 /** «Оценки и посещение»: отчёт за текущий учебный период. */
 const analyticsRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -249,6 +257,7 @@ const routeTree = rootRoute.addChildren([
   scheduleRoute,
   scheduleTemplateRoute,
   substitutionsRoute,
+  homeworkRoute,
   analyticsRoute,
   lessonsRoute,
   lessonJournalRoute,

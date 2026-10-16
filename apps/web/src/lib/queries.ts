@@ -51,6 +51,8 @@ import {
   suggestUsernameResponseSchema,
   userSummarySchema,
   homeworkAssignmentSummarySchema,
+  listHomeworkResponseSchema,
+  submissionStateSchema,
   listSubmissionsResponseSchema,
   storageSettingsSchema,
   storageTestResultSchema,
@@ -1426,6 +1428,50 @@ export function useUploadHomeworkFile() {
       }
 
       return uploadFileResponseSchema.parse(await response.json());
+    },
+  });
+}
+
+/**
+ * Задания ученика на дату: что задано по его группам.
+ *
+ * Набор групп определяет **сервер**: у ученика это его группы, у представителя — группы его
+ * детей. Подставить чужой идентификатор группы в адресе ничего не даёт.
+ */
+export function useMyHomework(input: { studyGroupId?: string; onDate?: string } = {}) {
+  const query = toQueryString(input);
+
+  return useQuery({
+    queryKey: ['my-homework', query],
+    queryFn: () => apiRequest(`/api/homework${query}`, listHomeworkResponseSchema),
+  });
+}
+
+/** Состояние сдачи: сдано ли уже, какой срок, можно ли сдавать. */
+export function useSubmissionState(assignmentId: string | null) {
+  return useQuery({
+    queryKey: ['homework-submission-state', assignmentId ?? ''],
+    enabled: assignmentId !== null,
+    queryFn: () =>
+      apiRequest(`/api/homework/${assignmentId ?? ''}/submission`, submissionStateSchema),
+  });
+}
+
+export function useSubmitHomework() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { assignmentId: string; text: string; fileIds: string[] }) =>
+      apiRequest(
+        '/api/homework/' + input.assignmentId + '/submission',
+        z.object({ id: z.uuid() }),
+        {
+          method: 'POST',
+          body: { text: input.text, fileIds: input.fileIds },
+        },
+      ),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ['homework-submission-state'] });
+      void client.invalidateQueries({ queryKey: ['my-homework'] });
     },
   });
 }

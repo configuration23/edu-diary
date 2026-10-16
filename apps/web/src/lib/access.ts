@@ -109,6 +109,15 @@ export const NAVIGATION: NavigationItem[] = [
     visible: (session) => has(session, 'security:read'),
   },
   {
+    to: '/homework',
+    label: 'Мои задания',
+    /**
+     * Ученику и представителю — задания своих групп, преподавателю — тот же раздел по его
+     * группам. Право `homework:read` есть у всех четырёх ролей, разница только в области.
+     */
+    visible: (session) => has(session, 'homework:read'),
+  },
+  {
     to: '/analytics',
     label: 'Оценки и посещение',
     /**
