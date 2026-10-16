@@ -108,4 +108,50 @@ describeWithDatabase('синхронизация каталога прав', () 
     // Ученику и родителю назначения не выдаются: в каталоге для них их нет.
     expect(codes).toEqual(['admin', 'teacher']);
   });
+
+  it('чтение новостей выдаётся всем ролям, публикация — только администратору', async () => {
+    /**
+     * Дефект, найденный владельцем: у всех, **кроме администратора**, `/api/news` отвечал `403`.
+     *
+     * Причина: право `news:read` я добавил в **наборы** ролей, но не в `grantedOnSync` —
+     * синхронизация выдаёт только права из этого списка, чтобы не перезаписывать ручные правки
+     * администратора. На **чистой** базе роли создаются сразу с полным набором, поэтому обычные
+     * тесты этого не видели: отказ вылез только на уже настроенной установке.
+     *
+     * Здесь это и проверяется: убираем право у всех ролей, как на установке «до обновления», и
+     * синхронизация должна его вернуть.
+     */
+    await database.db.sql.unsafe(`delete from role_permission where permission_code = 'news:read'`);
+
+    const before = await database.db.sql.unsafe(
+      `select count(*)::int as count from role_permission where permission_code = 'news:read'`,
+    );
+    expect((before[0] as { count: number } | undefined)?.count).toBe(0);
+
+    const result = await rolesService().syncCatalog();
+    expect(result.grantsAdded).toBeGreaterThan(0);
+
+    const rows = await database.db.sql.unsafe(
+      `select distinct r.code
+         from role r
+         join role_permission rp on rp.role_id = r.id
+        where rp.permission_code = 'news:read'
+        order by r.code`,
+    );
+
+    const codes = (rows as unknown as Array<{ code: string }>).map((row) => row.code);
+    expect(codes).toEqual(['admin', 'parent', 'student', 'teacher']);
+
+    /** Публикация — право администратора: остальным оно не выдаётся. */
+    const writers = await database.db.sql.unsafe(
+      `select distinct r.code
+         from role r
+         join role_permission rp on rp.role_id = r.id
+        where rp.permission_code = 'news:write'
+        order by r.code`,
+    );
+    expect((writers as unknown as Array<{ code: string }>).map((row) => row.code)).toEqual([
+      'admin',
+    ]);
+  });
 });

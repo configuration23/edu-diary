@@ -175,6 +175,11 @@ export const SYSTEM_ROLES: readonly SystemRoleDefinition[] = [
       { permission: 'schedule:read', scope: 'assigned' },
       { permission: 'lessons:read', scope: 'assigned' },
       { permission: 'lessons:write', scope: 'assigned' },
+      /**
+       * Новости заведения видны всем вошедшим: без выдачи на синхронизации после обновления
+       * преподаватель получил бы 403 на новом разделе.
+       */
+      { permission: 'news:read', scope: 'all' },
     ],
   },
   {
@@ -196,6 +201,12 @@ export const SYSTEM_ROLES: readonly SystemRoleDefinition[] = [
       { permission: 'homework:write', scope: 'own' },
       { permission: 'analytics:read', scope: 'own' },
     ],
+    /**
+     * Новости заведения видны всем вошедшим, поэтому право выдаётся и здесь: без записи в
+     * `grantedOnSync` на **уже настроенной** установке ученик после обновления получил бы `403` на
+     * новом разделе. Именно так и вышло — дефект нашёл владелец.
+     */
+    grantedOnSync: [{ permission: 'news:read', scope: 'all' }],
   },
   {
     code: 'parent',
@@ -212,5 +223,7 @@ export const SYSTEM_ROLES: readonly SystemRoleDefinition[] = [
       { permission: 'news:read', scope: 'all' },
       { permission: 'analytics:read', scope: 'own' },
     ],
+    /** Тот же случай, что у ученика: новости видны всем вошедшим. */
+    grantedOnSync: [{ permission: 'news:read', scope: 'all' }],
   },
 ];

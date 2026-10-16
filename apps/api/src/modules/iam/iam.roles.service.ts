@@ -209,6 +209,18 @@ export function createRolesService(dependencies: RolesServiceDependencies): Role
           const roleId = existing[0]?.id;
           if (roleId === undefined) continue;
 
+          /**
+           * Список «что уже есть» читаем **перед каждой ролью** — и обязательно **после** того, как
+           * в этом же проходе могли создать роль или выдать права.
+           *
+           * Раньше он читался один раз, и роль, **созданную в этом же проходе**, роли ниже видели
+           * устаревшей: их набор прав уже выдан, а в списке его ещё нет. Из-за этого на **чистой**
+           * базе синхронизация пыталась выдать право второй раз и падала на дубликате
+           * (`role_permission_role_id_permission_code_pk`).
+           *
+           * Дефект спал, пока списки `grantedOnSync` у создаваемых ролей были пусты или совпадали с
+           * уже выданным набором. Он проснулся, когда в них появилось новое право.
+           */
           const current = await roles.list();
           const present = new Set(
             (current.find((role) => role.id === roleId)?.permissions ?? []).map(
