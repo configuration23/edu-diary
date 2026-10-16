@@ -218,7 +218,7 @@ const homeworkRoute = createRoute({
 const submittedRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/submitted',
-  component: withSession(() => <SubmittedWorksScreen />),
+  component: withSession((session) => <SubmittedWorksScreen session={session} />),
 });
 
 /** «Оценки и посещение»: отчёт за текущий учебный период. */

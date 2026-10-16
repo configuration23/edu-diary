@@ -75,7 +75,15 @@ export const submissionRowSchema = z.object({
   studentId: uuidSchema,
   studentName: z.string(),
   /** Ответ ученика: `null` — ещё не сдал. */
-  submission: submissionSchema.nullable(),
+  submission: z
+    .object({
+      id: uuidSchema,
+      text: z.string(),
+      submittedAt: z.string(),
+      isLate: z.boolean(),
+      files: z.array(submissionFileSchema),
+    })
+    .nullable(),
 });
 export type SubmissionRowDto = z.infer<typeof submissionRowSchema>;
 

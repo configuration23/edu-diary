@@ -371,7 +371,33 @@ export function createHomeworkModule(dependencies: HomeworkModuleDependencies) {
       const from = query.from ?? today;
       const to = query.to ?? from;
 
-      const targetGroups = query.studyGroupId === undefined ? ownGroupIds : [query.studyGroupId];
+      const scope = staffScopeOf(viewer);
+
+      /**
+       * Какую группу показывать.
+       *
+       * Администратор (`all`) — любую указанную, преподаватель (`assigned`) — тоже указанную:
+       * у него нет «своих» групп в ученическом смысле, он выбирает их из своих назначений, а
+       * работы всё равно ограничены его уроками в сервисе. Раньше здесь стоял фильтр по
+       * ученическим группам, и запрос преподавателя всегда возвращал пусто — **именно поэтому
+       * раздел «Сданные работы» ничего не показывал**.
+       *
+       * Ученику оставляем только его группы: это область `own`.
+       */
+      const requestedGroup = query.studyGroupId;
+      const targetGroups =
+        requestedGroup !== undefined
+          ? scope === 'all' || scope === 'assigned'
+            ? [requestedGroup]
+            : ownGroupIds.filter((id) => id === requestedGroup)
+          : ownGroupIds;
+
+      console.log(
+        'ПРОСЛЕЖИВАНИЕ: запрос',
+        JSON.stringify(query),
+        'группы',
+        JSON.stringify(targetGroups),
+      );
 
       const assignments: AssignmentWithContext[] = [];
       for (const studyGroupId of targetGroups) {
