@@ -21,11 +21,15 @@ export function createLocalStorage(rootPath: string): StorageAdapter {
    *
    * Проверяем **после** нормализации: ключ собирается из UUID, но полагаться на это
    * нельзя — цена ошибки здесь слишком высока (чтение или запись произвольного файла).
+   *
+   * Разделитель не берём из платформы: `resolve` на Windows возвращает `\`, на Linux —
+   * `/`, и проверка, написанная под одну систему, пропускала бы выход из каталога на
+   * другой. Достаточно убедиться, что следующий символ — разделитель в любом виде.
    */
   function pathOf(key: string): string {
     const full = resolve(join(root, key));
 
-    if (full !== root && !full.startsWith(`${root}${separatorOf()}`)) {
+    if (full !== root && !/^[\\/]/.test(full.slice(root.length))) {
       throw new Error(`Ключ объекта вне хранилища: ${key}`);
     }
 
@@ -64,10 +68,6 @@ export function createLocalStorage(rootPath: string): StorageAdapter {
       }
     },
   };
-}
-
-function separatorOf(): string {
-  return process.platform === 'win32' ? '\\' : '/';
 }
 
 function isNotFound(error: unknown): boolean {
