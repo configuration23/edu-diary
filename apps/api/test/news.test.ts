@@ -169,19 +169,49 @@ describeWithDatabase('новости заведения', () => {
     expect(studentEditing.statusCode, studentEditing.body).toBe(403);
   });
 
-  it('новость с истёкшим сроком показа не показывается', async () => {
-    const created = await testApp.app.inject({
+  it('истёкшая новость скрыта, а со сроком сегодня — видна', async () => {
+    /**
+     * Граница срока: новость видна **весь день** `visibleUntil`, включая его, и исчезает на
+     * следующий день. Проверяем **обе стороны** границы: здесь легко промахнуться на день, и
+     * промах в одну сторону не заметен — он выглядит как «нормально работает».
+     *
+     * Даты считаем **от того же «сегодня»**, что и сервер (`toISOString`), а не через локальные
+     * методы даты. В окружении тестов пояс свой: `setDate(-1)` в полночь давал **сегодня**, и
+     * проверка переставала проверять задуманное — так и случилось, `main` падал сам по себе
+     * с полуночи до трёх часов ночи.
+     */
+    const serverToday = new Date().toISOString().slice(0, 10);
+    const shiftFromToday = (days: number): string => {
+      const date = new Date(`${serverToday}T00:00:00.000Z`);
+      date.setUTCDate(date.getUTCDate() + days);
+      return date.toISOString().slice(0, 10);
+    };
+
+    const expired = await testApp.app.inject({
       method: 'POST',
       url: '/api/news',
       headers: auth(adminCookie),
       payload: {
         title: 'Объявление на один день',
-        body: 'Действовало вчера.',
-        publishedOn: shiftDays(-3),
-        visibleUntil: shiftDays(-1),
+        body: 'Действовало до вчерашнего дня.',
+        publishedOn: shiftFromToday(-3),
+        visibleUntil: shiftFromToday(-1),
       },
     });
-    expect(created.statusCode, created.body).toBe(201);
+    expect(expired.statusCode, expired.body).toBe(201);
+
+    const lastDay = await testApp.app.inject({
+      method: 'POST',
+      url: '/api/news',
+      headers: auth(adminCookie),
+      payload: {
+        title: 'Объявление на сегодня',
+        body: 'Действует ровно сегодня.',
+        publishedOn: serverToday,
+        visibleUntil: serverToday,
+      },
+    });
+    expect(lastDay.statusCode, lastDay.body).toBe(201);
 
     const shown = await testApp.app.inject({
       method: 'GET',
@@ -189,7 +219,9 @@ describeWithDatabase('новости заведения', () => {
       headers: auth(adminCookie),
     });
     const titles = (shown.json() as { items: Json[] }).items.map((item) => item.title);
+
     expect(titles).not.toContain('Объявление на один день');
+    expect(titles).toContain('Объявление на сегодня');
   });
 
   it('новость правится и убирается, изменения попадают в аудит', async () => {

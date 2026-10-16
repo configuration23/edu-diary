@@ -25,12 +25,24 @@ function formatDay(iso: string): string {
 function NewsImage({ item }: { item: NewsItemDto }) {
   if (item.imageUrl === null) return null;
 
+  /**
+   * Оформление — как у форм и блоков: скругление, рамка и тень (`rounded-md` + `shadow-sm`, те же
+   * токены, что у `Card` и полей). Просьба владельца: голая картинка выбивалась из интерфейса,
+   * потому что весь остальной экран состоит из таких блоков.
+   *
+   * Ширину не растягиваем: у вертикального снимка при `w-full` выходила огромная плитка и
+   * «подложка» по бокам. `max-h` ограничивает высоту, поэтому длинная новость не уезжает за экран,
+   * а `object-contain` показывает снимок **целиком** — обрезка лица на фотографии с линейки хуже,
+   * чем свободное место.
+   */
   return (
-    <img
-      src={item.imageUrl}
-      alt={item.imageName ?? 'Изображение к новости'}
-      className="max-h-96 w-full rounded-md object-contain"
-    />
+    <div className="overflow-hidden rounded-md border border-slate-200 bg-[var(--color-surface-muted)] shadow-sm">
+      <img
+        src={item.imageUrl}
+        alt={item.imageName ?? 'Изображение к новости'}
+        className="max-h-96 w-full object-contain"
+      />
+    </div>
   );
 }
 

@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, lte, or, sql } from 'drizzle-orm';
+import { and, desc, eq, isNull, or, sql } from 'drizzle-orm';
 
 import type { Database } from '../../shared/db/client';
 import { newsItem } from './news.schema';
@@ -82,8 +82,12 @@ export function createNewsRepository(db: Database): NewsRepository {
         .where(
           and(
             active,
-            lte(newsItem.publishedOn, input.onDate),
-            or(isNull(newsItem.visibleUntil), sql`${newsItem.visibleUntil} >= ${onDate}`),
+            /** Обе стороны — календарные даты: при UTC+3 сравнение моментов путало день. */
+            sql`${newsItem.publishedOn}::date <= ${onDate}::date`,
+            or(
+              isNull(newsItem.visibleUntil),
+              sql`${newsItem.visibleUntil}::date >= ${onDate}::date`,
+            ),
           ),
         )
         .orderBy(desc(newsItem.publishedOn), desc(newsItem.sortOrder))
