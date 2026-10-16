@@ -51,6 +51,7 @@ import {
   suggestUsernameResponseSchema,
   userSummarySchema,
   lessonHomeworkFlagsResponseSchema,
+  listAssignmentSubmissionsResponseSchema,
   lessonHomeworkResponseSchema,
   listHomeworkResponseSchema,
   submissionStateSchema,
@@ -1553,5 +1554,24 @@ export function useHomeworkFlags(lessonIds: string[]) {
     enabled: lessonIds.length > 0,
     queryFn: () =>
       apiRequest(`/api/homework/lesson-flags${query}`, lessonHomeworkFlagsResponseSchema),
+  });
+}
+
+/**
+ * Сданные работы: **таблица класса** по заданиям.
+ *
+ * Учителю нужен не список сдавших, а таблица: напротив каждого ученика его ответ или пометка
+ * «не сдал». Состав группы сервер берёт **на дату урока-срока** — проверяют тех, кто был в
+ * группе тогда.
+ */
+export function useSubmittedWorks(
+  input: { studyGroupId?: string; from?: string; to?: string } = {},
+) {
+  const query = toQueryString(input);
+
+  return useQuery({
+    queryKey: ['submitted-works', query],
+    queryFn: () =>
+      apiRequest(`/api/homework/submissions${query}`, listAssignmentSubmissionsResponseSchema),
   });
 }

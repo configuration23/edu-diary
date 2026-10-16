@@ -149,6 +149,42 @@ export interface HomeworkService {
     viewer: HomeworkViewer;
     lessonIds: readonly string[];
   }): Promise<LessonHomeworkFlag[]>;
+  /**
+   * Сданные работы: **строка на ученика**.
+   *
+   * Учителю нужна таблица класса, а не список сдавших: напротив каждого ученика его ответ или
+   * пометка «не сдал». Так видно, кого ещё ждать, — список сдавших этого не показывает.
+   *
+   * Состав группы берём **на дату урока-срока**: работу проверяют у тех, кто был в группе
+   * тогда, а не у тех, кто в ней сейчас.
+   */
+  listSubmissionsTable(input: {
+    viewer: HomeworkViewer;
+    assignments: readonly AssignmentWithContext[];
+    studentsOfGroup: (
+      studyGroupId: string,
+      onDate: string,
+    ) => Promise<{ studentId: string; studentName: string }[]>;
+  }): Promise<AssignmentSubmissionsTable[]>;
+}
+
+/** Задание и работы по нему: одна карточка на задание. */
+export interface AssignmentSubmissionsTable {
+  assignment: AssignmentWithContext;
+  rows: {
+    studentId: string;
+    studentName: string;
+    /** Ответ ученика: `null` — ещё не сдал. */
+    submission: {
+      id: string;
+      studentId: string;
+      studentName: string;
+      text: string;
+      submittedAt: string;
+      isLate: boolean;
+      files: { id: string; originalName: string; sizeBytes: number; mimeType: string }[];
+    } | null;
+  }[];
 }
 
 export interface HomeworkServiceDependencies {
@@ -517,6 +553,71 @@ export function createHomeworkService(dependencies: HomeworkServiceDependencies)
           .filter((assignment) => assignment.dueLessonId === lessonId)
           .filter((assignment) => submitted.has(assignment.id)).length,
       }));
+    },
+
+    async listSubmissionsTable(input) {
+      /**
+       * Право проверки — по **области**, а не по наличию: у ученика `homework:write` есть, но
+       * с областью `own` (отправка решения), и работы всего класса ему видеть нельзя.
+       */
+      const scope =
+        scopeOf(input.viewer, 'homework:review') ?? scopeOf(input.viewer, 'homework:write');
+      if (scope !== 'assigned' && scope !== 'all') {
+        throw new AppError('FORBIDDEN', 'Недостаточно прав: homework:review');
+      }
+
+      const assignmentIds = input.assignments.map((assignment) => assignment.id);
+      const submissions = await repository.listSubmissionsWithFiles(assignmentIds);
+
+      const tables: AssignmentSubmissionsTable[] = [];
+
+      for (const assignment of input.assignments) {
+        /** Преподавателю — только свои уроки: чужое занятие он не проверяет. */
+        if (scope === 'assigned' && assignment.lessonTeacherUserId !== input.viewer.userId) {
+          continue;
+        }
+
+        /** Состав группы **на дату урока-срока**: проверяем тех, кто был тогда. */
+        const students = await input.studentsOfGroup(
+          assignment.studyGroupId,
+          assignment.dueLessonDate,
+        );
+
+        const own = submissions.filter((item) => item.assignmentId === assignment.id);
+        const byStudent = new Map(own.map((item) => [item.studentId, item]));
+
+        tables.push({
+          assignment,
+          rows: students.map((student) => {
+            const found = byStudent.get(student.studentId);
+
+            return {
+              studentId: student.studentId,
+              studentName: student.studentName,
+              submission:
+                found === undefined
+                  ? null
+                  : {
+                      id: found.id,
+                      studentId: found.studentId,
+                      studentName: found.studentName,
+                      text: found.text,
+                      submittedAt: found.submittedAt.toISOString(),
+                      /** Опоздание — по дате урока-срока: принесли позже — помечаем. */
+                      isLate: toIsoDate(found.submittedAt) > assignment.dueLessonDate,
+                      files: found.files.map((file) => ({
+                        id: file.id,
+                        originalName: file.originalName,
+                        sizeBytes: file.sizeBytes,
+                        mimeType: file.mimeType,
+                      })),
+                    },
+            };
+          }),
+        });
+      }
+
+      return tables;
     },
   };
 }

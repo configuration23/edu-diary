@@ -20,6 +20,12 @@ import {
  * ФИО), используют `leftJoin`: сервис не собирает данные из нескольких вызовов.
  */
 
+/** Минимум для списков: идентификатор и имя. */
+export interface StatisticalStudent {
+  id: string;
+  fullName: string;
+}
+
 export interface StudentRecord {
   id: string;
   userId: string | null;
@@ -130,6 +136,13 @@ export interface Dependencies {
 
 export interface AcademicsRepository {
   listStudents(filters: StudentListFilters): Promise<{ items: StudentRecord[]; total: number }>;
+  /**
+   * Ученики по идентификаторам.
+   *
+   * Нужен там, где состав уже известен (зачисления группы), а имена надо получить: тянуть
+   * весь справочник ради десятка фамилий нельзя — он растёт с каждым учебным годом.
+   */
+  listStudentsByIds(ids: readonly string[]): Promise<StatisticalStudent[]>;
   findStudent(id: string, executor?: Executor): Promise<StudentRecord | null>;
   /** Ученик по учётной записи: у ролей «ученик» и «родитель» известен её идентификатор. */
   findStudentByUserId(userId: string, executor?: Executor): Promise<StudentRecord | null>;
@@ -343,6 +356,15 @@ const EMPTY_DEPENDENCIES: Dependencies = { assignments: 0, enrollments: 0 };
 
 export function createAcademicsRepository(db: Database): AcademicsRepository {
   return {
+    async listStudentsByIds(ids) {
+      if (ids.length === 0) return [];
+
+      return db.orm
+        .select({ id: student.id, fullName: student.fullName })
+        .from(student)
+        .where(inArray(student.id, [...ids]));
+    },
+
     async listStudents(
       filters: StudentListFilters,
     ): Promise<{ items: StudentRecord[]; total: number }> {

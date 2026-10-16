@@ -595,6 +595,36 @@ ull: он сам
         const groups = await scheduleCatalog.groupsOfViewer(viewerUserId);
         return groups.some((group) => group.id === assignment.studyGroupId);
       },
+      /**
+       * Состав группы **на дату**: таблица сданных работ строится по нему.
+       *
+       * Берём состав на дату урока-срока: проверяют тех, кто был в группе тогда, а не тех,
+       * кто в ней сейчас.
+       */
+      async studentsOfGroup(studyGroupId, onDate) {
+        const enrollments = await academicsRepository.listEnrollments(studyGroupId);
+        const active = enrollments.filter(
+          (enrollment) =>
+            enrollment.joinedOn <= onDate &&
+            (enrollment.leftOn === null || enrollment.leftOn >= onDate),
+        );
+
+        const found = await academicsRepository.listStudents({
+          search: undefined,
+          limit: 500,
+          offset: 0,
+        });
+
+        /**
+         * Оставляем только тех, кто был в группе на дату: listStudents даёт весь
+         * справочник, а состав группы задают зачисления.
+         */
+        const activeIds = new Set(active.map((enrollment) => enrollment.studentId));
+
+        return found.items
+          .filter((item) => activeIds.has(item.id))
+          .map((item) => ({ studentId: item.id, studentName: item.fullName }));
+      },
       groupIdsOfViewer: async (userId) => {
         const groups = await scheduleCatalog.groupsOfViewer(userId);
         return groups.map((group) => group.id);

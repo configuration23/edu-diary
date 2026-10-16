@@ -64,3 +64,41 @@ export const listSubmissionsResponseSchema = z.object({
   total: z.number().int().nonnegative(),
 });
 export type ListSubmissionsResponse = z.infer<typeof listSubmissionsResponseSchema>;
+
+/**
+ * Сданные работы: **строка на ученика**.
+ *
+ * Учителю нужен не список сдавших, а **таблица класса**: напротив каждого ученика его ответ
+ * или пометка «не сдал». Так видно, кого ещё ждать, — а список сдавших этого не показывает.
+ */
+export const submissionRowSchema = z.object({
+  studentId: uuidSchema,
+  studentName: z.string(),
+  /** Ответ ученика: `null` — ещё не сдал. */
+  submission: submissionSchema.nullable(),
+});
+export type SubmissionRowDto = z.infer<typeof submissionRowSchema>;
+
+/** Задание и работы по нему: одна карточка на задание. */
+export const assignmentSubmissionsSchema = z.object({
+  assignmentId: uuidSchema,
+  /** Когда задали: «домашняя работа от 8-го». */
+  lessonDate: isoDateSchema,
+  /** Урок-срок: к какому занятию сдать. */
+  dueLessonDate: isoDateSchema,
+  subjectName: z.string(),
+  groupName: z.string(),
+  text: z.string(),
+  rows: z.array(submissionRowSchema),
+  /** Сколько сдали и сколько всего: «сдали 12 из 25» видно сразу. */
+  submittedCount: z.number().int().nonnegative(),
+  studentCount: z.number().int().nonnegative(),
+});
+export type AssignmentSubmissionsDto = z.infer<typeof assignmentSubmissionsSchema>;
+
+export const listAssignmentSubmissionsResponseSchema = z.object({
+  items: z.array(assignmentSubmissionsSchema),
+});
+export type ListAssignmentSubmissionsResponse = z.infer<
+  typeof listAssignmentSubmissionsResponseSchema
+>;

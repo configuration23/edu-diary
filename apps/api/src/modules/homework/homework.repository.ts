@@ -8,6 +8,7 @@ import {
   homeworkAssignmentFile,
   homeworkLink,
   homeworkSubmission,
+  homeworkSubmissionFile,
 } from './homework.schema';
 
 /**
@@ -75,7 +76,22 @@ export interface HomeworkRepository {
    * Так ученик получает свои задания на дату: список уроков дня даёт вызывающая сторона.
    */
   listByDueLessonIds(dueLessonIds: readonly string[]): Promise<AssignmentWithContext[]>;
-  /** Задания, **заданные** на этих уроках: отметка для расписания. */
+  /**
+   * Сдачи по заданиям вместе с файлами: нужны таблице «сданные работы».
+   *
+   * Состав группы приходит отдельно: задания лежат здесь, а ученики — в учебном модуле.
+   */
+  listSubmissionsWithFiles(assignmentIds: readonly string[]): Promise<
+    {
+      id: string;
+      assignmentId: string;
+      studentId: string;
+      studentName: string;
+      text: string;
+      submittedAt: Date;
+      files: { id: string; originalName: string; sizeBytes: number; mimeType: string }[];
+    }[]
+  >; /** Задания, **заданные** на этих уроках: отметка для расписания. */
   listByLessonIdsAssigned(lessonIds: readonly string[]): Promise<AssignmentWithContext[]>;
   /**
    * Какие из этих заданий сдал **сам смотрящий**.
@@ -203,6 +219,58 @@ export function createHomeworkRepository(db: Executor): HomeworkRepository {
       );
     },
 
+    async listSubmissionsWithFiles(assignmentIds) {
+      if (assignmentIds.length === 0) return [];
+
+      const rows = await db
+        .select({
+          id: homeworkSubmission.id,
+          assignmentId: homeworkSubmission.assignmentId,
+          studentId: homeworkSubmission.studentId,
+          studentName: student.fullName,
+          text: homeworkSubmission.text,
+          submittedAt: homeworkSubmission.submittedAt,
+        })
+        .from(homeworkSubmission)
+        .innerJoin(student, eq(student.id, homeworkSubmission.studentId))
+        .where(
+          and(
+            inArray(homeworkSubmission.assignmentId, [...assignmentIds]),
+            isNull(homeworkSubmission.deletedAt),
+          ),
+        );
+
+      const files = await db
+        .select({
+          id: homeworkSubmissionFile.id,
+          submissionId: homeworkSubmissionFile.submissionId,
+          originalName: homeworkSubmissionFile.originalName,
+          sizeBytes: homeworkSubmissionFile.sizeBytes,
+          mimeType: homeworkSubmissionFile.mimeType,
+        })
+        .from(homeworkSubmissionFile)
+        .where(
+          and(
+            inArray(
+              homeworkSubmissionFile.submissionId,
+              rows.map((row) => row.id),
+            ),
+            isNull(homeworkSubmissionFile.deletedAt),
+          ),
+        );
+
+      return rows.map((row) => ({
+        ...row,
+        files: files
+          .filter((file) => file.submissionId === row.id)
+          .map((file) => ({
+            id: file.id,
+            originalName: file.originalName,
+            sizeBytes: file.sizeBytes,
+            mimeType: file.mimeType,
+          })),
+      }));
+    },
     async listByLessonIdsAssigned(lessonIds) {
       if (lessonIds.length === 0) return [];
 

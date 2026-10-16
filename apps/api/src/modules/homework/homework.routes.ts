@@ -6,6 +6,7 @@ import {
   createHomeworkRequestSchema,
   homeworkAssignmentSummarySchema,
   listHomeworkQuerySchema,
+  listAssignmentSubmissionsResponseSchema,
   lessonHomeworkFlagsResponseSchema,
   lessonHomeworkResponseSchema,
   listHomeworkResponseSchema,
@@ -61,6 +62,16 @@ export interface HomeworkModuleDependencies {
   listLessonsForGroup: (studyGroupId: string, from: string, to: string) => Promise<LessonRecord[]>;
   /** Группы ученика и его представителей: ученик видит только их. */
   groupIdsOfViewer: (viewerUserId: string) => Promise<string[]>;
+  /**
+   * Состав группы **на дату**: таблица сданных работ строится по нему.
+   *
+   * Именно на дату урока-срока: проверяют тех, кто был в группе тогда, а не тех, кто в ней
+   * сейчас — иначе состав «поехал» бы после каждого перевода.
+   */
+  studentsOfGroup: (
+    studyGroupId: string,
+    onDate: string,
+  ) => Promise<{ studentId: string; studentName: string }[]>;
   /** Текущий адаптер хранилища: администратор может сменить его без перезапуска. */
   storageAdapter: () => Promise<StorageAdapter>;
   /** Предельный размер файла и белый список типов — из настроек. */
@@ -343,6 +354,62 @@ export function createHomeworkModule(dependencies: HomeworkModuleDependencies) {
       return { id: created.id };
     });
 
+    /**
+     * Сданные работы: **таблица класса** по заданиям.
+     *
+     * Учителю нужна не россыпь сдавших, а таблица: напротив каждого ученика его ответ или
+     * пометка «не сдал». Поэтому отдаём задания вместе с составом группы **на дату урока-срока**
+     * — проверяют тех, кто был тогда, а не тех, кто в группе сейчас.
+     */
+    app.get('/homework/submissions', async (request) => {
+      const query = listHomeworkQuerySchema.parse(request.query);
+      const viewer = viewerOf(request);
+
+      const ownGroupIds = await groupIdsOfViewer(viewer.userId);
+
+      const today = new Date().toISOString().slice(0, 10);
+      const from = query.from ?? today;
+      const to = query.to ?? from;
+
+      const targetGroups = query.studyGroupId === undefined ? ownGroupIds : [query.studyGroupId];
+
+      const assignments: AssignmentWithContext[] = [];
+      for (const studyGroupId of targetGroups) {
+        const lessons = await listLessonsForGroup(studyGroupId, from, to);
+        assignments.push(
+          ...(
+            await service.listDue({
+              viewer,
+              dueLessonIds: lessons.map((lesson) => lesson.id),
+            })
+          ).map((detail) => detail.assignment),
+        );
+      }
+
+      const tables = await service.listSubmissionsTable({
+        viewer,
+        assignments,
+        studentsOfGroup: dependencies.studentsOfGroup,
+      });
+
+      return listAssignmentSubmissionsResponseSchema.parse({
+        items: tables.map((table) => {
+          const submitted = table.rows.filter((row) => row.submission !== null).length;
+
+          return {
+            assignmentId: table.assignment.id,
+            lessonDate: table.assignment.lessonDate,
+            dueLessonDate: table.assignment.dueLessonDate,
+            subjectName: table.assignment.subjectName,
+            groupName: table.assignment.groupName,
+            text: table.assignment.text,
+            rows: table.rows,
+            submittedCount: submitted,
+            studentCount: table.rows.length,
+          };
+        }),
+      });
+    });
     /** Список сдавших: для учителя урока и администратора. */
     app.get('/homework/:assignmentId/submissions', async (request) => {
       const { assignmentId } = request.params as { assignmentId: string };
