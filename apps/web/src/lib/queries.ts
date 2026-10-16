@@ -50,8 +50,11 @@ import {
   subjectSchema,
   suggestUsernameResponseSchema,
   userSummarySchema,
+  homeworkAssignmentSummarySchema,
+  listSubmissionsResponseSchema,
   storageSettingsSchema,
   storageTestResultSchema,
+  uploadFileResponseSchema,
   type LessonDto,
   type SessionResponseDto,
   type SetupStatusResponseDto,
@@ -1350,5 +1353,79 @@ export function useTestStorage() {
         method: 'POST',
         body: input,
       }),
+  });
+}
+
+/**
+ * Домашнее задание урока.
+ *
+ * Задание ставится из журнала урока: учителю удобнее работать там, где он ведёт занятие, а
+ * ученику — видеть задание в своём списке.
+ */
+export function useLessonHomework(lessonId: string | null) {
+  return useQuery({
+    queryKey: ['homework-lesson', lessonId ?? ''],
+    enabled: lessonId !== null,
+    queryFn: () =>
+      apiRequest(
+        `/api/homework/lesson/${lessonId ?? ''}`,
+        z.object({ item: homeworkAssignmentSummarySchema.nullable() }),
+      ),
+  });
+}
+
+export function useCreateHomework() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      lessonId: string;
+      text: string;
+      dueOn?: string | null;
+      visibleUntil?: string | null;
+      links?: { url: string; title?: string | null }[];
+      fileIds?: string[];
+    }) => apiRequest('/api/homework', z.object({ id: z.uuid() }), { method: 'POST', body: input }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ['homework-lesson'] });
+    },
+  });
+}
+
+/** Список сдавших: только проверяющим. */
+export function useHomeworkSubmissions(assignmentId: string | null) {
+  return useQuery({
+    queryKey: ['homework-submissions', assignmentId ?? ''],
+    enabled: assignmentId !== null,
+    queryFn: () =>
+      apiRequest(`/api/homework/${assignmentId ?? ''}/submissions`, listSubmissionsResponseSchema),
+  });
+}
+
+/**
+ * Загрузка вложения.
+ *
+ * Файл загружается **до** сохранения задания: иначе форма ждала бы передачи файла. Имя
+ * поля — `file`, как ждёт сервер.
+ */
+export function useUploadHomeworkFile() {
+  return useMutation({
+    mutationFn: async (input: { file: File; kind: 'assignment' | 'submission' }) => {
+      const body = new FormData();
+      body.append('file', input.file);
+
+      const response = await fetch(
+        input.kind === 'submission' ? '/api/homework/submission-files' : '/api/homework/files',
+        { method: 'POST', body, credentials: 'same-origin' },
+      );
+
+      if (!response.ok) {
+        const parsed = (await response.json().catch(() => null)) as {
+          error?: { message?: string };
+        } | null;
+        throw new Error(parsed?.error?.message ?? 'Не удалось загрузить файл');
+      }
+
+      return uploadFileResponseSchema.parse(await response.json());
+    },
   });
 }

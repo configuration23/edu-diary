@@ -11,6 +11,7 @@ import { useNavigate, useParams } from '@tanstack/react-router';
 import { Fragment, useState } from 'react';
 
 import { useAppearanceSettings } from '../components/AppearanceContext';
+import { HomeworkCard } from '../components/HomeworkCard';
 import { Alert, Badge, Button, Card, EmptyState, Field, TextInput } from '../components/ui';
 import { SubjectDot } from '../lib/appearance';
 import { errorMessage } from '../lib/api-client';
@@ -355,6 +356,17 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
     (grant) => grant.permission === 'grades:write' && grant.scope === 'all',
   );
   const canAttend = session.permissions.some((grant) => grant.permission === 'attendance:write');
+  /**
+   * Право ставить задание — **по области**, а не по наличию.
+   *
+   * У ученика `homework:write` есть, но с областью `own`: это отправка решения, а не
+   * постановка задания. Проверка «право есть» показала бы ученику форму задания.
+   */
+  const canSetHomework = session.permissions.some(
+    (grant) =>
+      grant.permission === 'homework:write' &&
+      (grant.scope === 'assigned' || grant.scope === 'all'),
+  );
   /** Удаление посещаемости: включено ли в интерфейсе (сейчас скрыто, см. константу). */
   const canDeleteAttendance = ATTENDANCE_DELETE_ENABLED && canAttend;
   const reasonList = reasons.data?.items ?? [];
@@ -950,6 +962,12 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
         {saveAttendance.isError && <Alert tone="error">{errorMessage(saveAttendance.error)}</Alert>}
         {reasons.isError && <Alert tone="error">{errorMessage(reasons.error)}</Alert>}
       </Card>
+
+      {/*
+        Домашнее задание: ставится из журнала, а не в отдельном разделе — учителю удобнее
+        работать там, где он ведёт занятие. Ученик увидит то же задание в своём списке.
+      */}
+      <HomeworkCard lessonId={lesson.id} canManage={canSetHomework} today={lesson.lessonDate} />
 
       {/*
         Удалённые отметки: только администратору. Из журнала удалённое исчезает, и
