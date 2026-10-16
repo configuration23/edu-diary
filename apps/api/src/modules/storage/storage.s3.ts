@@ -60,7 +60,36 @@ export function createS3Storage(config: S3StorageConfig): StorageAdapter {
           new GetObjectCommand({ Bucket: config.bucket, Key: key }),
         );
 
-        const body = Buffer.from(await response.Body!.transformToByteArray());
+        /**
+         * Тело ответа читаем **универсально**.
+         *
+         * В разных сборках SDK тело бывает представлено по-разному (поток, байты,
+         * строка), и обращение напрямую к методу вроде `transformToByteArray` делает код
+         * зависимым от версии: локально типы сходятся, в другой среде — нет. Проверяем,
+         * что доступно, и приводим к буферу.
+         */
+        const raw = response.Body as
+          { transformToByteArray?: () => Promise<Uint8Array> } | Uint8Array | string | undefined;
+
+        let body: Buffer;
+        if (raw === undefined) {
+          body = Buffer.alloc(0);
+        } else if (typeof raw === 'string') {
+          body = Buffer.from(raw);
+        } else if (raw instanceof Uint8Array) {
+          body = Buffer.from(raw);
+        } else if (
+          typeof (raw as { transformToByteArray?: unknown }).transformToByteArray === 'function'
+        ) {
+          body = Buffer.from(
+            await (
+              raw as { transformToByteArray: () => Promise<Uint8Array> }
+            ).transformToByteArray(),
+          );
+        } else {
+          body = Buffer.alloc(0);
+        }
+
         return { key, body, mimeType: response.ContentType ?? 'application/octet-stream' };
       } catch (error) {
         if (isMissing(error)) return null;

@@ -12,3 +12,4 @@ export * from './students';
 export * from './users';
 export * from './appearance';
 export * from './journal';
+export * from './homework';
