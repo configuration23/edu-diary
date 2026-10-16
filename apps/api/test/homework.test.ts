@@ -7,11 +7,11 @@ import { createLessonContext, factories, injectClient } from './helpers/factorie
 const describeWithDatabase = describe.skipIf(!hasTestDatabase);
 
 /**
- * Домашние задания: публикация, права и видимость.
+ * Домашние задания: постановка, права и видимость.
  *
- * Проверяем то, что ломается незаметно: учитель не ставит задание в чужой урок, ученик не
- * видит чужие задания, «продолжительное» задание видно в уроках предмета до своей даты, но
- * **не раньше**, чем его задали.
+ * Модель **без дат**: у задания есть **урок-срок** — до какого занятия оно задано. Ученик
+ * видит задание в уроке-сроке и во всех промежуточных уроках, поэтому «долгая домашка и
+ * короткая рядом» не мешают друг другу: у каждой свой срок.
  */
 
 interface Json {
@@ -36,6 +36,11 @@ describeWithDatabase('домашние задания', () => {
   let studentCookie: string;
   let lessonId: string;
   let groupId: string;
+  let lessonDate: string;
+  let dueLessonId: string;
+  let dueLessonDate: string;
+
+  const auth = (cookie: string) => ({ cookie });
 
   beforeAll(async () => {
     database = await createTestDatabase();
@@ -58,31 +63,43 @@ describeWithDatabase('домашние задания', () => {
       yearStartsOn: shiftDays(-200),
       yearEndsOn: shiftDays(200),
       withStudent: true,
-      lessonDate: shiftDays(-1),
+      lessonDate: shiftDays(-7),
     });
-
-    const studentAccount = created.student;
 
     lessonId = created.lesson?.id ?? '';
     groupId = created.group.id;
+    lessonDate = shiftDays(-7);
     teacherCookie = created.teacher.cookie;
 
-    studentCookie = await (async () => {
-      const response = await testApp.app.inject({
-        method: 'POST',
-        url: '/api/auth/login',
-        /**
-         * Логин берём у фабрики: она добавляет к метке прогона допустимый суффикс, и
-         * выдуманный логин здесь уже один раз сломал тест.
-         */
-        payload: {
-          username: studentAccount?.username ?? '',
-          password: studentAccount?.password ?? '',
-        },
-      });
-      const cookie = response.cookies.find((item) => item.name === 'edu_diary_session');
-      return cookie === undefined ? '' : `${cookie.name}=${cookie.value}`;
-    })();
+    const login = await testApp.app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: {
+        username: created.student?.username ?? '',
+        password: created.student?.password ?? '',
+      },
+    });
+    const cookie = login.cookies.find((item) => item.name === 'edu_diary_session');
+    studentCookie = cookie === undefined ? '' : `${cookie.name}=${cookie.value}`;
+
+    /** Второй урок того же предмета: он станет уроком-сроком. */
+    const second = await testApp.app.inject({
+      method: 'POST',
+      url: '/api/lessons',
+      headers: auth(adminCookie),
+      payload: {
+        studyGroupId: groupId,
+        subjectId: created.subject.id,
+        teacherUserId: created.teacher.id,
+        lessonDate: shiftDays(-1),
+        pairNumber: 1,
+        timeStart: '08:30',
+        timeEnd: '10:00',
+      },
+    });
+    expect(second.statusCode, second.body).toBe(201);
+    dueLessonId = (second.json() as Json).id as string;
+    dueLessonDate = shiftDays(-1);
   });
 
   afterAll(async () => {
@@ -90,42 +107,86 @@ describeWithDatabase('домашние задания', () => {
     await database.dispose();
   });
 
-  const auth = (cookie: string) => ({ cookie });
-
-  it('учитель ставит задание в свой урок; оно видно в журнале урока', async () => {
+  it('учитель даёт список ближайших уроков для выбора срока', async () => {
     const response = await testApp.app.inject({
-      method: 'POST',
-      url: '/api/homework',
-      headers: auth(teacherCookie),
-      payload: { lessonId, text: 'Прочитать главу 3 и ответить на вопросы', dueOn: shiftDays(3) },
-    });
-
-    expect(response.statusCode, response.body).toBe(201);
-
-    const journal = await testApp.app.inject({
       method: 'GET',
       url: `/api/homework/lesson/${lessonId}`,
       headers: auth(teacherCookie),
     });
 
-    expect(journal.statusCode, journal.body).toBe(200);
-    const item = (journal.json() as { item: Json }).item;
-    expect(item?.text).toContain('главу 3');
-    // Учителю сразу видно, сколько учеников должны сдать.
-    expect(item?.studentCount).toBe(1);
-    expect(item?.submittedCount).toBe(0);
+    expect(response.statusCode, response.body).toBe(200);
+    const body = response.json() as { dueOptions: Json[] };
+
+    /**
+     * Список **вместо полей с датами**: датами оперировать неудобно, и учитель указывает
+     * совсем другие числа. В списке — уроки того же предмета и группы после текущего.
+     */
+    expect(body.dueOptions.length).toBeGreaterThanOrEqual(1);
+    expect(body.dueOptions[0]?.lessonDate).toBe(dueLessonDate);
   });
 
-  it('второе задание на тот же урок не принимается', async () => {
+  it('учитель ставит задание; оно видно в своём уроке и в уроке-сроке', async () => {
     const response = await testApp.app.inject({
       method: 'POST',
       url: '/api/homework',
       headers: auth(teacherCookie),
-      payload: { lessonId, text: 'Ещё одно задание' },
+      payload: {
+        lessonId,
+        dueLessonId,
+        text: 'Прочитать главу 3 и ответить на вопросы',
+      },
     });
 
-    // Два задания на урок запутали бы и учителя, и ученика.
-    expect(response.statusCode, response.body).toBe(409);
+    expect(response.statusCode, response.body).toBe(201);
+
+    /** Учитель видит задание **в своём уроке**: «когда задал». */
+    const own = await testApp.app.inject({
+      method: 'GET',
+      url: `/api/homework/lesson/${lessonId}`,
+      headers: auth(teacherCookie),
+    });
+    const ownBody = own.json() as { assignedHere: Json[]; dueHere: Json[] };
+    expect(ownBody.assignedHere).toHaveLength(1);
+    expect(ownBody.assignedHere[0]?.text).toContain('главу 3');
+    // Учителю сразу видно, сколько учеников должны сдать.
+    expect(ownBody.assignedHere[0]?.studentCount).toBe(1);
+
+    /** И **в уроке-сроке**: это то, что он проверяет на занятии сдачи. */
+    const due = await testApp.app.inject({
+      method: 'GET',
+      url: `/api/homework/lesson/${dueLessonId}`,
+      headers: auth(teacherCookie),
+    });
+    const dueBody = due.json() as { assignedHere: Json[]; dueHere: Json[] };
+    expect(dueBody.dueHere).toHaveLength(1);
+    /** Учитель должен понимать, что это задание **из прошлого** урока. */
+    expect(dueBody.dueHere[0]?.lessonDate).toBe(lessonDate);
+    // А задано на нём ничего не было.
+    expect(dueBody.assignedHere).toHaveLength(0);
+  });
+
+  it('на один урок можно задать несколько работ: они не затирают друг друга', async () => {
+    /**
+     * Долгий проект и короткая задача к тому же занятию — **разные задания** с разными
+     * сдачами. Раньше их запрещала уникальность «один урок — одно задание», и это мешало
+     * реальной работе.
+     */
+    const project = await testApp.app.inject({
+      method: 'POST',
+      url: '/api/homework',
+      headers: auth(teacherCookie),
+      payload: { lessonId, text: 'Подготовить доклад к занятию', dueLessonId },
+    });
+
+    expect(project.statusCode, project.body).toBe(201);
+
+    const own = await testApp.app.inject({
+      method: 'GET',
+      url: `/api/homework/lesson/${lessonId}`,
+      headers: auth(teacherCookie),
+    });
+    const body = own.json() as { assignedHere: Json[] };
+    expect(body.assignedHere).toHaveLength(2);
   });
 
   it('пустое задание не принимается', async () => {
@@ -136,25 +197,13 @@ describeWithDatabase('домашние задания', () => {
       payload: { lessonId, text: '   ' },
     });
 
-    // Проверка порядка: сначала отказ по пустоте, а не по занятому уроку.
-    expect([400, 409]).toContain(response.statusCode);
-  });
-
-  it('срок раньше даты урока отклоняется', async () => {
-    const response = await testApp.app.inject({
-      method: 'POST',
-      url: '/api/homework',
-      headers: auth(teacherCookie),
-      payload: { lessonId, text: 'Сдать вчера', dueOn: shiftDays(-5) },
-    });
-
     expect(response.statusCode, response.body).toBe(400);
   });
 
   it('ученик видит задание своей группы и не может его поставить', async () => {
     const list = await testApp.app.inject({
       method: 'GET',
-      url: `/api/homework?studyGroupId=${groupId}&onDate=${shiftDays(-1)}`,
+      url: `/api/homework?from=${dueLessonDate}&to=${dueLessonDate}`,
       headers: auth(studentCookie),
     });
 
@@ -162,7 +211,10 @@ describeWithDatabase('домашние задания', () => {
     const items = (list.json() as { items: Json[] }).items;
     expect(items.length).toBeGreaterThanOrEqual(1);
 
-    // Ученик не ставит задания: права `homework:write` у него нет.
+    /**
+     * Ученик решение **отправляет** (`homework:write` с областью `own`), но задание не
+     * ставит: для постановки нужна область `assigned`.
+     */
     const attempt = await testApp.app.inject({
       method: 'POST',
       url: '/api/homework',
@@ -170,20 +222,10 @@ describeWithDatabase('домашние задания', () => {
       payload: { lessonId, text: 'Я тоже хочу задать задание' },
     });
 
-    /**
-     * Ученик решение **отправляет** (homework:write с областью own), но задание не
-     * ставит: для постановки нужна область ssigned. Проверка «право есть» пропустила
-     * бы его, и он упёрся бы в 404 по чужому уроку вместо честного отказа.
-     */
     expect(attempt.statusCode, attempt.body).toBe(403);
   });
 
-  it('чужой урок: задание не ставится и не видно, ответ не отличается от «не найдено»', async () => {
-    /**
-     * Преподаватель без назначения на эту группу: он не должен ни видеть задание, ни
-     * узнать, что оно существует. Ответ — `404`, а не `403`: разница выдавала бы чужие
-     * задания.
-     */
+  it('чужой урок: задание не ставится, ответ не отличается от «не найдено»', async () => {
     const stranger = await testApp.app.inject({
       method: 'POST',
       url: '/api/users',
@@ -218,21 +260,78 @@ describeWithDatabase('домашние задания', () => {
       method: 'POST',
       url: '/api/homework',
       headers: auth(strangerCookie),
-      payload: { lessonId: '00000000-0000-7000-8000-000000000000', text: 'Нет такого урока' },
+      payload: {
+        lessonId: '00000000-0000-7000-8000-000000000000',
+        text: 'Нет такого урока',
+      },
     });
     expect(missing.statusCode).toBe(404);
   });
 
-  it('продолжительное задание не длиннее предела и видно только до своей даты', async () => {
-    const tooLong = await testApp.app.inject({
+  it('без выбора срока подставляется следующий урок по расписанию', async () => {
+    const created = await createLessonContext(factories(injectClient(testApp.app), adminCookie), {
+      run: 'СЛЕД',
+      yearStartsOn: shiftDays(-200),
+      yearEndsOn: shiftDays(200),
+      lessonDate: shiftDays(-7),
+    });
+
+    const second = await testApp.app.inject({
+      method: 'POST',
+      url: '/api/lessons',
+      headers: auth(adminCookie),
+      payload: {
+        studyGroupId: created.group.id,
+        subjectId: created.subject.id,
+        teacherUserId: created.teacher.id,
+        lessonDate: shiftDays(-1),
+        pairNumber: 2,
+        timeStart: '10:10',
+        timeEnd: '11:40',
+      },
+    });
+    expect(second.statusCode, second.body).toBe(201);
+    const nextId = (second.json() as Json).id as string;
+
+    const assignment = await testApp.app.inject({
+      method: 'POST',
+      url: '/api/homework',
+      headers: auth(created.teacher.cookie),
+      payload: { lessonId: created.lesson?.id ?? '', text: 'Задание без выбора срока' },
+    });
+    expect(assignment.statusCode, assignment.body).toBe(201);
+
+    const lesson = await testApp.app.inject({
+      method: 'GET',
+      url: `/api/homework/lesson/${created.lesson?.id ?? ''}`,
+      headers: auth(created.teacher.cookie),
+    });
+    const body = lesson.json() as { assignedHere: Json[] };
+
+    /** Срок — **следующий урок** того же предмета: домашка задаётся на следующий раз. */
+    expect(body.assignedHere[0]?.dueLessonId).toBe(nextId);
+  });
+
+  it('срок должен быть уроком того же предмета и группы', async () => {
+    const other = await createLessonContext(factories(injectClient(testApp.app), adminCookie), {
+      run: 'ЧУЖОЙ',
+      yearStartsOn: shiftDays(-200),
+      yearEndsOn: shiftDays(200),
+      lessonDate: shiftDays(-1),
+    });
+
+    const response = await testApp.app.inject({
       method: 'POST',
       url: '/api/homework',
       headers: auth(teacherCookie),
-      payload: { lessonId, text: 'Долгое задание', visibleUntil: shiftDays(60) },
+      payload: {
+        lessonId,
+        dueLessonId: other.lesson?.id ?? '',
+        text: 'Задание с чужим сроком',
+      },
     });
 
-    // Предел задаётся настройкой, а не константой: без него задание растянется на год.
-    expect(tooLong.statusCode, tooLong.body).toBe(400);
-    expect(tooLong.body).toContain('не дольше');
+    // Срок из другой группы или другого предмета — отказ: домашка не может «сдаваться» там.
+    expect(response.statusCode, response.body).toBe(400);
   });
 });

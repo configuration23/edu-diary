@@ -134,63 +134,31 @@ export function checkFile(input: {
   return { allowed: true, reason: null };
 }
 
-/** Привести настройку размера к допустимому диапазону. */
+/**
+ * Привести настройку размера файла к допустимому диапазону.
+ *
+ * Диапазон 1–50 МБ задан владельцем, значение по умолчанию — 10 МБ. Приводим на сервере:
+ * настройку можно изменить, и в неё попадёт заведомо неверное число.
+ */
 export function normalizeMaxFileMb(value: number): number {
   if (!Number.isFinite(value)) return DEFAULT_FILE_MB;
   return Math.min(MAX_FILE_MB, Math.max(MIN_FILE_MB, Math.round(value)));
 }
 
 /**
- * Видно ли задание в этом уроке.
- *
- * Задание принадлежит своему уроку, а «продолжительное» (с `visibleUntil`) видно ещё и в
- * других уроках того же предмета до указанной даты. Сравниваем **даты**, а не время:
- * «видно до 20-го» значит «видно и 20-го».
- */
-export function isAssignmentVisible(input: {
-  assignmentLessonId: string;
-  assignmentLessonDate: string;
-  visibleUntil: string | null;
-  lessonId: string;
-  lessonDate: string;
-}): boolean {
-  if (input.assignmentLessonId === input.lessonId) return true;
-  if (input.visibleUntil === null) return false;
-
-  return input.lessonDate >= input.assignmentLessonDate && input.lessonDate <= input.visibleUntil;
-}
-
-/**
  * Опоздала ли сдача.
  *
- * Сдавать после срока **можно** (решение владельца): не наказываем за задержку, но
- * показываем факт. Сравниваем по календарным датам — сданное в день срока опозданием не
+ * Сдавать после урока-срока **можно** (решение владельца): не наказываем за задержку, но
+ * показываем факт. Сравниваем по календарным датам: сданное в день срока опозданием не
  * считается.
  */
-export function isLateSubmission(input: { dueOn: string | null; submittedOn: string }): boolean {
-  if (input.dueOn === null) return false;
-  return input.submittedOn > input.dueOn;
-}
-
-/**
- * Предельная дата для продолжительного задания.
- *
- * Ограничение задаётся настройкой (`homework.max_duration_days`): без него задание легко
- * растянуть на весь год, и оно будет висеть в каждом уроке.
- */
-export function maxVisibleUntil(lessonDate: string, maxDays: number): string {
-  const date = new Date(`${lessonDate}T00:00:00Z`);
-  date.setUTCDate(date.getUTCDate() + Math.max(0, Math.round(maxDays)));
-  return date.toISOString().slice(0, 10);
-}
-
-/** Укладывается ли «видно до» в разрешённую длительность. */
-export function fitsDuration(input: {
-  lessonDate: string;
-  visibleUntil: string;
-  maxDays: number;
+export function isLateSubmission(input: {
+  /** Дата урока-срока, к которому задано. */
+  dueLessonDate: string;
+  /** Дата сдачи. */
+  submittedOn: string;
 }): boolean {
-  return input.visibleUntil <= maxVisibleUntil(input.lessonDate, input.maxDays);
+  return input.submittedOn > input.dueLessonDate;
 }
 
 /** Дата без времени: из отметки времени берём календарный день. */

@@ -967,7 +967,7 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
         Домашнее задание: ставится из журнала, а не в отдельном разделе — учителю удобнее
         работать там, где он ведёт занятие. Ученик увидит то же задание в своём списке.
       */}
-      <HomeworkCard lessonId={lesson.id} canManage={canSetHomework} today={lesson.lessonDate} />
+      <HomeworkCard lessonId={lesson.id} canManage={canSetHomework} />
 
       {/*
         Удалённые отметки: только администратору. Из журнала удалённое исчезает, и

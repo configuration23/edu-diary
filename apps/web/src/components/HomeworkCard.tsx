@@ -8,16 +8,20 @@ import {
   useUploadHomeworkFile,
 } from '../lib/queries';
 import { Alert, Badge, Button, Card, EmptyState, Field, TextInput } from './ui';
+import type { HomeworkAssignmentSummaryDto } from '@edu-diary/contracts';
 
 /**
  * Домашнее задание урока.
  *
- * Задание ставится **здесь, в журнале**: учителю удобнее работать там, где он ведёт занятие,
- * а не переключаться в отдельный раздел. Ученик увидит то же задание в своём списке.
+ * Дат в форме **нет**: датами оперировать неудобно, и учитель указывает совсем другие числа.
+ * Вместо них — **список ближайших уроков** того же предмета и группы: учитель выбирает
+ * занятие, до которого задаёт. По умолчанию подставляется следующий урок.
  *
- * Файлы загружаются **до** сохранения задания: иначе форма ждала бы передачи файла, а при
- * большом вложении это заметно. Загруженный файл ещё ни к чему не привязан — его «забирает»
- * сохранение задания.
+ * Блок показывает **две группы**:
+ * - «Задано на этом уроке» — то, что учитель задал здесь и может править;
+ * - «Сдать к этому уроку» — то, что нужно проверить сегодня, включая заданное раньше. Так
+ *   учитель видит, что домашка из прошлого урока ждёт проверки, и может задать новую, не
+ *   затирая прошлую.
  */
 
 interface UploadedFile {
@@ -29,24 +33,23 @@ interface UploadedFile {
 export function HomeworkCard({
   lessonId,
   canManage,
-  today,
 }: {
   lessonId: string;
   /** Право ставить задание: у ученика его нет, он увидит карточку только для чтения. */
   canManage: boolean;
-  /** Дата урока: срок раньше неё сервер отклонит. */
-  today: string;
 }) {
   const homework = useLessonHomework(lessonId);
   const create = useCreateHomework();
   const upload = useUploadHomeworkFile();
 
-  const assignment = homework.data?.item ?? null;
-  const submissions = useHomeworkSubmissions(assignment?.id ?? null);
+  const assignedHere = homework.data?.assignedHere ?? [];
+  const dueHere = homework.data?.dueHere ?? [];
+  const dueOptions = homework.data?.dueOptions ?? [];
+
+  const submissions = useHomeworkSubmissions(assignedHere[0]?.id ?? null);
 
   const [text, setText] = useState('');
-  const [dueOn, setDueOn] = useState('');
-  const [visibleUntil, setVisibleUntil] = useState('');
+  const [dueLessonId, setDueLessonId] = useState('');
   const [link, setLink] = useState('');
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -56,15 +59,58 @@ export function HomeworkCard({
       ? `${String(Math.max(1, Math.round(bytes / 1024)))} КБ`
       : `${(bytes / 1024 / 1024).toFixed(1)} МБ`;
 
+  /** Задания, заданные **на других** уроках, но ожидаемые к этому: их пора проверять. */
+  const fromEarlierLessons = dueHere.filter(
+    (assignment) => !assignedHere.some((own) => own.id === assignment.id),
+  );
+
   return (
     <Card
       title="Домашнее задание"
       description="Задание увидят ученики группы. Оценку за работу вы ставите сами — сдача оценку не проставляет."
     >
-      {assignment === null ? (
-        canManage ? (
+      <div className="flex flex-col gap-4">
+        {/*
+          Домашка из прошлого урока: плашка, а не полная форма. Учитель должен понимать, что
+          на этом занятии её пора проверять, и не путать со своим заданием.
+        */}
+        {fromEarlierLessons.length > 0 && (
+          <div className="flex flex-col gap-2 rounded-md border border-amber-300 bg-amber-50 p-3">
+            <p className="text-sm font-medium text-amber-900">
+              К этому уроку задано раньше — проверьте:
+            </p>
+            {fromEarlierLessons.map((assignment) => (
+              <div key={assignment.id} className="text-sm">
+                <span className="text-slate-600">от {assignment.lessonDate}: </span>
+                <span>{assignment.text}</span>
+                {assignment.files.length > 0 && (
+                  <span className="text-slate-600"> · файлов: {assignment.files.length}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {assignedHere.length > 0 && (
+          <div className="flex flex-col gap-3">
+            <p className="text-sm font-medium text-slate-700">Задано на этом уроке</p>
+            {assignedHere.map((assignment) => (
+              <AssignmentBlock
+                key={assignment.id}
+                assignment={assignment}
+                canManage={canManage}
+                formatSize={formatSize}
+                submissions={
+                  assignment.id === assignedHere[0]?.id ? submissions.data?.items : undefined
+                }
+              />
+            ))}
+          </div>
+        )}
+
+        {canManage && (
           <form
-            className="flex flex-col gap-3"
+            className="flex flex-col gap-3 border-t border-slate-200 pt-3"
             onSubmit={async (event) => {
               event.preventDefault();
               setError(null);
@@ -72,15 +118,13 @@ export function HomeworkCard({
               try {
                 await create.mutateAsync({
                   lessonId,
+                  dueLessonId: dueLessonId === '' ? null : dueLessonId,
                   text,
-                  dueOn: dueOn === '' ? null : dueOn,
-                  visibleUntil: visibleUntil === '' ? null : visibleUntil,
                   links: link.trim() === '' ? [] : [{ url: link.trim() }],
                   fileIds: files.map((file) => file.id),
                 });
                 setText('');
-                setDueOn('');
-                setVisibleUntil('');
+                setDueLessonId('');
                 setLink('');
                 setFiles([]);
               } catch (caught) {
@@ -97,38 +141,31 @@ export function HomeworkCard({
               />
             </Field>
 
-            <div className="flex flex-wrap gap-4">
-              <Field label="Сдать до">
-                <TextInput
-                  type="date"
-                  value={dueOn}
-                  min={today}
-                  onChange={(event) => setDueOn(event.target.value)}
-                />
-                <span className="text-xs text-slate-500">
-                  Можно оставить пустым: тогда срок не задан.
-                </span>
-              </Field>
-
-              <Field label="Видно в уроках до">
-                <TextInput
-                  type="date"
-                  value={visibleUntil}
-                  min={today}
-                  onChange={(event) => setVisibleUntil(event.target.value)}
-                />
-                <span className="text-xs text-slate-500">
-                  Продолжительное задание: одно и то же видно в уроках предмета до этой даты, а
-                  сдаётся один раз. Пусто — видно только в этом уроке.
-                </span>
-              </Field>
-            </div>
+            <Field label="К какому уроку">
+              <select
+                className="w-full max-w-md rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+                value={dueLessonId}
+                onChange={(event) => setDueLessonId(event.target.value)}
+              >
+                {/* Пустое значение — «следующий урок»: правило по умолчанию. */}
+                <option value="">Следующий урок (по расписанию)</option>
+                {dueOptions.map((option) => (
+                  <option key={option.lessonId} value={option.lessonId}>
+                    {option.lessonDate} · {option.pairNumber}-я пара
+                  </option>
+                ))}
+              </select>
+              <span className="text-xs text-slate-500">
+                Ученик увидит задание в этом уроке и во всех промежуточных: можно принести раньше.
+                Если следующего урока нет — задание останется на текущем.
+              </span>
+            </Field>
 
             <Field label="Ссылка">
               <TextInput
                 value={link}
                 onChange={(event) => setLink(event.target.value)}
-                placeholder="https://…"
+                placeholder="адрес ссылки"
               />
             </Field>
 
@@ -165,7 +202,9 @@ export function HomeworkCard({
                     <button
                       type="button"
                       className="text-xs text-red-700 underline"
-                      onClick={() => setFiles((current) => current.filter((f) => f.id !== file.id))}
+                      onClick={() =>
+                        setFiles((current) => current.filter((item) => item.id !== file.id))
+                      }
                     >
                       убрать
                     </button>
@@ -180,92 +219,116 @@ export function HomeworkCard({
               </Button>
             </div>
 
+            <span className="text-xs text-slate-500">
+              К одному уроку можно задать несколько работ: новая не затирает прошлую.
+            </span>
+
             {error !== null && <Alert tone="error">{error}</Alert>}
           </form>
-        ) : (
+        )}
+
+        {!canManage && assignedHere.length === 0 && fromEarlierLessons.length === 0 && (
           <EmptyState>К этому уроку задание не задано.</EmptyState>
-        )
-      ) : (
-        <div className="flex flex-col gap-3">
-          <p className="whitespace-pre-wrap text-sm">{assignment.text}</p>
+        )}
+      </div>
+    </Card>
+  );
+}
 
-          <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
-            {assignment.dueOn !== null && <span>Сдать до {assignment.dueOn}</span>}
-            {assignment.visibleUntil !== null && (
-              <span>Видно в уроках до {assignment.visibleUntil}</span>
-            )}
-            <Badge tone={assignment.submittedCount === 0 ? 'neutral' : 'success'}>
-              сдали {assignment.submittedCount} из {assignment.studentCount}
-            </Badge>
-          </div>
+function AssignmentBlock({
+  assignment,
+  canManage,
+  formatSize,
+  submissions,
+}: {
+  assignment: HomeworkAssignmentSummaryDto;
+  canManage: boolean;
+  formatSize: (bytes: number) => string;
+  submissions:
+    | { studentName: string; isLate: boolean; files: { id: string; originalName: string }[] }[]
+    | undefined;
+}) {
+  return (
+    <div className="flex flex-col gap-2 rounded-md border border-slate-200 p-3">
+      <p className="whitespace-pre-wrap text-sm">{assignment.text}</p>
 
-          {assignment.links.length > 0 && (
-            <ul className="flex flex-col gap-1 text-sm">
-              {assignment.links.map((item) => (
-                <li key={item.id}>
-                  <a
-                    className="text-blue-700 underline"
-                    href={item.url}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                  >
-                    {item.title ?? item.url}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          )}
+      <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
+        {/*
+          Две даты: когда задали и к какому уроку. Учителю важно видеть обе — задание могло
+          быть задано раньше, а проверять его нужно сейчас.
+        */}
+        <span>задано {assignment.lessonDate}</span>
+        <span>сдать к {assignment.dueLessonDate}</span>
+        <Badge tone={assignment.submittedCount === 0 ? 'neutral' : 'success'}>
+          сдали {assignment.submittedCount} из {assignment.studentCount}
+        </Badge>
+      </div>
 
-          {assignment.files.length > 0 && (
-            <ul className="flex flex-col gap-1 text-sm">
-              {assignment.files.map((file) => (
-                <li key={file.id}>
-                  <a
-                    className="text-blue-700 underline"
-                    href={`/api/homework/files/${file.id}`}
-                    download
-                  >
-                    {file.originalName}
-                  </a>{' '}
-                  <span className="text-slate-500">{formatSize(file.sizeBytes)}</span>
-                </li>
-              ))}
-            </ul>
-          )}
+      {assignment.links.length > 0 && (
+        <ul className="flex flex-col gap-1 text-sm">
+          {assignment.links.map((item) => (
+            <li key={item.id}>
+              <a
+                className="text-blue-700 underline"
+                href={item.url}
+                target="_blank"
+                rel="noreferrer noopener"
+              >
+                {item.title ?? item.url}
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
 
-          {canManage && (
-            <div>
-              <p className="text-sm font-medium text-slate-700">Сдавшие</p>
-              {submissions.data === undefined || submissions.data.items.length === 0 ? (
-                <EmptyState>Пока никто не сдал.</EmptyState>
-              ) : (
-                <ul className="mt-1 flex flex-col gap-1 text-sm">
-                  {submissions.data.items.map((submission) => (
-                    <li key={submission.id} className="flex flex-wrap items-center gap-2">
-                      <span>{submission.studentName}</span>
-                      {submission.isLate ? (
-                        <Badge tone="danger">сдано позже срока</Badge>
-                      ) : (
-                        <Badge tone="success">в срок</Badge>
-                      )}
-                      {submission.files.map((file) => (
-                        <a
-                          key={file.id}
-                          className="text-blue-700 underline"
-                          href={`/api/homework/files/${file.id}`}
-                          download
-                        >
-                          {file.originalName}
-                        </a>
-                      ))}
-                    </li>
+      {assignment.files.length > 0 && (
+        <ul className="flex flex-col gap-1 text-sm">
+          {assignment.files.map((file) => (
+            <li key={file.id}>
+              <a
+                className="text-blue-700 underline"
+                href={`/api/homework/files/${file.id}`}
+                download
+              >
+                {file.originalName}
+              </a>{' '}
+              <span className="text-slate-500">{formatSize(file.sizeBytes)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {canManage && (
+        <div>
+          <p className="text-sm font-medium text-slate-700">Сдавшие</p>
+          {submissions === undefined || submissions.length === 0 ? (
+            <EmptyState>Пока никто не сдал.</EmptyState>
+          ) : (
+            <ul className="mt-1 flex flex-col gap-1 text-sm">
+              {submissions.map((submission) => (
+                <li key={submission.studentName} className="flex flex-wrap items-center gap-2">
+                  <span>{submission.studentName}</span>
+                  {submission.isLate ? (
+                    <Badge tone="danger">сдано позже срока</Badge>
+                  ) : (
+                    <Badge tone="success">в срок</Badge>
+                  )}
+                  {submission.files.map((file) => (
+                    <a
+                      key={file.id}
+                      className="text-blue-700 underline"
+                      href={`/api/homework/files/${file.id}`}
+                      download
+                    >
+                      {file.originalName}
+                    </a>
                   ))}
-                </ul>
-              )}
-            </div>
+                </li>
+              ))}
+            </ul>
           )}
         </div>
       )}
-    </Card>
+    </div>
   );
 }

@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, isNull, or, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 
 import type { Executor } from '../../shared/db/client';
 import { studyGroup, subject } from '../academics';
@@ -13,19 +13,22 @@ import {
 /**
  * Доступ к данным домашних заданий.
  *
- * SQL живёт только здесь (`ARCHITECTURE.md` §3). Задание всегда читается вместе с уроком:
- * группа, предмет и преподаватель нужны и для прав, и для показа, и брать их отдельными
- * запросами значило бы плодить запросы на каждый экран.
+ * Модель: у задания есть **урок-срок** (`dueLessonId`) — до какого занятия оно задано. Дат
+ * нет: учитель выбирает урок из ближайших, а по умолчанию подставляется следующий урок того
+ * же предмета и группы. Ученик видит задание в уроке-сроке и во всех промежуточных уроках,
+ * поэтому «долгая домашка и короткая рядом» не мешают друг другу — у каждой свой срок.
  */
 
 export interface AssignmentWithContext {
   id: string;
+  /** Урок, на котором задание задано: «домашняя работа от 8-го». */
   lessonId: string;
-  text: string;
-  dueOn: string | null;
-  visibleUntil: string | null;
-  createdAt: Date;
   lessonDate: string;
+  /** Урок-срок: до какого занятия задано. */
+  dueLessonId: string;
+  dueLessonDate: string;
+  text: string;
+  createdAt: Date;
   lessonTeacherUserId: string | null;
   studyGroupId: string;
   groupName: string;
@@ -36,7 +39,6 @@ export interface AssignmentWithContext {
 
 export interface AssignmentFileRecord {
   id: string;
-  /** Пусто у файла, загруженного до сохранения задания. */
   assignmentId: string | null;
   storageKey: string;
   originalName: string;
@@ -56,31 +58,23 @@ export interface AssignmentLinkRecord {
 export interface HomeworkRepository {
   createAssignment(input: {
     lessonId: string;
+    dueLessonId: string;
     text: string;
-    dueOn: string | null;
-    visibleUntil: string | null;
     createdBy: string;
   }): Promise<{ id: string }>;
-  updateAssignment(
-    id: string,
-    input: { text?: string; dueOn?: string | null; visibleUntil?: string | null },
-  ): Promise<void>;
+  updateAssignment(id: string, input: { text?: string; dueLessonId?: string }): Promise<void>;
   softDeleteAssignment(id: string, actorUserId: string): Promise<void>;
   findAssignment(id: string): Promise<AssignmentWithContext | null>;
-  /** Задание урока: показывается в журнале. */
-  findByLessonId(lessonId: string): Promise<AssignmentWithContext | null>;
+  /** Задания, **заданные** на этом уроке: блок для учителя. */
+  listByLessonId(lessonId: string): Promise<AssignmentWithContext[]>;
+  /** Задания, **сдать которые** нужно к этому уроку: то, что видит ученик. */
+  listByDueLessonId(dueLessonId: string): Promise<AssignmentWithContext[]>;
   /**
-   * Задания группы, которые могут быть видны.
+   * Задания, срок которых — один из этих уроков.
    *
-   * Отбор кандидатов: задания уроков этой группы, дата урока **не позже** проверяемой даты,
-   * и либо задание этого урока, либо «продолжительное» с `visible_until` не раньше неё.
-   * Точную проверку видимости делает домен — правило остаётся в одном месте.
+   * Так ученик получает свои задания на дату: список уроков дня даёт вызывающая сторона.
    */
-  listCandidates(input: {
-    studyGroupId: string;
-    lessonIds: readonly string[];
-    onDate: string;
-  }): Promise<AssignmentWithContext[]>;
+  listByDueLessonIds(dueLessonIds: readonly string[]): Promise<AssignmentWithContext[]>;
   addFiles(assignmentId: string, fileIds: readonly string[]): Promise<void>;
   listFiles(assignmentIds: readonly string[]): Promise<AssignmentFileRecord[]>;
   replaceLinks(
@@ -88,16 +82,6 @@ export interface HomeworkRepository {
     links: readonly { url: string; title: string | null }[],
   ): Promise<void>;
   listLinks(assignmentIds: readonly string[]): Promise<AssignmentLinkRecord[]>;
-  /**
-   * Файлы, которые ещё ни к чему не привязаны **и загружены этим же человеком**.
-   *
-   * Проверка загрузчика обязательна: иначе, зная чужой идентификатор, можно было бы
-   * привязать к своему заданию чужой файл.
-   */
-  findUnattachedFiles(input: {
-    fileIds: readonly string[];
-    uploadedBy: string;
-  }): Promise<{ id: string }[]>;
   countStudents(studyGroupId: string, onDate: string): Promise<number>;
   countSubmissions(assignmentIds: readonly string[]): Promise<Map<string, number>>;
   /** Ведёт ли этот преподаватель урок: по нему проверяется право на файл задания. */
@@ -108,11 +92,14 @@ export function createHomeworkRepository(db: Executor): HomeworkRepository {
   const selection = {
     id: homeworkAssignment.id,
     lessonId: homeworkAssignment.lessonId,
-    text: homeworkAssignment.text,
-    dueOn: homeworkAssignment.dueOn,
-    visibleUntil: homeworkAssignment.visibleUntil,
-    createdAt: homeworkAssignment.createdAt,
     lessonDate: lessonTable.lessonDate,
+    dueLessonId: homeworkAssignment.dueLessonId,
+    /** Дата урока-срока: по ней ученик видит, «до какого числа» сдать. */
+    dueLessonDate: sql<string>`(
+      select due.lesson_date from lesson as due where due.id = ${homeworkAssignment.dueLessonId}
+    )`,
+    text: homeworkAssignment.text,
+    createdAt: homeworkAssignment.createdAt,
     lessonTeacherUserId: lessonTable.teacherUserId,
     studyGroupId: lessonTable.studyGroupId,
     groupName: studyGroup.name,
@@ -135,9 +122,8 @@ export function createHomeworkRepository(db: Executor): HomeworkRepository {
         .insert(homeworkAssignment)
         .values({
           lessonId: input.lessonId,
+          dueLessonId: input.dueLessonId,
           text: input.text,
-          dueOn: input.dueOn,
-          visibleUntil: input.visibleUntil,
           createdBy: input.createdBy,
         })
         .returning({ id: homeworkAssignment.id });
@@ -150,8 +136,7 @@ export function createHomeworkRepository(db: Executor): HomeworkRepository {
         .update(homeworkAssignment)
         .set({
           ...(input.text === undefined ? {} : { text: input.text }),
-          ...(input.dueOn === undefined ? {} : { dueOn: input.dueOn }),
-          ...(input.visibleUntil === undefined ? {} : { visibleUntil: input.visibleUntil }),
+          ...(input.dueLessonId === undefined ? {} : { dueLessonId: input.dueLessonId }),
           updatedAt: new Date(),
         })
         .where(eq(homeworkAssignment.id, id));
@@ -172,31 +157,25 @@ export function createHomeworkRepository(db: Executor): HomeworkRepository {
       return rows[0] ?? null;
     },
 
-    async findByLessonId(lessonId) {
-      const rows = await base()
-        .where(and(eq(homeworkAssignment.lessonId, lessonId), isNull(homeworkAssignment.deletedAt)))
-        .limit(1);
-
-      return rows[0] ?? null;
+    async listByLessonId(lessonId) {
+      return base().where(
+        and(eq(homeworkAssignment.lessonId, lessonId), isNull(homeworkAssignment.deletedAt)),
+      );
     },
 
-    async listCandidates(input) {
-      if (input.lessonIds.length === 0) return [];
+    async listByDueLessonId(dueLessonId) {
+      return base().where(
+        and(eq(homeworkAssignment.dueLessonId, dueLessonId), isNull(homeworkAssignment.deletedAt)),
+      );
+    },
+
+    async listByDueLessonIds(dueLessonIds) {
+      if (dueLessonIds.length === 0) return [];
 
       return base().where(
         and(
-          eq(lessonTable.studyGroupId, input.studyGroupId),
+          inArray(homeworkAssignment.dueLessonId, [...dueLessonIds]),
           isNull(homeworkAssignment.deletedAt),
-          sql`${lessonTable.lessonDate} <= ${input.onDate}`,
-          /**
-           * Кандидат — задание одного из уроков **или** «продолжительное» задание,
-           * видимое на эту дату. Собираем через `inArray`/`gte`, без склейки SQL: значения
-           * приходят из запроса клиента.
-           */
-          or(
-            inArray(homeworkAssignment.lessonId, [...input.lessonIds]),
-            gte(homeworkAssignment.visibleUntil, input.onDate),
-          ),
         ),
       );
     },
@@ -245,21 +224,6 @@ export function createHomeworkRepository(db: Executor): HomeworkRepository {
       );
     },
 
-    async findUnattachedFiles(input) {
-      if (input.fileIds.length === 0) return [];
-
-      return db
-        .select({ id: homeworkAssignmentFile.id })
-        .from(homeworkAssignmentFile)
-        .where(
-          and(
-            inArray(homeworkAssignmentFile.id, [...input.fileIds]),
-            eq(homeworkAssignmentFile.uploadedBy, input.uploadedBy),
-            isNull(homeworkAssignmentFile.deletedAt),
-          ),
-        );
-    },
-
     async countStudents(studyGroupId, onDate) {
       /** Только параметризованный запрос: значения приходят из запроса клиента. */
       const rows = await db.execute(sql`
@@ -305,6 +269,3 @@ export function createHomeworkRepository(db: Executor): HomeworkRepository {
     },
   };
 }
-
-/** Порядок вывода: свежие задания первыми. */
-export const HOMEWORK_ORDER = desc(homeworkAssignment.createdAt);

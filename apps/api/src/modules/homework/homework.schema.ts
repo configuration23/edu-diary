@@ -1,14 +1,5 @@
 import { sql } from 'drizzle-orm';
-import {
-  check,
-  index,
-  integer,
-  pgTable,
-  text,
-  timestamp,
-  uniqueIndex,
-  uuid,
-} from 'drizzle-orm/pg-core';
+import { check, index, integer, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 import { uuidv7 } from '../../shared/ids';
 import { appUser } from '../iam';
@@ -45,20 +36,18 @@ export const homeworkAssignment = pgTable(
     /** Текст задания: обязателен либо он, либо хотя бы одно вложение. */
     text: text('text').notNull(),
     /**
-     * Срок сдачи. `null` — без срока: задание просто видно в уроке.
+     * Урок, **до которого** задано: «на следующий урок», «через два урока».
      *
-     * Срок — **календарная дата**, а не момент времени: «сдать до 20-го» понятнее, чем
-     * «до 20-го 23:59:59», и часовой пояс перестаёт влиять на опоздание.
-     */
-    dueOn: text('due_on'),
-    /**
-     * До какого числа задание видно в уроках предмета («продолжительное задание»).
+     * Датами оперировать неудобно, и они порождают ошибки: учитель указывает совсем другие
+     * числа. Поэтому срок — это **урок**, выбранный из списка ближайших занятий того же
+     * предмета и группы. По умолчанию подставляется следующий урок по расписанию.
      *
-     * `null` — видно только в своём уроке. Значение ограничено настройкой
-     * `homework.max_duration_days`: без предела задание легко растянуть на весь год, и
-     * оно будет висеть в каждом уроке.
+     * Так же решается случай «долгая домашка и короткая рядом»: у каждой свой урок-срок, и
+     * они не затирают друг друга.
      */
-    visibleUntil: text('visible_until'),
+    dueLessonId: uuid('due_lesson_id')
+      .notNull()
+      .references(() => lesson.id, { onDelete: 'cascade' }),
     createdBy: uuid('created_by').references(() => appUser.id, { onDelete: 'set null' }),
     /** Мягкое удаление: задание скрывается, но история и сдачи остаются. */
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
@@ -68,15 +57,13 @@ export const homeworkAssignment = pgTable(
   },
   (table) => [
     index('homework_assignment_lesson_idx').on(table.lessonId),
+    /** Задания ищем по уроку-сроку: это и есть «что сдать к этому занятию». */
+    index('homework_assignment_due_lesson_idx').on(table.dueLessonId),
     /**
-     * Уникальность «один урок — одно задание»: два задания на один урок запутали бы и
-     * учителя, и ученика. Второе задание ставится на другой урок.
+     * Уникальности «один урок — одно задание» здесь **нет намеренно**: на один урок может
+     * быть задано несколько работ — долгий проект и задача к следующему занятию. Это разные
+     * задания с разными сдачами, и затирать их друг другом нельзя.
      */
-    uniqueIndex('homework_assignment_lesson_key')
-      .on(table.lessonId)
-      .where(sql`${table.deletedAt} is null`),
-    /** Продолжительное задание ищем по дате видимости. */
-    index('homework_assignment_visible_until_idx').on(table.visibleUntil),
     check('homework_assignment_text_or_files', sql`length(btrim(${table.text})) > 0`),
   ],
 );

@@ -34,7 +34,6 @@ import {
   createSettingsModule,
   createSettingsRepository,
   createSettingsService,
-  SETTING_KEYS,
 } from './modules/settings';
 import {
   buildStaffingService,
@@ -530,10 +529,6 @@ ull: он сам
           offset: 0,
         });
         return result.items;
-      },
-      async maxDurationDays() {
-        const value = await settings.get<number>(SETTING_KEYS.homeworkMaxDurationDays);
-        return value ?? 14;
       },
       /** Группы ученика и его представителей: ученик видит задания только своих групп. */
       /**

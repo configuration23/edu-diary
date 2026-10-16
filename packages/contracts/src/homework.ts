@@ -5,12 +5,13 @@ import { isoDateSchema, uuidSchema } from './common';
 /**
  * Домашние задания (Этап 5).
  *
- * Задание привязано к **уроку**: учитель ставит его в журнале, там же видит, кто сдал.
- * «Продолжительное» задание не размножается: это одно задание, видимое во всех уроках
- * предмета до `visibleUntil`, и сдаётся оно один раз (решение владельца).
+ * Модель **без дат**: у задания есть **урок-срок** — до какого занятия оно задано. Учитель
+ * выбирает его из ближайших уроков того же предмета и группы, а по умолчанию подставляется
+ * следующий урок по расписанию. Датами оперировать неудобно, и они порождают ошибки: учитель
+ * указывает совсем другие числа.
  *
- * Вложение описывается **ссылкой на файл**, а не содержимым: файлы лежат в хранилище и
- * выдаются отдельным маршрутом с проверкой прав.
+ * Ученик видит задание **в уроке-сроке и во всех промежуточных уроках**, поэтому «долгая
+ * домашка и короткая рядом» не мешают друг другу — у каждой свой срок.
  */
 
 /** Вложение: то, что видно в задании или в решении. */
@@ -39,29 +40,30 @@ export const homeworkLinkSchema = z.object({
 });
 export type HomeworkLinkDto = z.infer<typeof homeworkLinkSchema>;
 
-/** Задание целиком: текст, срок, вложения и ссылки. */
+/**
+ * Задание целиком.
+ *
+ * Две даты, и обе нужны: `lessonDate` — **когда задали** (учитель видит «домашняя работа от
+ * 8-го»), `dueLessonDate` — **когда сдавать** (ученик видит «сдать до 15-го»).
+ */
 export const homeworkAssignmentSchema = z.object({
   id: uuidSchema,
   lessonId: uuidSchema,
+  /** Дата урока, на котором задание задано. */
+  lessonDate: isoDateSchema,
+  /** Урок-срок: до какого занятия задано. */
+  dueLessonId: uuidSchema,
+  /** Дата урока-срока: то, «до какого числа» сдать. */
+  dueLessonDate: isoDateSchema,
   text: z.string(),
-  /** Срок сдачи; `null` — без срока. */
-  dueOn: isoDateSchema.nullable(),
-  /** До какого числа задание видно в уроках предмета; `null` — только в своём уроке. */
-  visibleUntil: isoDateSchema.nullable(),
   files: z.array(attachmentSchema),
   links: z.array(homeworkLinkSchema),
   createdAt: z.string(),
 });
 export type HomeworkAssignmentDto = z.infer<typeof homeworkAssignmentSchema>;
 
-/**
- * Задание с уроком и сведениями о сдаче — то, что видно в журнале урока.
- *
- * `submittedCount` и `studentCount` нужны учителю сразу: «сдали 12 из 25» понятнее, чем
- * список из двадцати пяти человек.
- */
+/** Задание со сведениями о группе и сдаче — то, что видно в списках. */
 export const homeworkAssignmentSummarySchema = homeworkAssignmentSchema.extend({
-  lessonDate: isoDateSchema,
   groupName: z.string(),
   subjectName: z.string(),
   submittedCount: z.number().int().nonnegative(),
@@ -69,17 +71,14 @@ export const homeworkAssignmentSummarySchema = homeworkAssignmentSchema.extend({
 });
 export type HomeworkAssignmentSummaryDto = z.infer<typeof homeworkAssignmentSummarySchema>;
 
-/** Вложение в запросе: файл уже загружен и получил идентификатор. */
-export const attachmentInputSchema = z.object({
-  /** Идентификатор загруженного файла: загрузка и привязка разделены. */
-  fileId: uuidSchema,
-});
-
 export const createHomeworkRequestSchema = z.object({
   lessonId: uuidSchema,
+  /**
+   * Урок-срок. Не задан — сервер подставит **следующий урок** того же предмета и группы; если
+   * следующего нет, сроком станет сам урок.
+   */
+  dueLessonId: uuidSchema.nullish(),
   text: z.string().trim().max(4000).default(''),
-  dueOn: isoDateSchema.nullish(),
-  visibleUntil: isoDateSchema.nullish(),
   links: z
     .array(
       z.object({
@@ -96,8 +95,7 @@ export type CreateHomeworkRequest = z.infer<typeof createHomeworkRequestSchema>;
 
 export const updateHomeworkRequestSchema = z.object({
   text: z.string().trim().max(4000).optional(),
-  dueOn: isoDateSchema.nullish(),
-  visibleUntil: isoDateSchema.nullish(),
+  dueLessonId: uuidSchema.optional(),
   links: z
     .array(
       z.object({
@@ -112,13 +110,12 @@ export const updateHomeworkRequestSchema = z.object({
 export type UpdateHomeworkRequest = z.infer<typeof updateHomeworkRequestSchema>;
 
 export const listHomeworkQuerySchema = z.object({
-  /** Задания одного урока. */
-  lessonId: uuidSchema.optional(),
   /** Задания группы: нужны разделу со списком. */
   studyGroupId: uuidSchema.optional(),
-  /** Только те, что видны на дату: так ученик получает свои задания. */
-  onDate: isoDateSchema.optional(),
-  limit: z.coerce.number().int().min(1).max(200).default(50),
+  /** Задания, сдать которые нужно **в эти даты включительно**. */
+  from: isoDateSchema.optional(),
+  to: isoDateSchema.optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(100),
 });
 export type ListHomeworkQuery = z.infer<typeof listHomeworkQuerySchema>;
 
@@ -128,12 +125,7 @@ export const listHomeworkResponseSchema = z.object({
 });
 export type ListHomeworkResponse = z.infer<typeof listHomeworkResponseSchema>;
 
-/**
- * Ответ на загрузку файла.
- *
- * Идентификатор вложения отдаётся сразу: файл загружается до сохранения задания, иначе
- * пришлось бы держать форму открытой во время передачи большого файла.
- */
+/** Ответ на загрузку файла. */
 export const uploadFileResponseSchema = z.object({
   id: uuidSchema,
   originalName: z.string().min(1),
@@ -141,3 +133,24 @@ export const uploadFileResponseSchema = z.object({
   mimeType: z.string().min(1),
 });
 export type UploadFileResponse = z.infer<typeof uploadFileResponseSchema>;
+
+/** Ближайшие уроки: из них учитель выбирает срок вместо ввода даты. */
+export const dueLessonOptionSchema = z.object({
+  lessonId: uuidSchema,
+  lessonDate: isoDateSchema,
+  pairNumber: z.number().int(),
+});
+export type DueLessonOptionDto = z.infer<typeof dueLessonOptionSchema>;
+
+export const dueLessonOptionsResponseSchema = z.object({
+  items: z.array(dueLessonOptionSchema),
+});
+export type DueLessonOptionsResponse = z.infer<typeof dueLessonOptionsResponseSchema>;
+
+/** Что видно в уроке: заданное здесь и то, что сдать к этому уроку. */
+export const lessonHomeworkResponseSchema = z.object({
+  assignedHere: z.array(homeworkAssignmentSummarySchema),
+  dueHere: z.array(homeworkAssignmentSummarySchema),
+  dueOptions: z.array(dueLessonOptionSchema),
+});
+export type LessonHomeworkResponse = z.infer<typeof lessonHomeworkResponseSchema>;

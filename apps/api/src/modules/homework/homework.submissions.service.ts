@@ -45,7 +45,8 @@ export interface SubmissionService {
   findOwn(input: {
     assignmentId: string;
     studentId: string;
-    dueOn: string | null;
+    /** Дата урока-срока: по ней считается опоздание. */
+    dueLessonDate: string;
   }): Promise<SubmissionView | null>;
   /** Список сдавших для учителя: в нём же видно опоздавших. */
   list(input: { assignment: AssignmentWithContext }): Promise<SubmissionView[]>;
@@ -63,7 +64,7 @@ export function createSubmissionService(dependencies: {
 }): SubmissionService {
   const { repository } = dependencies;
 
-  const viewOf = (record: SubmissionRecord, dueOn: string | null): SubmissionView => ({
+  const viewOf = (record: SubmissionRecord, dueLessonDate: string): SubmissionView => ({
     id: record.id,
     assignmentId: record.assignmentId,
     studentId: record.studentId,
@@ -74,7 +75,11 @@ export function createSubmissionService(dependencies: {
      * Опоздание сравниваем **по календарным датам**: сданное в день срока опозданием не
      * считается, и часовой пояс на это не влияет.
      */
-    isLate: dueOn !== null && toIsoDate(record.submittedAt) > dueOn,
+    /**
+     * Опоздание — по **дате урока-срока**: задание к занятию 15-го, принесли 16-го —
+     * опоздал. Принимаем, но помечаем (решение владельца).
+     */
+    isLate: toIsoDate(record.submittedAt) > dueLessonDate,
     files: record.files.map((file) => ({
       id: file.id,
       originalName: file.originalName,
@@ -90,12 +95,12 @@ export function createSubmissionService(dependencies: {
         input.studentId,
       );
 
-      return found === null ? null : viewOf(found, input.dueOn);
+      return found === null ? null : viewOf(found, input.dueLessonDate);
     },
 
     async list(input) {
       const records = await repository.listByAssignment(input.assignment.id);
-      return records.map((record) => viewOf(record, input.assignment.dueOn));
+      return records.map((record) => viewOf(record, input.assignment.dueLessonDate));
     },
 
     async submit(input) {

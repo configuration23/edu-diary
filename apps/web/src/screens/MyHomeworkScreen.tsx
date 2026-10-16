@@ -27,7 +27,11 @@ function todayIso(): string {
 
 export function MyHomeworkScreen() {
   const [date, setDate] = useState(todayIso());
-  const homework = useMyHomework({ onDate: date });
+  /**
+   * Ищем по **урокам-срокам**: задание привязано к занятию, и «что сдать в этот день» —
+   * это «какие уроки сегодня и что к ним задано».
+   */
+  const homework = useMyHomework({ from: date, to: date });
 
   const items = homework.data?.items ?? [];
 
@@ -90,13 +94,17 @@ function HomeworkItem({ assignment }: { assignment: HomeworkAssignmentSummaryDto
       <div className="flex flex-col gap-3">
         <p className="whitespace-pre-wrap text-sm">{assignment.text}</p>
 
-        {assignment.dueOn !== null && (
-          <p className="text-sm text-slate-600">
-            Сдать до {assignment.dueOn}
-            {/* Сдавать после срока можно: не наказываем за задержку, но показываем факт. */}
-            {own === null && assignment.dueOn < todayIso() && ' — срок прошёл, сдать можно'}
-          </p>
-        )}
+        {/*
+          Обе даты нужны ученику: к какому уроку сдать и когда задали. Вторая помогает
+          понять, «свежее» это задание или висит давно.
+        */}
+        <p className="text-sm text-slate-600">
+          Сдать к уроку {assignment.dueLessonDate}
+          {/* Сдавать после срока можно: не наказываем за задержку, но показываем факт. */}
+          {own === null && assignment.dueLessonDate < todayIso() && ' — срок прошёл, сдать можно'}
+          {' · задано '}
+          {assignment.lessonDate}
+        </p>
 
         {assignment.links.length > 0 && (
           <ul className="flex flex-col gap-1 text-sm">

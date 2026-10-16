@@ -90,12 +90,15 @@ describeWithDatabase('сдача решения', () => {
     const cookie = login.cookies.find((item) => item.name === 'edu_diary_session');
     studentCookie = cookie === undefined ? '' : `${cookie.name}=${cookie.value}`;
 
-    // Срок уже прошёл: это и позволяет проверить пометку опоздания.
+    /**
+     * Срок — следующий урок после задания. Создаём его отдельно, чтобы урок-срок был
+     * **в прошлом**: это и позволяет проверить пометку опоздания.
+     */
     const assignment = await testApp.app.inject({
       method: 'POST',
       url: '/api/homework',
       headers: auth(teacherCookie),
-      payload: { lessonId, text: 'Прочитать главу 3', dueOn: shiftDays(-1) },
+      payload: { lessonId, text: 'Прочитать главу 3' },
     });
     expect(assignment.statusCode, assignment.body).toBe(201);
     assignmentId = (assignment.json() as Json).id as string;
@@ -118,7 +121,11 @@ describeWithDatabase('сдача решения', () => {
     expect(body.canSubmit).toBe(true);
     expect(body.own).toBeNull();
     // Срок отдаётся ученику: без него непонятно, «сдать до» — это когда.
-    expect(body.dueOn).toBe(shiftDays(-1));
+    /**
+     * Урок-срок отдаётся ученику: без него непонятно, «до какого занятия» сдать. По
+     * умолчанию это следующий урок предмета, поэтому проверяем, что дата вообще есть.
+     */
+    expect(typeof body.dueLessonDate).toBe('string');
   });
 
   it('пустое решение не принимается', async () => {

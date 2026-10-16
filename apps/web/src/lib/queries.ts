@@ -50,7 +50,7 @@ import {
   subjectSchema,
   suggestUsernameResponseSchema,
   userSummarySchema,
-  homeworkAssignmentSummarySchema,
+  lessonHomeworkResponseSchema,
   listHomeworkResponseSchema,
   submissionStateSchema,
   listSubmissionsResponseSchema,
@@ -1369,10 +1369,7 @@ export function useLessonHomework(lessonId: string | null) {
     queryKey: ['homework-lesson', lessonId ?? ''],
     enabled: lessonId !== null,
     queryFn: () =>
-      apiRequest(
-        `/api/homework/lesson/${lessonId ?? ''}`,
-        z.object({ item: homeworkAssignmentSummarySchema.nullable() }),
-      ),
+      apiRequest(`/api/homework/lesson/${lessonId ?? ''}`, lessonHomeworkResponseSchema),
   });
 }
 
@@ -1382,8 +1379,7 @@ export function useCreateHomework() {
     mutationFn: (input: {
       lessonId: string;
       text: string;
-      dueOn?: string | null;
-      visibleUntil?: string | null;
+      dueLessonId?: string | null;
       links?: { url: string; title?: string | null }[];
       fileIds?: string[];
     }) => apiRequest('/api/homework', z.object({ id: z.uuid() }), { method: 'POST', body: input }),
@@ -1438,7 +1434,7 @@ export function useUploadHomeworkFile() {
  * Набор групп определяет **сервер**: у ученика это его группы, у представителя — группы его
  * детей. Подставить чужой идентификатор группы в адресе ничего не даёт.
  */
-export function useMyHomework(input: { studyGroupId?: string; onDate?: string } = {}) {
+export function useMyHomework(input: { studyGroupId?: string; from?: string; to?: string } = {}) {
   const query = toQueryString(input);
 
   return useQuery({

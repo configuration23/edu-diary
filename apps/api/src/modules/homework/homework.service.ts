@@ -1,9 +1,4 @@
-import {
-  fitsDuration,
-  isAssignmentVisible,
-  maxVisibleUntil,
-  type AccessScope,
-} from '@edu-diary/domain';
+import { toIsoDate, type AccessScope } from '@edu-diary/domain';
 
 import { AppError } from '../../shared/errors';
 import type { LessonRecord } from '../schedule';
@@ -12,10 +7,14 @@ import type { AssignmentWithContext, HomeworkRepository } from './homework.repos
 /**
  * Домашние задания: права и правила.
  *
- * Права проверяются **здесь**, а не в маршрутах: правило «чужой урок — не твоё дело» должно
- * действовать одинаково и в списке, и в правке, и в удалении. Ответ на чужой объект —
- * `404`, а не `403`: разница между «нет» и «нельзя» рассказывала бы о существовании чужих
- * заданий (то же решение, что в журнале).
+ * Модель: у задания есть **урок-срок** — до какого занятия оно задано. Дат нет: учитель
+ * выбирает урок из ближайших занятий того же предмета и группы, а по умолчанию подставляется
+ * **следующий урок** по расписанию. Так «долгая домашка и короткая рядом» не мешают друг
+ * другу: у каждой свой срок, и они не затирают одна другую.
+ *
+ * Права проверяются здесь, а не в маршрутах: правило «чужой урок — не твоё дело» должно
+ * действовать одинаково и в списке, и в правке, и в удалении. Ответ на чужой объект — `404`,
+ * а не `403`: разница между «нет» и «нельзя» рассказывала бы о существовании чужих заданий.
  */
 
 export interface HomeworkViewer {
@@ -23,13 +22,43 @@ export interface HomeworkViewer {
   permissions: ReadonlyMap<string, AccessScope>;
 }
 
+/** Файл и ссылка: то, что показывается вместе с заданием. */
+export interface HomeworkAttachment {
+  id: string;
+  originalName: string;
+  sizeBytes: number;
+  mimeType: string;
+  isDeleted: boolean;
+}
+
+export interface HomeworkLinkView {
+  id: string;
+  url: string;
+  title: string | null;
+}
+
+export interface HomeworkDetail {
+  assignment: AssignmentWithContext;
+  files: HomeworkAttachment[];
+  links: HomeworkLinkView[];
+  submittedCount: number;
+  studentCount: number;
+}
+
+/** Ближайший урок для списка выбора срока. */
+export interface DueLessonOption {
+  lessonId: string;
+  lessonDate: string;
+  pairNumber: number;
+}
+
 export interface HomeworkService {
   createAssignment(input: {
     viewer: HomeworkViewer;
     lessonId: string;
+    /** Урок-срок: `null` — следующий урок по расписанию. */
+    dueLessonId: string | null;
     text: string;
-    dueOn: string | null;
-    visibleUntil: string | null;
     links: readonly { url: string; title: string | null }[];
     fileIds: readonly string[];
   }): Promise<{ id: string }>;
@@ -37,53 +66,38 @@ export interface HomeworkService {
     viewer: HomeworkViewer;
     assignmentId: string;
     text?: string;
-    dueOn?: string | null;
-    visibleUntil?: string | null;
-    links?: readonly { url: string; title: string | null }[];
-    fileIds?: readonly string[];
+    dueLessonId?: string;
   }): Promise<void>;
   removeAssignment(input: { viewer: HomeworkViewer; assignmentId: string }): Promise<void>;
-  /** Задание урока для журнала: доступно учителю урока и администратору. */
-  getForLesson(input: { viewer: HomeworkViewer; lessonId: string }): Promise<HomeworkDetail | null>;
   /**
-   * Задания, видимые ученику и представителю на дату.
+   * Что видно в уроке.
    *
-   * «Продолжительное» задание попадает в каждый урок предмета до своей даты — но сдаётся
-   * один раз, поэтому в списке оно встречается **одним** заданием.
+   * `assignedHere` — задания, **заданные** на этом уроке: их правит учитель.
+   * `dueHere` — задания, **сдать которые** нужно к этому уроку, включая заданные раньше:
+   * это то, что проверяет учитель и видит ученик.
    */
-  listVisible(input: {
+  getForLesson(input: { viewer: HomeworkViewer; lessonId: string }): Promise<{
+    assignedHere: HomeworkDetail[];
+    dueHere: HomeworkDetail[];
+  }>;
+  /** Задания, сдать которые нужно к этим урокам: список ученика на дату. */
+  listDue(input: {
     viewer: HomeworkViewer;
-    studyGroupId: string;
-    /** Уроки, в которых смотрим задания: пара «идентификатор — дата». */
-    lessons: readonly { lessonId: string; lessonDate: string }[];
-    onDate: string;
+    dueLessonIds: readonly string[];
   }): Promise<HomeworkDetail[]>;
-}
-
-export interface HomeworkDetail {
-  assignment: AssignmentWithContext;
-  files: {
-    id: string;
-    originalName: string;
-    sizeBytes: number;
-    mimeType: string;
-    isDeleted: boolean;
-  }[];
-  links: { id: string; url: string; title: string | null }[];
-  submittedCount: number;
-  studentCount: number;
+  /** Ближайшие уроки того же предмета и группы: из них учитель выбирает срок. */
+  listDueOptions(input: { lesson: LessonRecord; limit?: number }): Promise<DueLessonOption[]>;
 }
 
 export interface HomeworkServiceDependencies {
   repository: HomeworkRepository;
-  /** Урок: права на задание определяются уроком. */
   findLesson: (lessonId: string) => Promise<LessonRecord | null>;
-  /** Настройка предельной длительности продолжительного задания, в днях. */
-  maxDurationDays: () => Promise<number>;
+  /** Уроки группы в периоде: из них выбирается следующий урок и строится список срока. */
+  listLessonsForGroup: (studyGroupId: string, from: string, to: string) => Promise<LessonRecord[]>;
 }
 
 export function createHomeworkService(dependencies: HomeworkServiceDependencies): HomeworkService {
-  const { repository, findLesson, maxDurationDays } = dependencies;
+  const { repository, findLesson, listLessonsForGroup } = dependencies;
 
   const has = (viewer: HomeworkViewer, permission: string): boolean =>
     viewer.permissions.has(permission);
@@ -98,8 +112,8 @@ export function createHomeworkService(dependencies: HomeworkServiceDependencies)
   /**
    * Может ли роль **ставить** задания.
    *
-   * Ученик тоже имеет homework:write, но с областью own — это отправка решения, а не
-   * постановка задания. Поэтому смотрим область: ssigned (свой урок) и ll.
+   * У ученика `homework:write` есть, но с областью `own` — это отправка решения, а не
+   * постановка задания. Поэтому смотрим область: `assigned` (свой урок) и `all`.
    */
   const canWriteAssignments = (viewer: HomeworkViewer): boolean => {
     const scope = scopeOf(viewer, 'homework:write');
@@ -107,7 +121,7 @@ export function createHomeworkService(dependencies: HomeworkServiceDependencies)
   };
 
   /**
-   * Может ли смотрящий ставить задание в этот урок.
+   * Может ли смотрящий распоряжаться заданиями этого урока.
    *
    * Преподаватель — только в **свой** урок: проверяем `teacherUserId`, а не членство в
    * группе. Замена переносит это поле, поэтому заменяющий получает права автоматически, а
@@ -126,6 +140,15 @@ export function createHomeworkService(dependencies: HomeworkServiceDependencies)
   };
 
   const requireManage = async (viewer: HomeworkViewer, lessonId: string): Promise<LessonRecord> => {
+    /**
+     * Сначала право, потом урок. Иначе роль **без права** получала бы «Урок не найден»:
+     * отсутствие права не должно выглядеть как отсутствие объекта, а разные ответы
+     * рассказывали бы о существовании чужих уроков.
+     */
+    if (!canWriteAssignments(viewer)) {
+      throw new AppError('FORBIDDEN', 'Недостаточно прав: homework:write');
+    }
+
     const lesson = await requireLesson(lessonId);
     if (!canManageLesson(viewer, lesson)) {
       // `404`, а не `403`: чужие задания не должны выдавать своё существование.
@@ -136,40 +159,28 @@ export function createHomeworkService(dependencies: HomeworkServiceDependencies)
   };
 
   /**
-   * Проверить срок и «видно до».
+   * Ближайшие уроки того же предмета и группы, начиная со следующего после данного.
    *
-   * Ограничение длительности задаётся настройкой, а не константой: без предела задание
-   * легко растянуть на весь год, и оно будет висеть в каждом уроке. Срок сдачи раньше даты
-   * урока тоже отклоняем — задание «сдать вчера» бессмысленно.
+   * Список нужен вместо полей с датами: датами оперировать неудобно, и учитель указывает
+   * совсем другие числа. Здесь он выбирает занятие — то же, что видит в расписании.
    */
-  const assertDates = async (input: {
-    lessonDate: string;
-    dueOn: string | null;
-    visibleUntil: string | null;
-  }): Promise<void> => {
-    if (input.dueOn !== null && input.dueOn < input.lessonDate) {
-      throw new AppError('VALIDATION_FAILED', 'Срок сдачи раньше даты урока');
-    }
+  const nextLessons = async (lesson: LessonRecord, limit = 5): Promise<LessonRecord[]> => {
+    /** Берём с запасом: после праздников и отменённых занятий уроков может не быть неделями. */
+    const horizon = addDays(lesson.lessonDate, 120);
 
-    if (input.visibleUntil === null) return;
+    const lessons = await listLessonsForGroup(lesson.studyGroupId, lesson.lessonDate, horizon);
 
-    if (input.visibleUntil < input.lessonDate) {
-      throw new AppError('VALIDATION_FAILED', 'Дата видимости раньше даты урока');
-    }
-
-    const limit = await maxDurationDays();
-    if (
-      !fitsDuration({
-        lessonDate: input.lessonDate,
-        visibleUntil: input.visibleUntil,
-        maxDays: limit,
-      })
-    ) {
-      throw new AppError(
-        'VALIDATION_FAILED',
-        `Задание видно не дольше ${String(limit)} дней: до ${maxVisibleUntil(input.lessonDate, limit)}`,
-      );
-    }
+    return lessons
+      .filter(
+        (candidate) =>
+          candidate.subjectId === lesson.subjectId && candidate.lessonDate > lesson.lessonDate,
+      )
+      .sort((a, b) =>
+        a.lessonDate === b.lessonDate
+          ? a.pairNumber - b.pairNumber
+          : a.lessonDate.localeCompare(b.lessonDate),
+      )
+      .slice(0, limit);
   };
 
   const detailOf = async (assignments: AssignmentWithContext[]): Promise<HomeworkDetail[]> => {
@@ -180,8 +191,9 @@ export function createHomeworkService(dependencies: HomeworkServiceDependencies)
       repository.countSubmissions(ids),
     ]);
 
-    return Promise.all(
-      assignments.map(async (assignment) => ({
+    const details: HomeworkDetail[] = [];
+    for (const assignment of assignments) {
+      details.push({
         assignment,
         files: files
           .filter((file) => file.assignmentId === assignment.id)
@@ -198,48 +210,48 @@ export function createHomeworkService(dependencies: HomeworkServiceDependencies)
         submittedCount: submitted.get(assignment.id) ?? 0,
         studentCount: await repository.countStudents(
           assignment.studyGroupId,
-          assignment.lessonDate,
+          assignment.dueLessonDate,
         ),
-      })),
-    );
+      });
+    }
+
+    return details;
   };
 
   return {
     async createAssignment(input) {
-      /**
-       * Право проверяем **по области**, а не по наличию.
-       *
-       * `homework:write` есть и у ученика — с областью `own`: это отправка решения. Ставить
-       * задание вправе только преподаватель (`assigned`) и администратор (`all`). Проверка
-       * «право есть» пропустила бы ученика, и он упёрся бы в `404` по чужому уроку вместо
-       * честного отказа.
-       */
-      if (!canWriteAssignments(input.viewer)) {
-        throw new AppError('FORBIDDEN', 'Недостаточно прав: homework:write');
-      }
-
       const lesson = await requireManage(input.viewer, input.lessonId);
 
       if (input.text.trim() === '' && input.links.length === 0 && input.fileIds.length === 0) {
         throw new AppError('VALIDATION_FAILED', 'Задание пустое: нужен текст, ссылка или файл');
       }
 
-      await assertDates({
-        lessonDate: lesson.lessonDate,
-        dueOn: input.dueOn,
-        visibleUntil: input.visibleUntil,
-      });
-
-      const existing = await repository.findByLessonId(input.lessonId);
-      if (existing !== null) {
-        throw new AppError('CONFLICT', 'К этому уроку задание уже задано');
+      /**
+       * Урок-срок: выбранный, а по умолчанию — **следующий урок** того же предмета. Если
+       * следующего нет (последнее занятие, каникулы, конец периода), сроком становится этот
+       * же урок: выдумывать дату за расписание не нужно.
+       */
+      let dueLessonId = input.dueLessonId ?? '';
+      if (dueLessonId !== '') {
+        const due = await requireLesson(dueLessonId);
+        if (due.studyGroupId !== lesson.studyGroupId || due.subjectId !== lesson.subjectId) {
+          throw new AppError(
+            'VALIDATION_FAILED',
+            'Срок должен быть уроком того же предмета и группы',
+          );
+        }
+        if (due.lessonDate < lesson.lessonDate) {
+          throw new AppError('VALIDATION_FAILED', 'Срок раньше урока, на котором задано задание');
+        }
+      } else {
+        const [next] = await nextLessons(lesson, 1);
+        dueLessonId = next?.id ?? lesson.id;
       }
 
       const created = await repository.createAssignment({
         lessonId: input.lessonId,
+        dueLessonId,
         text: input.text,
-        dueOn: input.dueOn,
-        visibleUntil: input.visibleUntil,
         createdBy: input.viewer.userId,
       });
 
@@ -259,25 +271,17 @@ export function createHomeworkService(dependencies: HomeworkServiceDependencies)
 
       await requireManage(input.viewer, assignment.lessonId);
 
-      await assertDates({
-        lessonDate: assignment.lessonDate,
-        dueOn: input.dueOn === undefined ? assignment.dueOn : input.dueOn,
-        visibleUntil:
-          input.visibleUntil === undefined ? assignment.visibleUntil : input.visibleUntil,
-      });
+      if (input.dueLessonId !== undefined) {
+        const due = await requireLesson(input.dueLessonId);
+        if (due.lessonDate < assignment.lessonDate) {
+          throw new AppError('VALIDATION_FAILED', 'Срок раньше урока, на котором задано задание');
+        }
+      }
 
       await repository.updateAssignment(input.assignmentId, {
         ...(input.text === undefined ? {} : { text: input.text }),
-        ...(input.dueOn === undefined ? {} : { dueOn: input.dueOn }),
-        ...(input.visibleUntil === undefined ? {} : { visibleUntil: input.visibleUntil }),
+        ...(input.dueLessonId === undefined ? {} : { dueLessonId: input.dueLessonId }),
       });
-
-      if (input.links !== undefined) {
-        await repository.replaceLinks(input.assignmentId, input.links);
-      }
-      if (input.fileIds !== undefined) {
-        await repository.addFiles(input.assignmentId, input.fileIds);
-      }
     },
 
     async removeAssignment(input) {
@@ -293,62 +297,58 @@ export function createHomeworkService(dependencies: HomeworkServiceDependencies)
         throw new AppError('FORBIDDEN', 'Недостаточно прав: homework:read');
       }
 
-      const assignment = await repository.findByLessonId(input.lessonId);
-      if (assignment === null) return null;
+      const lesson = await requireLesson(input.lessonId);
 
       /**
-       * Ученику и представителю задание своего урока доступно: ограничение — уроки своей
+       * Ученику и представителю задания своего урока доступны: ограничение — уроки своей
        * группы, их отбирает вызывающая сторона. Преподавателю чужой урок не показываем.
        */
-      const maySeeAsStaff =
-        seesAll(input.viewer) ||
-        (scopeOf(input.viewer, 'homework:read') === 'assigned' &&
-          assignment.lessonTeacherUserId === input.viewer.userId);
-      const maySeeAsOwn = scopeOf(input.viewer, 'homework:read') === 'own';
+      const staffScope =
+        scopeOf(input.viewer, 'homework:review') ?? scopeOf(input.viewer, 'homework:write');
+      const canSeeAsStaff =
+        staffScope === 'all' ||
+        (staffScope === 'assigned' && lesson.teacherUserId === input.viewer.userId);
+      const canSeeAsOwn = scopeOf(input.viewer, 'homework:read') === 'own';
 
-      if (!maySeeAsStaff && !maySeeAsOwn) {
+      if (!canSeeAsStaff && !canSeeAsOwn) {
         throw new AppError('NOT_FOUND', 'Урок не найден');
       }
 
-      const [detail] = await detailOf([assignment]);
-      return detail ?? null;
+      const [assigned, due] = await Promise.all([
+        repository.listByLessonId(input.lessonId),
+        repository.listByDueLessonId(input.lessonId),
+      ]);
+
+      return {
+        assignedHere: await detailOf(assigned),
+        dueHere: await detailOf(due),
+      };
     },
 
-    async listVisible(input) {
+    async listDue(input) {
       if (!has(input.viewer, 'homework:read')) {
         throw new AppError('FORBIDDEN', 'Недостаточно прав: homework:read');
       }
 
-      /**
-       * Ученику и представителю задания **своей** группы: список уроков приходит от
-       * вызывающей стороны, которая уже проверила доступ к группе.
-       */
-      const candidates = await repository.listCandidates({
-        studyGroupId: input.studyGroupId,
-        lessonIds: input.lessons.map((lesson) => lesson.lessonId),
-        onDate: input.onDate,
-      });
+      const assignments = await repository.listByDueLessonIds(input.dueLessonIds);
+      return detailOf(assignments);
+    },
 
-      /**
-       * Точную видимость решает домен: своё задание видно всегда, продолжительное — в
-       * уроках того же предмета до своей даты, но **не раньше**, чем его задали.
-       *
-       * Поэтому проверяем кандидата против **каждого** урока из запроса: задание,
-       * поставленное на 8-е, не должно появиться в уроке 1-го.
-       */
-      const visible = candidates.filter((candidate) =>
-        input.lessons.some((lesson) =>
-          isAssignmentVisible({
-            assignmentLessonId: candidate.lessonId,
-            assignmentLessonDate: candidate.lessonDate,
-            visibleUntil: candidate.visibleUntil,
-            lessonId: lesson.lessonId,
-            lessonDate: lesson.lessonDate,
-          }),
-        ),
-      );
+    async listDueOptions(input) {
+      const lessons = await nextLessons(input.lesson, input.limit ?? 5);
 
-      return detailOf(visible);
+      return lessons.map((lesson) => ({
+        lessonId: lesson.id,
+        lessonDate: lesson.lessonDate,
+        pairNumber: lesson.pairNumber,
+      }));
     },
   };
+}
+
+/** Прибавить дни к календарной дате: нужно для горизонта поиска уроков. */
+function addDays(date: string, days: number): string {
+  const value = new Date(`${date}T00:00:00Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return toIsoDate(value);
 }

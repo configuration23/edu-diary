@@ -8,10 +8,7 @@ import {
   MIN_FILE_MB,
   checkFile,
   extensionOf,
-  fitsDuration,
-  isAssignmentVisible,
   isLateSubmission,
-  maxVisibleUntil,
   normalizeMaxFileMb,
   DEFAULT_ALLOWED_EXTENSIONS,
 } from '../src/homework';
@@ -134,93 +131,25 @@ describe('настройка размера файла', () => {
   });
 });
 
-describe('видимость задания в уроках', () => {
-  it('в своём уроке задание видно всегда', () => {
-    const result = isAssignmentVisible({
-      assignmentLessonId: 'урок-1',
-      assignmentLessonDate: '2026-10-01',
-      visibleUntil: null,
-      lessonId: 'урок-1',
-      lessonDate: '2026-10-01',
-    });
-
-    expect(result).toBe(true);
+describe('срок сдачи и опоздание', () => {
+  it('сдача после урока-срока помечается опозданием', () => {
+    /**
+     * Задание к занятию 15-го, принесли 16-го — это опоздание. Принимаем, но помечаем:
+     * решение владельца.
+     */
+    expect(isLateSubmission({ dueLessonDate: '2026-10-15', submittedOn: '2026-10-16' })).toBe(true);
   });
 
-  it('без «видно до» задание в других уроках не показывается', () => {
-    const result = isAssignmentVisible({
-      assignmentLessonId: 'урок-1',
-      assignmentLessonDate: '2026-10-01',
-      visibleUntil: null,
-      lessonId: 'урок-2',
-      lessonDate: '2026-10-08',
-    });
-
-    expect(result).toBe(false);
-  });
-
-  it('продолжительное задание видно в уроках до указанной даты', () => {
-    const common = {
-      assignmentLessonId: 'урок-1',
-      assignmentLessonDate: '2026-10-01',
-      visibleUntil: '2026-10-15',
-    };
-
-    // В день задания, в середине срока и в последний день — видно.
-    expect(isAssignmentVisible({ ...common, lessonId: 'урок-2', lessonDate: '2026-10-01' })).toBe(
-      true,
-    );
-    expect(isAssignmentVisible({ ...common, lessonId: 'урок-3', lessonDate: '2026-10-08' })).toBe(
-      true,
-    );
-    expect(isAssignmentVisible({ ...common, lessonId: 'урок-4', lessonDate: '2026-10-15' })).toBe(
-      true,
-    );
-    // После срока — уже нет.
-    expect(isAssignmentVisible({ ...common, lessonId: 'урок-5', lessonDate: '2026-10-22' })).toBe(
+  it('сдача в день урока-срока опозданием не считается', () => {
+    expect(isLateSubmission({ dueLessonDate: '2026-10-15', submittedOn: '2026-10-15' })).toBe(
       false,
     );
   });
 
-  it('уроки до самого задания продолжительное задание не показывает', () => {
-    const result = isAssignmentVisible({
-      assignmentLessonId: 'урок-1',
-      assignmentLessonDate: '2026-10-08',
-      visibleUntil: '2026-10-20',
-      lessonId: 'урок-назад',
-      lessonDate: '2026-10-01',
-    });
-
-    // Задание нельзя «получить» раньше, чем его задали.
-    expect(result).toBe(false);
-  });
-});
-
-describe('срок сдачи и ограничение длительности', () => {
-  it('сдача после срока помечается опозданием', () => {
-    expect(isLateSubmission({ dueOn: '2026-10-10', submittedOn: '2026-10-11' })).toBe(true);
-  });
-
-  it('сдача в день срока опозданием не считается', () => {
-    expect(isLateSubmission({ dueOn: '2026-10-10', submittedOn: '2026-10-10' })).toBe(false);
-  });
-
-  it('без срока опоздания не бывает', () => {
-    expect(isLateSubmission({ dueOn: null, submittedOn: '2026-12-31' })).toBe(false);
-  });
-
-  it('предел продолжительности считается от даты урока', () => {
-    expect(maxVisibleUntil('2026-10-01', 14)).toBe('2026-10-15');
-    // Переход через месяц.
-    expect(maxVisibleUntil('2026-10-25', 14)).toBe('2026-11-08');
-  });
-
-  it('слишком длинное задание не укладывается в предел', () => {
-    expect(
-      fitsDuration({ lessonDate: '2026-10-01', visibleUntil: '2026-10-15', maxDays: 14 }),
-    ).toBe(true);
-    expect(
-      fitsDuration({ lessonDate: '2026-10-01', visibleUntil: '2026-10-16', maxDays: 14 }),
-    ).toBe(false);
+  it('сдача раньше срока опозданием не считается', () => {
+    // Сдать раньше — нормально: задание на 15-е можно принести 10-го.
+    expect(isLateSubmission({ dueLessonDate: '2026-10-15', submittedOn: '2026-10-10' })).toBe(
+      false,
+    );
   });
 });

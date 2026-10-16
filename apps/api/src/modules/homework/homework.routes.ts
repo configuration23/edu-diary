@@ -6,6 +6,7 @@ import {
   createHomeworkRequestSchema,
   homeworkAssignmentSummarySchema,
   listHomeworkQuerySchema,
+  lessonHomeworkResponseSchema,
   listHomeworkResponseSchema,
   listSubmissionsResponseSchema,
   submitHomeworkRequestSchema,
@@ -54,12 +55,9 @@ const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 export interface HomeworkModuleDependencies {
   db: Database;
   audit: AuditService;
-  /** Урок или 
-ull, если его нет: сервис сам решает, отвечать 404 или отказать. */
+  /** Урок или `null`, если его нет: сервис сам решает, отвечать `404` или отказать. */
   findLesson: (lessonId: string) => Promise<LessonRecord | null>;
   listLessonsForGroup: (studyGroupId: string, from: string, to: string) => Promise<LessonRecord[]>;
-  /** Состав группы: от него зависит, сколько учеников должны сдать. */
-  maxDurationDays: () => Promise<number>;
   /** Группы ученика и его представителей: ученик видит только их. */
   groupIdsOfViewer: (viewerUserId: string) => Promise<string[]>;
   /** Текущий адаптер хранилища: администратор может сменить его без перезапуска. */
@@ -99,20 +97,23 @@ ull, если его нет: сервис сам решает, отвечать 
   }) => Promise<boolean>;
 }
 
-function toSummary(
-  detail: HomeworkDetail,
-  lesson: { lessonDate: string } | null,
-): HomeworkAssignmentSummaryDto {
+/**
+ * Задание для ответа.
+ *
+ * Две даты, и обе нужны: lessonDate — **когда задали** (учитель видит «домашняя работа
+ * от 8-го»), dueLessonDate — **когда сдавать** (ученик видит «сдать до 15-го»).
+ */
+function toSummary(detail: HomeworkDetail): HomeworkAssignmentSummaryDto {
   return homeworkAssignmentSummarySchema.parse({
     id: detail.assignment.id,
     lessonId: detail.assignment.lessonId,
+    lessonDate: detail.assignment.lessonDate,
+    dueLessonId: detail.assignment.dueLessonId,
+    dueLessonDate: detail.assignment.dueLessonDate,
     text: detail.assignment.text,
-    dueOn: detail.assignment.dueOn,
-    visibleUntil: detail.assignment.visibleUntil,
     files: detail.files,
     links: detail.links,
     createdAt: detail.assignment.createdAt.toISOString(),
-    lessonDate: lesson?.lessonDate ?? detail.assignment.lessonDate,
     groupName: detail.assignment.groupName,
     subjectName: detail.assignment.subjectName,
     submittedCount: detail.submittedCount,
@@ -123,10 +124,13 @@ function toSummary(
 export function createHomeworkModule(dependencies: HomeworkModuleDependencies) {
   const { db, audit, findLesson, listLessonsForGroup, groupIdsOfViewer } = dependencies;
 
+  /** Один репозиторий заданий на весь модуль: сервис и список сдавших берут его отсюда. */
+  const homeworkRepository = createHomeworkRepository(db.orm);
+
   const service = createHomeworkService({
-    repository: createHomeworkRepository(db.orm),
+    repository: homeworkRepository,
     findLesson,
-    maxDurationDays: dependencies.maxDurationDays,
+    listLessonsForGroup,
   });
 
   const fileRepository = createAssignmentFileRepository(db.orm);
@@ -283,12 +287,14 @@ export function createHomeworkModule(dependencies: HomeworkModuleDependencies) {
           : await submissions.findOwn({
               assignmentId,
               studentId: access.studentId,
-              dueOn: access.assignment.dueOn,
+              dueLessonDate: access.assignment.dueLessonDate,
             });
 
       return {
         own,
-        dueOn: access.assignment.dueOn,
+        /** Урок-срок: по нему ученик видит, когда сдавать. */
+        dueLessonId: access.assignment.dueLessonId,
+        dueLessonDate: access.assignment.dueLessonDate,
         /** Сдавать может только ученик, у которого есть карточка, и только один раз. */
         canSubmit: access.studentId !== null && own === null,
       };
@@ -350,27 +356,59 @@ export function createHomeworkModule(dependencies: HomeworkModuleDependencies) {
         throw new AppError('FORBIDDEN', 'Недостаточно прав: homework:review');
       }
 
-      const assignment = await service.getForLesson({
-        viewer,
-        lessonId: (await dependencies.findAssignmentLesson(assignmentId)) ?? '',
-      });
-
+      /**
+       * Список сдавших отдаём по **самому заданию**, а не по уроку: право проверяет
+       * `resolveStudentAccess` внутри `getForLesson`, и нам нужен сам объект задания.
+       */
+      const assignment = await homeworkRepository.findAssignment(assignmentId);
       if (assignment === null) throw new AppError('NOT_FOUND', 'Задание не найдено');
 
-      const items = await submissions.list({ assignment: assignment.assignment });
+      const access = await dependencies.resolveStudentAccess({
+        viewerUserId: viewer.userId,
+        scope: staffScopeOf(viewer),
+        assignmentId,
+      });
+
+      if (access === null) throw new AppError('NOT_FOUND', 'Задание не найдено');
+
+      const items = await submissions.list({ assignment: access.assignment });
 
       return listSubmissionsResponseSchema.parse({ items, total: items.length });
     });
 
-    /** Задание урока: экран журнала. */
+    /**
+     * Задание урока: экран журнала.
+     *
+     * Отдаём **две группы**: `assignedHere` — что задано на этом уроке (это правит учитель),
+     * `dueHere` — что нужно сдать к этому уроку, включая заданное раньше. Учитель видит
+     * плашку «домашняя работа от 8-го» и может задать новое, не затирая прошлое.
+     *
+     * `dueOptions` — ближайшие уроки того же предмета и группы: из них выбирается срок вместо
+     * ввода даты.
+     */
     app.get('/homework/lesson/:lessonId', async (request) => {
       const { lessonId } = request.params as { lessonId: string };
-      const detail = await service.getForLesson({ viewer: viewerOf(request), lessonId });
+      const viewer = viewerOf(request);
 
-      return { item: detail === null ? null : toSummary(detail, null) };
+      const lesson = await findLesson(lessonId);
+      if (lesson === null) throw new AppError('NOT_FOUND', 'Урок не найден');
+
+      const homework = await service.getForLesson({ viewer, lessonId });
+      const dueOptions = await service.listDueOptions({ lesson });
+
+      return lessonHomeworkResponseSchema.parse({
+        assignedHere: homework.assignedHere.map(toSummary),
+        dueHere: homework.dueHere.map(toSummary),
+        dueOptions,
+      });
     });
 
-    /** Задания на дату: ученик и представитель видят задания своих групп. */
+    /**
+     * Задания на дату: ученик и представитель видят задания своих групп.
+     *
+     * Ищем не по дате, а по **урокам-срокам**: задание привязано к занятию, и «что сдать в
+     * этот день» — это «какие уроки сегодня и что к ним задано».
+     */
     app.get('/homework', async (request) => {
       const query = listHomeworkQuerySchema.parse(request.query);
       const viewer = viewerOf(request);
@@ -390,26 +428,22 @@ export function createHomeworkModule(dependencies: HomeworkModuleDependencies) {
             ? [query.studyGroupId]
             : ownGroupIds.filter((id) => id === query.studyGroupId);
 
-      const onDate = query.onDate ?? new Date().toISOString().slice(0, 10);
+      const today = new Date().toISOString().slice(0, 10);
+      const from = query.from ?? today;
+      const to = query.to ?? from;
 
       const items: HomeworkAssignmentSummaryDto[] = [];
       for (const studyGroupId of targetGroups) {
-        const lessons = await listLessonsForGroup(studyGroupId, onDate, onDate);
+        const lessons = await listLessonsForGroup(studyGroupId, from, to);
         if (lessons.length === 0) continue;
 
-        const details = await service.listVisible({
+        const details = await service.listDue({
           viewer,
-          studyGroupId,
-          lessons: lessons.map((lesson) => ({
-            lessonId: lesson.id,
-            lessonDate: lesson.lessonDate,
-          })),
-          onDate,
+          dueLessonIds: lessons.map((lesson) => lesson.id),
         });
 
         for (const detail of details) {
-          const lesson = lessons.find((item) => item.id === detail.assignment.lessonId) ?? null;
-          items.push(toSummary(detail, lesson));
+          items.push(toSummary(detail));
         }
       }
 
@@ -424,8 +458,7 @@ export function createHomeworkModule(dependencies: HomeworkModuleDependencies) {
         viewer,
         lessonId: body.lessonId,
         text: body.text,
-        dueOn: body.dueOn ?? null,
-        visibleUntil: body.visibleUntil ?? null,
+        dueLessonId: body.dueLessonId ?? null,
         links: body.links.map((link) => ({ url: link.url, title: link.title ?? null })),
         fileIds: body.fileIds,
       });
@@ -435,7 +468,7 @@ export function createHomeworkModule(dependencies: HomeworkModuleDependencies) {
           action: 'create',
           entityKind: 'homework_assignment',
           entityId: created.id,
-          after: { lessonId: body.lessonId, dueOn: body.dueOn ?? null },
+          after: { lessonId: body.lessonId, dueLessonId: body.dueLessonId ?? null },
         },
         actorFromRequest(request),
       );
@@ -453,8 +486,7 @@ export function createHomeworkModule(dependencies: HomeworkModuleDependencies) {
         viewer,
         assignmentId,
         ...(body.text === undefined ? {} : { text: body.text }),
-        ...(body.dueOn === undefined ? {} : { dueOn: body.dueOn }),
-        ...(body.visibleUntil === undefined ? {} : { visibleUntil: body.visibleUntil }),
+        ...(body.dueLessonId === undefined ? {} : { dueLessonId: body.dueLessonId }),
         ...(body.links === undefined
           ? {}
           : {
