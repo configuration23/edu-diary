@@ -1,8 +1,8 @@
 /**
  * Публичный интерфейс модуля `homework` (Этап 5).
  *
- * Задания, решения и вложения. Таблицы модуля отдаются наружу: их читают миграции и
- * сборка приложения, а другие модули работают с заданиями через сервис, а не через схему.
+ * Домашние задания: таблицы, доступ к данным, правила и маршруты. Таблицы отдаются наружу
+ * для миграций и сборки приложения; другие модули работают с заданиями через сервис.
  */
 
 export {
@@ -12,3 +12,18 @@ export {
   homeworkSubmission,
   homeworkSubmissionFile,
 } from './homework.schema';
+export {
+  createHomeworkRepository,
+  type AssignmentFileRecord,
+  type AssignmentLinkRecord,
+  type AssignmentWithContext,
+  type HomeworkRepository,
+} from './homework.repository';
+export {
+  createHomeworkService,
+  type HomeworkDetail,
+  type HomeworkService,
+  type HomeworkServiceDependencies,
+  type HomeworkViewer,
+} from './homework.service';
+export { createHomeworkModule, type HomeworkModuleDependencies } from './homework.routes';

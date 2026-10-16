@@ -341,7 +341,8 @@ export async function createLessonContext(
   subject: { id: string };
   teacher: { id: string; cookie: string };
   assignment: { id: string };
-  student?: { id: string };
+  /** Ученик вместе с логином: тестам нужно под ним войти, а логин генерирует фабрика. */
+  student?: { id: string; username: string; password: string };
   lesson?: { id: string };
 }> {
   const year = await createAcademicYear(context, {
@@ -383,15 +384,18 @@ export async function createLessonContext(
     subject: { id: string };
     teacher: { id: string; cookie: string };
     assignment: { id: string };
-    student?: { id: string };
+    student?: { id: string; username: string; password: string };
     lesson?: { id: string };
   } = { year, group, subject, teacher, assignment };
 
   if (input.withStudent === true) {
+    const studentPassword = input.studentPassword ?? 'kolledzh-uchenik-2025';
+    const studentUsername = `uchenik-${slug}`;
+
     const student = await createStudentWithAccount(context, {
       fullName: input.studentName ?? `Ученик ${input.run}`,
-      username: `uchenik-${slug}`,
-      password: input.studentPassword ?? 'kolledzh-uchenik-2025',
+      username: studentUsername,
+      password: studentPassword,
     });
 
     await enrollStudent(context, {
@@ -400,7 +404,12 @@ export async function createLessonContext(
       joinedOn: input.yearStartsOn,
     });
 
-    result.student = student;
+    /**
+     * Логин и пароль возвращаем вместе с учеником: тесты входят под ним, а собирает их
+     * фабрика. Угадывать логин в тесте нельзя — он зависит от метки прогона, и один раз
+     * это уже сломало проверку.
+     */
+    result.student = { ...student, username: studentUsername, password: studentPassword };
   }
 
   if (input.lessonDate !== undefined) {

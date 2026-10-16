@@ -13,6 +13,7 @@ import { buildIamServices, createIamModule, type SessionRevokerPort } from './mo
 import { createGuardiansRepository } from './modules/iam/iam.guardians.repository';
 import { createUsersRepository } from './modules/iam/iam.users.repository';
 import type { UsersService } from './modules/iam/iam.users.service';
+import { createHomeworkModule } from './modules/homework';
 import {
   buildJournalService,
   createJournalModule,
@@ -30,6 +31,7 @@ import {
   createSettingsModule,
   createSettingsRepository,
   createSettingsService,
+  SETTING_KEYS,
 } from './modules/settings';
 import {
   buildStaffingService,
@@ -485,6 +487,53 @@ export async function buildApp({
     { prefix: '/api' },
   );
 
+  /**
+   * Домашние задания. Права и правила живут в сервисе модуля, а сюда передаются порты:
+   * поиск урока (по нему определяются права), уроки группы на дату и предельная
+   * длительность задания из настроек.
+   */
+  await app.register(
+    createHomeworkModule({
+      db,
+      audit,
+      /**
+       * getLesson бросает NOT_FOUND на неизвестный урок, а модулю нужен 
+ull: он сам
+       * решает, показать 404 или отказать в правке чужого задания неотличимо.
+       */
+      async findLesson(lessonId) {
+        try {
+          return await schedule.getLesson(lessonId);
+        } catch {
+          return null;
+        }
+      },
+      /**
+       * Уроки группы на дату: нужны, чтобы понять, в каких уроках видно задание.
+       * Берём из сервиса расписания — он уже умеет это с проверками.
+       */
+      async listLessonsForGroup(studyGroupId, from, to) {
+        const result = await schedule.listLessons({
+          studyGroupId,
+          from,
+          to,
+          limit: 200,
+          offset: 0,
+        });
+        return result.items;
+      },
+      async maxDurationDays() {
+        const value = await settings.get<number>(SETTING_KEYS.homeworkMaxDurationDays);
+        return value ?? 14;
+      },
+      /** Группы ученика и его представителей: ученик видит задания только своих групп. */
+      groupIdsOfViewer: async (userId) => {
+        const groups = await scheduleCatalog.groupsOfViewer(userId);
+        return groups.map((group) => group.id);
+      },
+    }),
+    { prefix: '/api' },
+  );
   await app.register(createAuditModule({ audit }), { prefix: '/api' });
   await app.register(createSecurityModule({ security, audit }), { prefix: '/api' });
   await app.register(createPrivacyModule({ privacy }), { prefix: '/api' });

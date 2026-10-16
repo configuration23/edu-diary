@@ -174,6 +174,11 @@ export const SYSTEM_ROLES: readonly SystemRoleDefinition[] = [
       { permission: 'grades:read', scope: 'own' },
       { permission: 'attendance:read', scope: 'own' },
       { permission: 'homework:read', scope: 'own' },
+      /**
+       * homework:write у ученика — это **отправка решения**, а не постановка задания.
+       * Ставить задание вправе только область ssigned (преподаватель своего урока) и
+       * ll (администратор), поэтому сервер проверяет область, а не наличие права.
+       */
       { permission: 'homework:write', scope: 'own' },
       { permission: 'analytics:read', scope: 'own' },
     ],
