@@ -29,6 +29,14 @@ export interface HomeworkAttachment {
   sizeBytes: number;
   mimeType: string;
   isDeleted: boolean;
+  /**
+   * Когда файл загружен.
+   *
+   * Нужен контракту ответа, и без него маршрут отвечал 400: проверка схемы отклоняла
+   * ответ, когда у задания были вложения. Дефект не был виден в тестах, потому что в них
+   * задания создавались **без файлов**, и список вложений был пуст.
+   */
+  createdAt: string;
 }
 
 export interface HomeworkLinkView {
@@ -203,6 +211,7 @@ export function createHomeworkService(dependencies: HomeworkServiceDependencies)
             sizeBytes: file.sizeBytes,
             mimeType: file.mimeType,
             isDeleted: file.deletedAt !== null,
+            createdAt: file.createdAt.toISOString(),
           })),
         links: links
           .filter((link) => link.assignmentId === assignment.id)

@@ -28,6 +28,19 @@ function shiftDays(days: number): string {
   ].join('-');
 }
 
+/** Собрать тело multipart: проверяем ответ с вложением, значит файл надо приложить. */
+function multipartBody(fileName: string, content: Buffer): { body: Buffer; boundary: string } {
+  const boundary = '----homework-boundary';
+  const head = Buffer.from(
+    `--${boundary}\r\ncontent-disposition: form-data; name="file"; filename="${fileName}"\r\n` +
+      `content-type: application/octet-stream\r\n\r\n`,
+  );
+
+  return {
+    body: Buffer.concat([head, content, Buffer.from(`\r\n--${boundary}--\r\n`)]),
+    boundary,
+  };
+}
 describeWithDatabase('домашние задания', () => {
   let database: TestDatabase;
   let testApp: TestApp;
@@ -333,5 +346,49 @@ describeWithDatabase('домашние задания', () => {
 
     // Срок из другой группы или другого предмета — отказ: домашка не может «сдаваться» там.
     expect(response.statusCode, response.body).toBe(400);
+  });
+  it('задание с файлом отдаётся по контракту: ответ проходит проверку схемы', async () => {
+    /**
+     * Тест, которого не хватало. На стенде маршрут журнала отвечал `400`: контракт требует у
+     * вложения поле `createdAt`, а сервис его не отдавал. Скрылось это потому, что **все
+     * прежние проверки создавали задания без файлов** — список вложений был пуст, и
+     * расхождение формы не проявлялось.
+     *
+     * Поэтому здесь файл **прикладывается**, а ответ разбирается схемой клиента.
+     */
+    const { lessonHomeworkResponseSchema } = await import('@edu-diary/contracts');
+
+    const material = multipartBody('материал.txt', Buffer.from('материалы к заданию'));
+    const upload = await testApp.app.inject({
+      method: 'POST',
+      url: '/api/homework/files',
+      headers: {
+        cookie: teacherCookie,
+        'content-type': `multipart/form-data; boundary=${material.boundary}`,
+      },
+      payload: material.body,
+    });
+    expect(upload.statusCode, upload.body).toBe(201);
+    const fileId = (upload.json() as Json).id as string;
+
+    const created = await testApp.app.inject({
+      method: 'POST',
+      url: '/api/homework',
+      headers: auth(teacherCookie),
+      payload: { lessonId, text: 'Задание с файлом', fileIds: [fileId] },
+    });
+    expect(created.statusCode, created.body).toBe(201);
+
+    const lesson = await testApp.app.inject({
+      method: 'GET',
+      url: `/api/homework/lesson/${lessonId}`,
+      headers: auth(teacherCookie),
+    });
+
+    expect(lesson.statusCode, lesson.body).toBe(200);
+
+    /** Разбор той же схемой, что у клиента: расхождение формы станет падением, а не `400`. */
+    const parsed = lessonHomeworkResponseSchema.safeParse(lesson.json());
+    expect(parsed.success, JSON.stringify(parsed.error?.issues)).toBe(true);
   });
 });
