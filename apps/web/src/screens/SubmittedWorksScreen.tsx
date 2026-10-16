@@ -1,7 +1,16 @@
 import { useEffect, useState } from 'react';
 
 import { useAssignments, useGroups, useSubmittedWorks } from '../lib/queries';
-import { Badge, Card, EmptyState, Field, TextInput } from '../components/ui';
+import { Badge, Field } from '../components/ui';
+import {
+  Page,
+  PageHeader,
+  PersonList,
+  PersonRow,
+  QueryState,
+  Section,
+  Toolbar,
+} from '../components/layout';
 import type { SessionResponseDto } from '@edu-diary/contracts';
 
 /**
@@ -10,9 +19,13 @@ import type { SessionResponseDto } from '@edu-diary/contracts';
  * Учителю нужен не список сдавших, а **таблица**: напротив каждого ученика его ответ или
  * пометка «не сдал». Так видно, кого ещё ждать, — а список сдавших этого не показывает.
  *
- * Группа выбирается явно, как в «Оценках и посещении»: у преподавателя группы дают его
- * назначения, у администратора — справочник. Без выбора группу взять неоткуда: у преподавателя
- * нет «своих» групп в смысле ученика, и запрос без группы возвращал пусто.
+ * **Первый экран, собранный по новому каркасу** (Этап 6, шаг 0). Здесь видно, что даёт каркас:
+ * страница, шапка с действиями, панель фильтров и строка «кто × значение» берутся готовыми, и в
+ * экране не остаётся ни одного случайного отступа.
+ *
+ * Группа выбирается явно: у преподавателя группы дают его назначения, у администратора —
+ * справочник. Без выбора группу взять неоткуда — у преподавателя нет «своих» групп в смысле
+ * ученика, и запрос без группы возвращал пусто.
  *
  * Состав группы сервер берёт **на дату урока-срока**: работу проверяют у тех, кто был в группе
  * тогда, а не у тех, кто в ней сейчас.
@@ -61,133 +74,118 @@ export function SubmittedWorksScreen({ session }: { session: SessionResponseDto 
   });
 
   const items = works.data?.items ?? [];
+  const groupOptions = canChooseAnyGroup
+    ? (groups.data?.items ?? []).map((group) => [group.id, group.name] as const)
+    : teacherGroups;
 
   return (
-    <div className="flex flex-col gap-4">
-      <Card
+    <Page>
+      <PageHeader
         title="Сданные работы"
         description="Ответы учеников по заданиям, срок которых — выбранная дата. Кто не сдал, видно сразу."
+      />
+
+      <Toolbar>
+        <Field label="Группа">
+          <select
+            className="w-full min-w-56 rounded-md border border-slate-300 px-3 py-2 text-sm"
+            value={groupId}
+            onChange={(event) => setGroupId(event.target.value)}
+          >
+            {groupOptions.map(([id, name]) => (
+              <option key={id} value={id}>
+                {name}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        <Field label="Дата урока-срока">
+          <input
+            type="date"
+            className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+            value={date}
+            onChange={(event) => setDate(event.target.value)}
+          />
+        </Field>
+      </Toolbar>
+
+      <QueryState
+        isLoading={works.isLoading}
+        error={works.error}
+        isEmpty={items.length === 0}
+        emptyText="На эту дату заданий нет. Проверьте группу и дату: показываются задания, срок которых приходится на выбранный день."
+        onRetry={() => void works.refetch()}
       >
-        <div className="flex flex-wrap gap-4">
-          <Field label="Группа">
-            {canChooseAnyGroup ? (
-              <select
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                value={groupId}
-                onChange={(event) => setGroupId(event.target.value)}
-              >
-                {(groups.data?.items ?? []).map((group) => (
-                  <option key={group.id} value={group.id}>
-                    {group.name}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <select
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                value={groupId}
-                onChange={(event) => setGroupId(event.target.value)}
-              >
-                {teacherGroups.map(([id, name]) => (
-                  <option key={id} value={id}>
-                    {name}
-                  </option>
-                ))}
-              </select>
-            )}
-          </Field>
+        {items.map((assignment) => (
+          <Section
+            key={assignment.assignmentId}
+            title={assignment.subjectName}
+            description={`${assignment.groupName} · сдать к ${assignment.dueLessonDate} · задано ${assignment.lessonDate}`}
+            actions={
+              <Badge tone={assignment.submittedCount === 0 ? 'neutral' : 'success'}>
+                сдали {assignment.submittedCount} из {assignment.studentCount}
+              </Badge>
+            }
+          >
+            <p className="whitespace-pre-wrap text-sm text-slate-700">{assignment.text}</p>
 
-          <Field label="Дата урока-срока">
-            <TextInput type="date" value={date} onChange={(event) => setDate(event.target.value)} />
-            <span className="text-xs text-slate-500">
-              Показываем задания, сдать которые нужно к урокам этой даты. Состав группы — на эту же
-              дату.
-            </span>
-          </Field>
-        </div>
-      </Card>
-
-      {works.isLoading && <Card>Загружаем…</Card>}
-
-      {works.data !== undefined && items.length === 0 && (
-        <Card>
-          <EmptyState>
-            На эту дату заданий нет. Проверьте группу и дату: показываются задания, срок которых
-            приходится на выбранный день.
-          </EmptyState>
-        </Card>
-      )}
-
-      {items.map((assignment) => (
-        <Card
-          key={assignment.assignmentId}
-          title={assignment.subjectName}
-          description={`${assignment.groupName} · сдать к ${assignment.dueLessonDate} · задано ${assignment.lessonDate}`}
-          actions={
-            <Badge tone={assignment.submittedCount === 0 ? 'neutral' : 'success'}>
-              сдали {assignment.submittedCount} из {assignment.studentCount}
-            </Badge>
-          }
-        >
-          <p className="whitespace-pre-wrap text-sm text-slate-700">{assignment.text}</p>
-
-          {/*
-            Вертикальный список учеников, как в журнале: напротив каждого — его ответ или
-            пометка «не сдал». Так таблица читается построчно и видно, кого ещё ждать.
-          */}
-          <ul className="mt-3 flex flex-col divide-y divide-slate-100">
-            {assignment.rows.map((row) => (
-              <li key={row.studentId} className="flex flex-col gap-1 py-2 text-sm">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="min-w-40 font-medium">{row.studentName}</span>
-
+            {/*
+              Вертикальный список учеников: напротив каждого — его ответ или пометка «не сдал».
+              Строка берётся готовая: тот же вид, что в журнале и «Оценках».
+            */}
+            <PersonList>
+              {assignment.rows.map((row) => (
+                <PersonRow key={row.studentId} name={row.studentName}>
                   {row.submission === null ? (
                     <Badge tone="neutral">не сдал</Badge>
-                  ) : row.submission.isLate ? (
-                    <Badge tone="danger">сдано позже срока</Badge>
                   ) : (
-                    <Badge tone="success">сдано</Badge>
+                    <>
+                      {row.submission.isLate ? (
+                        <Badge tone="danger">сдано позже срока</Badge>
+                      ) : (
+                        <Badge tone="success">сдано</Badge>
+                      )}
+                      <span className="text-xs text-slate-500">
+                        {new Date(row.submission.submittedAt).toLocaleDateString('ru-RU')}
+                      </span>
+                      {row.submission.files.map((file) => (
+                        <a
+                          key={file.id}
+                          className="text-blue-700 underline"
+                          href={`/api/homework/files/${file.id}`}
+                          download
+                        >
+                          {file.originalName}
+                        </a>
+                      ))}
+                    </>
                   )}
+                </PersonRow>
+              ))}
+            </PersonList>
 
-                  {row.submission !== null && (
-                    <span className="text-xs text-slate-500">
-                      {new Date(row.submission.submittedAt).toLocaleDateString('ru-RU')}
-                    </span>
-                  )}
-                </div>
-
-                {row.submission !== null && (
-                  <div className="flex flex-col gap-1 pl-4">
-                    {row.submission.text !== '' && (
-                      <p className="whitespace-pre-wrap text-slate-700">{row.submission.text}</p>
-                    )}
-
-                    {row.submission.files.length > 0 && (
-                      <ul className="flex flex-wrap gap-2">
-                        {row.submission.files.map((file) => (
-                          <li key={file.id}>
-                            <a
-                              className="text-blue-700 underline"
-                              href={`/api/homework/files/${file.id}`}
-                              download
-                            >
-                              {file.originalName}
-                            </a>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-
-                    {row.submission.text === '' && row.submission.files.length === 0 && (
-                      <span className="text-slate-500">Ответ без текста и файлов</span>
-                    )}
-                  </div>
+            {/*
+              Текст ответа показываем **под** строками: иначе длинный ответ растягивает строку и
+              таблица перестаёт читаться построчно.
+            */}
+            {assignment.rows.some((row) => (row.submission?.text ?? '') !== '') && (
+              <div className="flex flex-col gap-1 rounded-md bg-[var(--color-surface-muted)] p-3">
+                {assignment.rows.map((row) =>
+                  row.submission === null || row.submission.text === '' ? null : (
+                    <p key={row.studentId} className="text-sm">
+                      <span className="font-medium text-slate-700">{row.studentName}: </span>
+                      <span className="whitespace-pre-wrap text-slate-700">
+                        {row.submission.text}
+                      </span>
+                    </p>
+                  ),
                 )}
-              </li>
-            ))}
-          </ul>
-        </Card>
-      ))}
-    </div>
+              </div>
+            )}
+          </Section>
+        ))}
+      </QueryState>
+    </Page>
   );
 }

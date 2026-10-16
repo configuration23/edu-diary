@@ -1,6 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { ADMIN_PASSWORD, completeSetup, createTestApp, type TestApp } from './helpers/api';
+import {
+  ADMIN_PASSWORD,
+  completeSetup,
+  configureTestStorage,
+  createTestApp,
+  type TestApp,
+} from './helpers/api';
 import { createTestDatabase, hasTestDatabase, type TestDatabase } from './helpers/database';
 import { createLessonContext, factories, injectClient } from './helpers/factories';
 
@@ -94,6 +100,9 @@ describeWithDatabase('вложения домашних заданий', () => {
     });
     const cookie = login.cookies.find((item) => item.name === 'edu_diary_session');
     studentCookie = cookie === undefined ? '' : `${cookie.name}=${cookie.value}`;
+
+    /** Хранилище — временный каталог: пустой путь означал бы корень проекта. */
+    await configureTestStorage(testApp.app, adminCookie);
   });
 
   afterAll(async () => {

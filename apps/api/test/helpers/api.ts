@@ -1,3 +1,6 @@
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import type { FastifyInstance } from 'fastify';
 
 import { buildApp } from '../../src/app';
@@ -65,6 +68,40 @@ export function cookieHeader(cookies: Array<{ name: string; value: string }>): s
   const session = cookies.find((item) => item.name === 'edu_diary_session');
   if (session === undefined) throw new Error('Cookie сессии не установлена');
   return `${session.name}=${session.value}`;
+}
+
+/**
+ * Каталог локального хранилища для тестов: **временный, вне репозитория**.
+ *
+ * Путь обязателен: если он пуст, сервис хранилища отказывает (см. `storage.service.ts`).
+ * Раньше пустой путь означал `resolve('')` — то есть **корень проекта**: загруженные в тестах
+ * файлы падали в рабочий каталог и часть попала в репозиторий. Тесты обязаны писать во
+ * временный каталог, а не в проект.
+ */
+export function testStoragePath(): string {
+  return join(tmpdir(), 'edu-diary-test-storage');
+}
+
+/**
+ * Настроить хранилище для теста: локальный провайдер и временный каталог.
+ *
+ * Путь задаётся **через тот же API настроек**, которым пользуется администратор: отдельного
+ * «тестового» пути в коде нет, иначе проверяли бы не то, что работает на стенде.
+ */
+export async function configureTestStorage(
+  app: FastifyInstance,
+  adminCookie: string,
+): Promise<void> {
+  const response = await app.inject({
+    method: 'PUT',
+    url: '/api/settings/storage',
+    headers: { cookie: adminCookie },
+    payload: { provider: 'local', localPath: testStoragePath() },
+  });
+
+  if (response.statusCode !== 200) {
+    throw new Error(`Хранилище не настроено: ${response.statusCode} ${response.body}`);
+  }
 }
 
 export async function login(

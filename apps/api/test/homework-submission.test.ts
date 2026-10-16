@@ -1,6 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { ADMIN_PASSWORD, completeSetup, createTestApp, type TestApp } from './helpers/api';
+import {
+  ADMIN_PASSWORD,
+  completeSetup,
+  configureTestStorage,
+  createTestApp,
+  type TestApp,
+} from './helpers/api';
 import { createTestDatabase, hasTestDatabase, type TestDatabase } from './helpers/database';
 import { createLessonContext, factories, injectClient } from './helpers/factories';
 
@@ -102,6 +108,9 @@ describeWithDatabase('сдача решения', () => {
     });
     expect(assignment.statusCode, assignment.body).toBe(201);
     assignmentId = (assignment.json() as Json).id as string;
+
+    /** Хранилище — временный каталог: пустой путь означал бы корень проекта. */
+    await configureTestStorage(testApp.app, adminCookie);
   });
 
   afterAll(async () => {

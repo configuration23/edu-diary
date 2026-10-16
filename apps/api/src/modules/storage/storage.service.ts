@@ -4,6 +4,7 @@ import type { StorageAdapter } from './storage.adapter';
 import { decryptSecret, encryptSecret, isEncrypted } from './storage.crypto';
 import { createLocalStorage } from './storage.local';
 import { createS3Storage } from './storage.s3';
+import { AppError } from '../../shared/errors';
 import { DEFAULT_ALLOWED_EXTENSIONS, DEFAULT_FILE_MB, normalizeMaxFileMb } from '@edu-diary/domain';
 
 /**
@@ -80,9 +81,24 @@ export function createStorageService(settings: SettingsService, encryptionKey: s
       overrides.provider ?? (await settings.get<string>(SETTING_KEYS.storageProvider)) ?? 'local';
 
     if (provider !== 's3') {
-      const path =
-        overrides.localPath ?? (await settings.get<string>(SETTING_KEYS.storageLocalPath)) ?? '';
-      return createLocalStorage(path);
+      const configured = overrides.localPath ?? (await settings.get<string>(SETTING_KEYS.storageLocalPath));
+
+      /**
+       * Пустой путь — **ошибка, а не «текущий каталог»**.
+       *
+       * Раньше здесь подставлялось `''`, а `resolve('')` возвращает каталог запуска: файлы
+       * пользователей молча падали в **корень проекта**, и часть из них попала в репозиторий.
+       * На стенде то же самое означало бы запись в каталог приложения — то есть внутрь
+       * контейнера, чего мы как раз избегаем (`PHASE-5-PLAN.md`).
+       */
+      if (configured === undefined || configured === null || configured.trim() === '') {
+        throw new AppError(
+          'VALIDATION_FAILED',
+          'Не задан каталог локального хранилища. Укажите его в настройках хранилища — иначе файлы попадут в каталог приложения.',
+        );
+      }
+
+      return createLocalStorage(configured);
     }
 
     const read = async (fromForm: string | undefined, key: string): Promise<string> =>

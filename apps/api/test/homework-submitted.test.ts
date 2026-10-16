@@ -1,6 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { ADMIN_PASSWORD, completeSetup, createTestApp, type TestApp } from './helpers/api';
+import {
+  ADMIN_PASSWORD,
+  completeSetup,
+  configureTestStorage,
+  createTestApp,
+  type TestApp,
+} from './helpers/api';
 import { createTestDatabase, hasTestDatabase, type TestDatabase } from './helpers/database';
 import { createLessonContext, factories, injectClient } from './helpers/factories';
 
@@ -69,6 +75,9 @@ describeWithDatabase('сданные работы', () => {
       },
       admin: { username: 'admin', fullName: 'Администратор', password: ADMIN_PASSWORD },
     }));
+
+    /** Хранилище — временный каталог: пустой путь означал бы корень проекта. */
+    await configureTestStorage(testApp.app, adminCookie);
 
     const created = await createLessonContext(factories(injectClient(testApp.app), adminCookie), {
       run: 'СДАННЫЕ',
