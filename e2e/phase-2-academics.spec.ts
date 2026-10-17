@@ -170,8 +170,15 @@ test.describe('Этап 2: год, группа, назначения', () => {
     await page.getByRole('link', { name: 'Справочники' }).click();
     await expect(page.getByRole('heading', { name: 'Предметы' })).toBeVisible();
 
-    await page.getByLabel('Название').first().fill(SUBJECT);
+    /** Форма скрыта: сначала открываем её кнопкой в шапке блока «Предметы». */
     await page.getByRole('button', { name: 'Добавить предмет' }).click();
+
+    const subjectForm = page
+      .locator('section')
+      .filter({ has: page.getByRole('heading', { name: 'Предметы' }) });
+
+    await subjectForm.getByLabel('Название').fill(SUBJECT);
+    await subjectForm.getByRole('button', { name: 'Добавить предмет' }).click();
     await expect(page.getByRole('cell', { name: SUBJECT })).toBeVisible();
 
     // --- Назначение ---

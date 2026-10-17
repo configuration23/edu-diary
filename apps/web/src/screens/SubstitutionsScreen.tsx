@@ -48,9 +48,12 @@ function shiftDays(days: number): string {
 function QuickSubstitution({
   groupId,
   initialLessonId,
+  onDone,
 }: {
   groupId: string | null;
   initialLessonId: string | null;
+  /** Закрыть форму после оформления: дальше человек работает с журналом. */
+  onDone: () => void;
 }) {
   /**
    * Урок мог прийти ссылкой из раздела «Уроки»: тогда окно шире, чтобы занятие
@@ -88,6 +91,7 @@ function QuickSubstitution({
           setLessonId('');
           setSubstituteUserId('');
           setCustomReason('');
+          onDone();
         } catch {
           // Ошибка показывается ниже.
         }
@@ -183,6 +187,9 @@ function QuickSubstitution({
         >
           Оформить замену
         </Button>
+        <Button tone="secondary" onClick={onDone}>
+          Отмена
+        </Button>
       </div>
 
       {create.isSuccess && <Alert tone="success">Замена оформлена и опубликована.</Alert>}
@@ -246,21 +253,38 @@ export function SubstitutionsScreen({
   canManage: boolean;
   initialLessonId?: string | null;
 }) {
+  /**
+   * Форма скрыта, пока её не позовут кнопкой из блока списка.
+   *
+   * Раньше «Быстрая замена» была **отдельной карточкой сверху**, а журнал — второй карточкой. Две
+   * карточки об одном и том же: человек искал, где оформить замену, и не связывал форму с журналом,
+   * в который она пишет. Теперь одна карточка: кнопка в шапке, форма над списком.
+   */
+  const [creating, setCreating] = useState(false);
+
   return (
     <div className="flex flex-col gap-6">
-      {canManage && (
-        <Card
-          title="Быстрая замена"
-          description="Замена на один урок: занятие, заменяющий и причина. Публикуется сразу, причина остаётся в журнале."
-        >
-          <QuickSubstitution groupId={groupId} initialLessonId={initialLessonId} />
-        </Card>
-      )}
-
       <Card
-        title="Журнал замен"
-        description="Действующие замены: кто кого заменяет и на какой срок."
+        title="Замены"
+        description="Действующие замены: кто кого заменяет и на какой срок. Замена оформляется на один урок и публикуется сразу."
+        actions={
+          canManage ? (
+            creating ? undefined : (
+              <Button onClick={() => setCreating(true)}>Оформить замену</Button>
+            )
+          ) : undefined
+        }
       >
+        {canManage && creating && (
+          <div className="mb-4 rounded-md border border-slate-300 bg-slate-50 p-4">
+            <QuickSubstitution
+              groupId={groupId}
+              initialLessonId={initialLessonId}
+              onDone={() => setCreating(false)}
+            />
+          </div>
+        )}
+
         <SubstitutionJournal />
       </Card>
     </div>

@@ -187,6 +187,9 @@ test.describe('Этап 3: звонки, расписание, уроки', () =
       .locator('section')
       .filter({ has: page.getByRole('heading', { level: 2, name: 'Звонки' }) });
 
+    /** Форма скрыта: открываем её кнопкой в шапке блока «Звонки». */
+    await bells.getByRole('button', { name: 'Добавить звонок' }).click();
+
     await bells.getByLabel('Пара').selectOption('3');
     await bells.getByLabel('Начало').fill('11:30');
     await bells.getByLabel('Окончание').fill('13:00');
@@ -196,17 +199,14 @@ test.describe('Этап 3: звонки, расписание, уроки', () =
 
     // --- Сетка (шаблон): занятие группы ---
     await page.getByRole('link', { name: 'Сетка (шаблон)' }).click();
-    // Экран открывается блоком добавления занятия: группа выбирается в нём,
-    // список занятий идёт ниже и подгружается по выбранной группе.
-    await expect(
-      page.getByRole('heading', { level: 2, name: 'Добавить занятие', exact: true }),
-    ).toBeVisible();
+    // Форма добавления скрыта: открываем её кнопкой в шапке блока «Занятия в сетке».
+    await page.getByRole('button', { name: 'Добавить занятие' }).click();
 
-    // Группа выбирается в блоке добавления занятия: список ниже подгружается по
-    // выбранной группе, а отдельного селекта в шапке на этом экране нет.
+    // Группа выбирается в форме добавления: список ниже подгружается по выбранной
+    // группе, а отдельного селекта в шапке на этом экране нет.
     const entryForm = page
       .locator('section')
-      .filter({ has: page.getByRole('heading', { name: 'Добавить занятие' }) });
+      .filter({ has: page.getByRole('heading', { name: 'Занятия в сетке' }) });
 
     await entryForm.getByLabel('Группа').selectOption({ label: GROUP });
     await expect(page.getByText('В расписании этой группы пока нет занятий')).toBeVisible();

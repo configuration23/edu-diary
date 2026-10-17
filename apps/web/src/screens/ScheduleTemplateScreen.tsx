@@ -92,12 +92,15 @@ function EntryForm({
   selectedGroupId,
   selectGroup,
   yearStart,
+  onDone,
 }: {
   groupId: string | null;
   groups: Array<{ id: string; name: string }>;
   selectedGroupId: string | null;
   selectGroup: (id: string | null) => void;
   yearStart: string;
+  /** Закрыть форму после добавления: дальше человек работает со списком. */
+  onDone: () => void;
 }) {
   const assignments = useAssignments(groupId === null ? {} : { studyGroupId: groupId });
   const rooms = useRooms();
@@ -172,6 +175,8 @@ function EntryForm({
             validFrom,
             validTo: validTo === '' ? null : validTo,
           });
+          /** Форму закрываем: дальше человек работает со списком занятий. */
+          onDone();
         } catch {
           // Ошибка показывается ниже.
         }
@@ -322,6 +327,12 @@ function EntryForm({
       </div>
 
       {create.isError && <Alert tone="error">{errorMessage(create.error)}</Alert>}
+
+      <div className="mt-3">
+        <Button tone="secondary" onClick={onDone}>
+          Отмена
+        </Button>
+      </div>
     </form>
   );
 }
@@ -461,6 +472,8 @@ export function ScheduleTemplateScreen({ session }: { session: SessionResponseDt
   // Пары для выбора — только заведённые в звонках: остальные всё равно нельзя заполнить.
   const pairs = pairsFromBells(bells.data?.items);
   const [editingId, setEditingId] = useState<string | null>(null);
+  /** Форма добавления скрыта, пока её не позовут кнопкой: список важнее формы. */
+  const [creating, setCreating] = useState(false);
   const editable = canManageSchedule(session);
   /**
    * Учётные записи запрашиваем только те, кто правит расписание: у преподавателя права
@@ -480,25 +493,35 @@ export function ScheduleTemplateScreen({ session }: { session: SessionResponseDt
 
   return (
     <div className="flex flex-col gap-6">
-      {editable && (
-        <Card
-          title="Добавить занятие"
-          description="Занятие повторяется каждую неделю в указанных датах действия. Группа выбирается здесь — список ниже показывает её занятия."
-        >
-          <EntryForm
-            groupId={selectedGroupId}
-            groups={groups}
-            selectedGroupId={selectedGroupId}
-            selectGroup={selectGroup}
-            yearStart={activeYearStartsOn ?? ''}
-          />
-        </Card>
-      )}
-
       <Card
         title="Занятия в сетке"
-        description={`Шаблон занятий на неделю${activeYearTitle === null ? '' : ` · ${activeYearTitle}`}. Уроки по датам появляются на экране «Уроки».`}
+        description={`Шаблон занятий на неделю${activeYearTitle === null ? '' : ` · ${activeYearTitle}`}. Занятие повторяется каждую неделю в указанных датах действия; уроки по датам появляются на экране «Уроки».`}
+        actions={
+          editable ? (
+            creating ? undefined : (
+              <Button onClick={() => setCreating(true)}>Добавить занятие</Button>
+            )
+          ) : undefined
+        }
       >
+        {/*
+          Отдельной карточки «Добавить занятие» больше нет: она стояла над списком постоянно и
+          занимала первый экран, хотя занятие добавляют реже, чем смотрят существующие. Теперь форма
+          открывается кнопкой и показывается **над списком** — там же, где её ждут.
+        */}
+        {editable && creating && (
+          <div className="mb-4 rounded-md border border-slate-300 bg-slate-50 p-4">
+            <EntryForm
+              groupId={selectedGroupId}
+              groups={groups}
+              selectedGroupId={selectedGroupId}
+              selectGroup={selectGroup}
+              yearStart={activeYearStartsOn ?? ''}
+              onDone={() => setCreating(false)}
+            />
+          </div>
+        )}
+
         {!editable && (
           <GroupField groups={groups} selectedGroupId={selectedGroupId} selectGroup={selectGroup} />
         )}

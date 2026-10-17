@@ -43,6 +43,8 @@ function subjectKindLabel(kind: string): string {
 }
 
 function SubjectsCard() {
+  /** Форма создания скрыта, пока её не позовут кнопкой: список важнее формы. */
+  const [creating, setCreating] = useState(false);
   const subjects = useSubjects();
   const create = useCreateSubject();
   const update = useUpdateSubject();
@@ -75,71 +77,99 @@ function SubjectsCard() {
   const [editColor, setEditColor] = useState('');
 
   return (
-    <Card title="Предметы" description="По предмету ставятся оценки и строятся назначения.">
-      <form
-        className="flex flex-col gap-3"
-        onSubmit={async (event) => {
-          event.preventDefault();
-          try {
-            await create.mutateAsync({
-              name,
-              shortName: shortName === '' ? null : shortName,
-              kind,
-              color: color === '' ? null : color,
-            });
-            setName('');
-            setShortName('');
-            setColor('');
-          } catch {
-            // Ошибка показывается ниже.
-          }
-        }}
-      >
-        <div className="grid gap-3 sm:grid-cols-4">
-          <Field label="Название">
-            <TextInput required value={name} onChange={(event) => setName(event.target.value)} />
-          </Field>
-          <Field label="Короткое имя" hint="Код для плиток расписания, 2–4 символа (необязательно)">
-            <TextInput value={shortName} onChange={(event) => setShortName(event.target.value)} />
-          </Field>
-          <Field label="Вид">
-            <select
-              className="rounded-md border border-slate-300 px-3 py-2 text-sm"
-              value={kind}
-              onChange={(event) =>
-                setKind(event.target.value as 'mandatory' | 'optional' | 'practice')
+    <Card
+      title="Предметы"
+      description="По предмету ставятся оценки и строятся назначения."
+      actions={
+        creating ? undefined : <Button onClick={() => setCreating(true)}>Добавить предмет</Button>
+      }
+    >
+      {creating && (
+        <>
+          <form
+            className="flex flex-col gap-3"
+            onSubmit={async (event) => {
+              event.preventDefault();
+              try {
+                await create.mutateAsync({
+                  name,
+                  shortName: shortName === '' ? null : shortName,
+                  kind,
+                  color: color === '' ? null : color,
+                });
+                setName('');
+                setShortName('');
+                setColor('');
+                setCreating(false);
+              } catch {
+                // Ошибка показывается ниже.
               }
-            >
-              {SUBJECT_KINDS.map((item) => (
-                <option key={item.value} value={item.value}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Цвет" hint="Пусто — подберём автоматически">
-            <span className="flex items-center gap-2">
-              <input
-                type="color"
-                name="color"
-                className="h-9 w-12 rounded border border-slate-300"
-                value={color === '' ? nextSubjectColor : color}
-                onChange={(event) => setColor(event.target.value)}
-              />
-              {color === '' && <span className="text-xs text-slate-500">по кругу оттенков</span>}
-            </span>
-          </Field>
-          <div className="flex items-end pb-2">
-            <Button type="submit" disabled={create.isPending}>
-              Добавить предмет
-            </Button>
-          </div>
-        </div>
+            }}
+          >
+            <div className="grid gap-3 sm:grid-cols-4">
+              <Field label="Название">
+                <TextInput
+                  required
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                />
+              </Field>
+              <Field
+                label="Короткое имя"
+                hint="Код для плиток расписания, 2–4 символа (необязательно)"
+              >
+                <TextInput
+                  value={shortName}
+                  onChange={(event) => setShortName(event.target.value)}
+                />
+              </Field>
+              <Field label="Вид">
+                <select
+                  className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+                  value={kind}
+                  onChange={(event) =>
+                    setKind(event.target.value as 'mandatory' | 'optional' | 'practice')
+                  }
+                >
+                  {SUBJECT_KINDS.map((item) => (
+                    <option key={item.value} value={item.value}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Цвет" hint="Пусто — подберём автоматически">
+                <span className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    name="color"
+                    className="h-9 w-12 rounded border border-slate-300"
+                    value={color === '' ? nextSubjectColor : color}
+                    onChange={(event) => setColor(event.target.value)}
+                  />
+                  {color === '' && (
+                    <span className="text-xs text-slate-500">по кругу оттенков</span>
+                  )}
+                </span>
+              </Field>
+              <div className="flex items-end pb-2">
+                <Button type="submit" disabled={create.isPending}>
+                  Добавить предмет
+                </Button>
+              </div>
+            </div>
 
-        {create.isError && <Alert tone="error">{errorMessage(create.error)}</Alert>}
-        {remove.isError && <Alert tone="error">{errorMessage(remove.error)}</Alert>}
-        {remove.isSuccess && <Alert tone="success">Предмет удалён.</Alert>}
-      </form>
+            {create.isError && <Alert tone="error">{errorMessage(create.error)}</Alert>}
+            {remove.isError && <Alert tone="error">{errorMessage(remove.error)}</Alert>}
+            {remove.isSuccess && <Alert tone="success">Предмет удалён.</Alert>}
+            <div className="mt-3">
+              <Button tone="secondary" onClick={() => setCreating(false)}>
+                Отмена
+              </Button>
+            </div>
+          </form>
+        </>
+      )}
 
       <div className="mt-4">
         {subjects.isLoading && <p className="text-sm text-slate-500">Загружаем…</p>}
@@ -265,6 +295,8 @@ function SubjectsCard() {
 }
 
 function RoomsCard() {
+  /** Форма создания скрыта, пока её не позовут кнопкой: список важнее формы. */
+  const [creating, setCreating] = useState(false);
   const rooms = useRooms();
   const create = useCreateRoom();
   const update = useUpdateRoom();
@@ -286,48 +318,68 @@ function RoomsCard() {
   };
 
   return (
-    <Card title="Аудитории" description="Аудитория указывается в уроке расписания.">
-      <form
-        className="flex flex-col gap-3"
-        onSubmit={async (event) => {
-          event.preventDefault();
-          try {
-            await create.mutateAsync({
-              name,
-              capacity: capacity === '' ? null : Number(capacity),
-              note: note === '' ? null : note,
-            });
-            setName('');
-            setCapacity('');
-            setNote('');
-          } catch {
-            // Ошибка показывается ниже.
-          }
-        }}
-      >
-        <div className="grid gap-3 sm:grid-cols-4">
-          <Field label="Название">
-            <TextInput required value={name} onChange={(event) => setName(event.target.value)} />
-          </Field>
-          <Field label="Вместимость" hint="Необязательно">
-            <TextInput
-              inputMode="numeric"
-              value={capacity}
-              onChange={(event) => setCapacity(event.target.value)}
-            />
-          </Field>
-          <Field label="Примечание" hint="Необязательно">
-            <TextInput value={note} onChange={(event) => setNote(event.target.value)} />
-          </Field>
-          <div className="flex items-end pb-2">
-            <Button type="submit" disabled={create.isPending}>
-              Добавить аудиторию
-            </Button>
-          </div>
-        </div>
+    <Card
+      title="Аудитории"
+      description="Аудитория указывается в уроке расписания."
+      actions={
+        creating ? undefined : <Button onClick={() => setCreating(true)}>Добавить аудиторию</Button>
+      }
+    >
+      {creating && (
+        <>
+          <form
+            className="flex flex-col gap-3"
+            onSubmit={async (event) => {
+              event.preventDefault();
+              try {
+                await create.mutateAsync({
+                  name,
+                  capacity: capacity === '' ? null : Number(capacity),
+                  note: note === '' ? null : note,
+                });
+                setName('');
+                setCapacity('');
+                setNote('');
+                setCreating(false);
+              } catch {
+                // Ошибка показывается ниже.
+              }
+            }}
+          >
+            <div className="grid gap-3 sm:grid-cols-4">
+              <Field label="Название">
+                <TextInput
+                  required
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                />
+              </Field>
+              <Field label="Вместимость" hint="Необязательно">
+                <TextInput
+                  inputMode="numeric"
+                  value={capacity}
+                  onChange={(event) => setCapacity(event.target.value)}
+                />
+              </Field>
+              <Field label="Примечание" hint="Необязательно">
+                <TextInput value={note} onChange={(event) => setNote(event.target.value)} />
+              </Field>
+              <div className="flex items-end pb-2">
+                <Button type="submit" disabled={create.isPending}>
+                  Добавить аудиторию
+                </Button>
+              </div>
+            </div>
 
-        {create.isError && <Alert tone="error">{errorMessage(create.error)}</Alert>}
-      </form>
+            {create.isError && <Alert tone="error">{errorMessage(create.error)}</Alert>}
+            <div className="mt-3">
+              <Button tone="secondary" onClick={() => setCreating(false)}>
+                Отмена
+              </Button>
+            </div>
+          </form>
+        </>
+      )}
 
       <div className="mt-4">
         {rooms.data !== undefined && rooms.data.items.length === 0 && (
@@ -412,6 +464,8 @@ function RoomsCard() {
 }
 
 function CategoriesCard() {
+  /** Форма создания скрыта, пока её не позовут кнопкой: список важнее формы. */
+  const [creating, setCreating] = useState(false);
   const categories = useGradeCategories();
   const create = useCreateGradeCategory();
   const update = useUpdateGradeCategory();
@@ -427,50 +481,67 @@ function CategoriesCard() {
     <Card
       title="Причины оценок"
       description="Причина обязательна при выставлении оценки и задаёт её вес в среднем балле."
+      actions={
+        creating ? undefined : <Button onClick={() => setCreating(true)}>Добавить причину</Button>
+      }
     >
-      <form
-        className="flex flex-col gap-3"
-        onSubmit={async (event) => {
-          event.preventDefault();
-          try {
-            await create.mutateAsync({ code, title, weight: Number(weight) });
-            setCode('');
-            setTitle('');
-            setWeight('1');
-          } catch {
-            // Ошибка показывается ниже.
-          }
-        }}
-      >
-        <div className="grid gap-3 sm:grid-cols-4">
-          <Field label="Код" hint="До двух символов: Д, К, Пр">
-            <TextInput
-              required
-              maxLength={2}
-              value={code}
-              onChange={(event) => setCode(event.target.value)}
-            />
-          </Field>
-          <Field label="Название">
-            <TextInput required value={title} onChange={(event) => setTitle(event.target.value)} />
-          </Field>
-          <Field label="Вес" hint="1–5">
-            <TextInput
-              required
-              inputMode="numeric"
-              value={weight}
-              onChange={(event) => setWeight(event.target.value)}
-            />
-          </Field>
-          <div className="flex items-end pb-2">
-            <Button type="submit" disabled={create.isPending}>
-              Добавить причину
-            </Button>
-          </div>
-        </div>
+      {creating && (
+        <>
+          <form
+            className="flex flex-col gap-3"
+            onSubmit={async (event) => {
+              event.preventDefault();
+              try {
+                await create.mutateAsync({ code, title, weight: Number(weight) });
+                setCode('');
+                setTitle('');
+                setWeight('1');
+                setCreating(false);
+              } catch {
+                // Ошибка показывается ниже.
+              }
+            }}
+          >
+            <div className="grid gap-3 sm:grid-cols-4">
+              <Field label="Код" hint="До двух символов: Д, К, Пр">
+                <TextInput
+                  required
+                  maxLength={2}
+                  value={code}
+                  onChange={(event) => setCode(event.target.value)}
+                />
+              </Field>
+              <Field label="Название">
+                <TextInput
+                  required
+                  value={title}
+                  onChange={(event) => setTitle(event.target.value)}
+                />
+              </Field>
+              <Field label="Вес" hint="1–5">
+                <TextInput
+                  required
+                  inputMode="numeric"
+                  value={weight}
+                  onChange={(event) => setWeight(event.target.value)}
+                />
+              </Field>
+              <div className="flex items-end pb-2">
+                <Button type="submit" disabled={create.isPending}>
+                  Добавить причину
+                </Button>
+              </div>
+            </div>
 
-        {create.isError && <Alert tone="error">{errorMessage(create.error)}</Alert>}
-      </form>
+            {create.isError && <Alert tone="error">{errorMessage(create.error)}</Alert>}
+            <div className="mt-3">
+              <Button tone="secondary" onClick={() => setCreating(false)}>
+                Отмена
+              </Button>
+            </div>
+          </form>
+        </>
+      )}
 
       <div className="mt-4">
         {categories.data !== undefined && categories.data.items.length === 0 && (
@@ -645,6 +716,8 @@ function SignRulesCard() {
 }
 
 function BellsCard() {
+  /** Форма создания скрыта, пока её не позовут кнопкой: список важнее формы. */
+  const [creating, setCreating] = useState(false);
   const bells = useBells();
   const save = useSaveBell();
   const remove = useDeleteBell();
@@ -658,73 +731,86 @@ function BellsCard() {
     <Card
       title="Звонки"
       description="Время пары подставляется в расписание по номеру пары и остаётся правимым."
+      actions={
+        creating ? undefined : <Button onClick={() => setCreating(true)}>Добавить звонок</Button>
+      }
     >
-      <form
-        className="flex flex-col gap-3"
-        onSubmit={async (event) => {
-          event.preventDefault();
-          try {
-            await save.mutateAsync({
-              pairNumber: Number(pairNumber),
-              timeStart,
-              timeEnd,
-              breakMinutes: breakMinutes === '' ? null : Number(breakMinutes),
-            });
-            setTimeStart('');
-            setTimeEnd('');
-            setBreakMinutes('');
-          } catch {
-            // Ошибка показывается ниже.
-          }
-        }}
-      >
-        <div className="grid gap-3 sm:grid-cols-4">
-          <Field label="Пара">
-            <select
-              className="rounded-md border border-slate-300 px-3 py-2 text-sm"
-              value={pairNumber}
-              onChange={(event) => setPairNumber(event.target.value)}
-            >
-              {[1, 2, 3, 4, 5, 6, 7, 8].map((number) => (
-                <option key={number} value={String(number)}>
-                  {number}-я пара
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Начало">
-            <TextInput
-              required
-              type="time"
-              value={timeStart}
-              onChange={(event) => setTimeStart(event.target.value)}
-            />
-          </Field>
-          <Field label="Окончание">
-            <TextInput
-              required
-              type="time"
-              value={timeEnd}
-              onChange={(event) => setTimeEnd(event.target.value)}
-            />
-          </Field>
-          <Field label="Перемена, мин" hint="Необязательно">
-            <TextInput
-              inputMode="numeric"
-              value={breakMinutes}
-              onChange={(event) => setBreakMinutes(event.target.value)}
-            />
-          </Field>
-        </div>
+      {creating && (
+        <>
+          <form
+            className="flex flex-col gap-3"
+            onSubmit={async (event) => {
+              event.preventDefault();
+              try {
+                await save.mutateAsync({
+                  pairNumber: Number(pairNumber),
+                  timeStart,
+                  timeEnd,
+                  breakMinutes: breakMinutes === '' ? null : Number(breakMinutes),
+                });
+                setTimeStart('');
+                setTimeEnd('');
+                setBreakMinutes('');
+                setCreating(false);
+              } catch {
+                // Ошибка показывается ниже.
+              }
+            }}
+          >
+            <div className="grid gap-3 sm:grid-cols-4">
+              <Field label="Пара">
+                <select
+                  className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+                  value={pairNumber}
+                  onChange={(event) => setPairNumber(event.target.value)}
+                >
+                  {[1, 2, 3, 4, 5, 6, 7, 8].map((number) => (
+                    <option key={number} value={String(number)}>
+                      {number}-я пара
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Начало">
+                <TextInput
+                  required
+                  type="time"
+                  value={timeStart}
+                  onChange={(event) => setTimeStart(event.target.value)}
+                />
+              </Field>
+              <Field label="Окончание">
+                <TextInput
+                  required
+                  type="time"
+                  value={timeEnd}
+                  onChange={(event) => setTimeEnd(event.target.value)}
+                />
+              </Field>
+              <Field label="Перемена, мин" hint="Необязательно">
+                <TextInput
+                  inputMode="numeric"
+                  value={breakMinutes}
+                  onChange={(event) => setBreakMinutes(event.target.value)}
+                />
+              </Field>
+            </div>
 
-        <div>
-          <Button type="submit" disabled={save.isPending}>
-            Сохранить звонок
-          </Button>
-        </div>
+            <div>
+              <Button type="submit" disabled={save.isPending}>
+                Сохранить звонок
+              </Button>
+            </div>
 
-        {save.isError && <Alert tone="error">{errorMessage(save.error)}</Alert>}
-      </form>
+            {save.isError && <Alert tone="error">{errorMessage(save.error)}</Alert>}
+            <div className="mt-3">
+              <Button tone="secondary" onClick={() => setCreating(false)}>
+                Отмена
+              </Button>
+            </div>
+          </form>
+        </>
+      )}
 
       <div className="mt-4">
         {bells.data !== undefined && bells.data.items.length === 0 && (
