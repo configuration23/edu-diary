@@ -1,5 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { RouterProvider, createRootRoute, createRoute, createRouter } from '@tanstack/react-router';
+import {
+  RouterProvider,
+  createRootRoute,
+  createRoute,
+  createRouter,
+  redirect,
+} from '@tanstack/react-router';
 import type { ReactNode } from 'react';
 
 import { AppLayout } from './components/AppLayout';
@@ -9,12 +15,10 @@ import { AppearanceProvider } from './components/AppearanceContext';
 import { Alert } from './components/ui';
 import { errorMessage } from './lib/api-client';
 import { useSession, useSetupStatus } from './lib/queries';
-import { AcademicsScreen } from './screens/AcademicsScreen';
-import { AssignmentsScreen } from './screens/AssignmentsScreen';
+import { AcademicProcessScreen } from './screens/AcademicProcessScreen';
 import { AuditScreen } from './screens/AuditScreen';
 import { CatalogsScreen } from './screens/CatalogsScreen';
 import { DashboardScreen } from './screens/DashboardScreen';
-import { GroupsScreen } from './screens/GroupsScreen';
 import { LoginScreen } from './screens/LoginScreen';
 import { LessonJournalScreen } from './screens/LessonJournalScreen';
 import { LessonsScreen } from './screens/LessonsScreen';
@@ -135,24 +139,38 @@ const securityRoute = createRoute({
   component: withSession(() => <SecurityScreen />),
 });
 
-const academicsRoute = createRoute({
+/**
+ * «Учебный процесс»: годы, группы, ученики и назначения на одной странице.
+ *
+ * Раньше это были три пункта меню — «Учебный год», «Группы и ученики», «Назначения». Работа идёт
+ * по одной цепочке, и три перехода между связанными разделами только мешали.
+ */
+const academicProcessRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/academics',
-  component: withSession(() => <AcademicsScreen />),
+  path: '/academic-process',
+  component: withSession((session) => <AcademicProcessScreen session={session} />),
 });
 
-const groupsRoute = createRoute({
+/**
+ * Старые адреса ведут на объединённую страницу.
+ *
+ * Закладки на «Учебный год» и «Группы и ученики» продолжают работать: удалять адреса без
+ * перенаправления значит отдавать «страница не найдена» тем, кто ими пользовался.
+ */
+const legacyAcademicsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/academics',
+  beforeLoad: () => {
+    throw redirect({ to: '/academic-process' });
+  },
+});
+
+const legacyGroupsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/groups',
-  // Блоки учеников показываются только тем, кто может их заводить: у
-  // преподавателя раздел остаётся про группы и состав.
-  component: withSession((session) => (
-    <GroupsScreen
-      canManageStudents={session.permissions.some(
-        (grant) => grant.permission === 'students:write' && grant.scope === 'all',
-      )}
-    />
-  )),
+  beforeLoad: () => {
+    throw redirect({ to: '/academic-process' });
+  },
 });
 
 const catalogsRoute = createRoute({
@@ -161,10 +179,12 @@ const catalogsRoute = createRoute({
   component: withSession(() => <CatalogsScreen />),
 });
 
-const assignmentsRoute = createRoute({
+const legacyAssignmentsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/assignments',
-  component: withSession((session) => <AssignmentsScreen session={session} />),
+  beforeLoad: () => {
+    throw redirect({ to: '/academic-process' });
+  },
 });
 
 const scheduleRoute = createRoute({
@@ -266,10 +286,12 @@ function SubstitutionsRoute() {
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
-  academicsRoute,
-  groupsRoute,
+  academicProcessRoute,
+  /** Старые адреса: работают, но ведут на объединённую страницу. */
+  legacyAcademicsRoute,
+  legacyGroupsRoute,
+  legacyAssignmentsRoute,
   catalogsRoute,
-  assignmentsRoute,
   scheduleRoute,
   scheduleTemplateRoute,
   substitutionsRoute,

@@ -87,7 +87,7 @@ test('Этап 4: журнал урока — оценки с причинами
   await page.goto('/');
   await login(page, ADMIN.username, ADMIN.password);
   // Ждём, пока сессия установлена: иначе запросы к API уйдут без cookie.
-  await expect(page.getByRole('link', { name: 'Учебный год' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Учебный процесс' })).toBeVisible();
 
   // --- Данные учебного процесса через API ---
   const year = await bodyOf<{ id: string }>(
@@ -332,7 +332,7 @@ test('Этап 4: журнал урока — оценки с причинами
 test('Этап 4, шаг 3: удалённую оценку видно и можно вернуть', async ({ page }) => {
   await page.goto('/');
   await login(page, ADMIN.username, ADMIN.password);
-  await expect(page.getByRole('link', { name: 'Учебный год' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Учебный процесс' })).toBeVisible();
 
   const group = await bodyOf<{ id: string }>(
     await page.request.post('/api/groups', {
@@ -465,7 +465,7 @@ test('Этап 4, шаг 3: удалённую оценку видно и мож
 test('Этап 4, шаг 2: пересчёт плюсов в оценку', async ({ page }) => {
   await page.goto('/');
   await login(page, ADMIN.username, ADMIN.password);
-  await expect(page.getByRole('link', { name: 'Учебный год' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Учебный процесс' })).toBeVisible();
 
   // Данные: год, группа, предмет, ученик, назначение и два урока.
   const year = await bodyOf<{ id: string }>(
@@ -668,7 +668,7 @@ test('Этап 4, шаг 4: аналитика по группе', async ({ page
 
   await page.goto('/');
   await login(page, ADMIN.username, ADMIN.password);
-  await expect(page.getByRole('link', { name: 'Учебный год' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Учебный процесс' })).toBeVisible();
 
   const years = await page.request.get('/api/academic-years');
   /**

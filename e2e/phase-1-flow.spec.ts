@@ -270,10 +270,8 @@ test.describe.serial('Этап 1: настройка, вход, права', () 
 
     const screens = [
       '/',
-      '/academics',
-      '/groups',
+      '/academic-process',
       '/catalogs',
-      '/assignments',
       '/schedule',
       '/schedule/template',
       '/substitutions',
@@ -289,6 +287,26 @@ test.describe.serial('Этап 1: настройка, вход, права', () 
     for (const path of screens) {
       await page.goto(path);
       await expect(page.getByRole('link', { name: 'Обзор' })).toBeVisible();
+    }
+
+    /**
+     * Старые адреса объединённых разделов **перенаправляют** на «Учебный процесс».
+     *
+     * Без перенаправления закладки на «Учебный год», «Группы и ученики» и «Назначения» отдавали бы
+     * «страница не найдена» — человек решил бы, что раздел пропал.
+     */
+    for (const legacy of ['/academics', '/groups', '/assignments']) {
+      await page.goto(legacy);
+      await expect(page).toHaveURL(/\/academic-process$/);
+      await expect(page.getByRole('heading', { name: 'Учебный процесс' })).toBeVisible();
+    }
+
+    /**
+     * В меню больше нет старых пунктов: иначе объединение не видно, и человек продолжит ходить по
+     * трём разделам, между которыми только что убрали переходы.
+     */
+    for (const label of ['Учебный год', 'Группы и ученики', 'Назначения']) {
+      await expect(page.getByRole('link', { name: label, exact: true })).toHaveCount(0);
     }
 
     expect(pageErrors, 'исключения страницы').toEqual([]);
@@ -376,16 +394,29 @@ test.describe.serial('Этап 1: настройка, вход, права', () 
       '/audit',
       '/security',
       '/settings',
-      '/academics',
-      '/groups',
       '/catalogs',
-      '/assignments',
       '/schedule/template',
       '/substitutions',
       '/lessons',
+      /** Объединённая страница: ученику не положена — там годы, группы и назначения. */
+      '/academic-process',
     ]) {
       await forbidden(path);
     }
+
+    /**
+     * Старые адреса объединённых разделов у ученика ведут на **тот же** закрытый экран.
+     *
+     * Проверяем, что это «Страница не найдена», а не ошибка: перенаправление не должно выдавать
+     * ученику существование раздела и не должно показывать ему `403`.
+     */
+    for (const legacy of ['/academics', '/groups', '/assignments']) {
+      await page.goto(legacy);
+      await expect(page.getByText('Страница не найдена', { exact: false })).toBeVisible();
+    }
+
+    /** В меню ученика объединённого раздела нет: ему там нечего делать. */
+    await expect(page.getByRole('link', { name: 'Учебный процесс' })).toHaveCount(0);
 
     /**
      * На **разрешённых** экранах ученик не должен получать `403` и `400`.

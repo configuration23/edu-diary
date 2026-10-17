@@ -58,25 +58,21 @@ export const NAVIGATION: NavigationItem[] = [
    * Маршрут `/profile` при этом существует и защищён сессией — просто в списке не объявлен.
    */
   { to: '/', label: 'Обзор', visible: () => true },
+  /**
+   * «Учебный процесс» — годы, группы, ученики и назначения одной страницей (решение владельца).
+   *
+   * Раньше это были три пункта меню, хотя работа идёт по одной цепочке: год → группы → ученики →
+   * назначения. Три перехода между связанными разделами только мешали.
+   */
   {
-    to: '/academics',
-    label: 'Учебный год',
-    visible: (session) => has(session, 'academics:read'),
-  },
-  {
-    to: '/groups',
-    label: 'Группы и ученики',
-    visible: (session) => has(session, 'academics:read'),
+    to: '/academic-process',
+    label: 'Учебный процесс',
+    visible: (session) => has(session, 'academics:read') || has(session, 'assignments:read'),
   },
   {
     to: '/catalogs',
     label: 'Справочники',
     visible: (session) => has(session, 'academics:read'),
-  },
-  {
-    to: '/assignments',
-    label: 'Назначения',
-    visible: (session) => has(session, 'assignments:read'),
   },
   {
     to: '/schedule',
