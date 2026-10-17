@@ -190,7 +190,13 @@ export function registerScheduleRoutes(
           authHasPermission(auth, 'schedule:read', 'assigned'),
       });
 
-      return listGroupOptionsResponseSchema.parse({ items });
+      /**
+       * Название активного года отдаём вместе с группами: подпись расписания показывает его всем
+       * ролям, а справочник годов ученику недоступен.
+       */
+      const academicYearTitle = await catalog.activeYearTitle();
+
+      return listGroupOptionsResponseSchema.parse({ items, academicYearTitle });
     },
   );
 

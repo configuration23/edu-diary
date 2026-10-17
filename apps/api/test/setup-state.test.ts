@@ -20,12 +20,33 @@ function createFakeSettings(values: Map<string, unknown>): {
     },
     // Брендинг в этом тесте не участвует: состояние настройки от него не зависит.
     async readBranding() {
-      return { title: null, shortName: null, signature: null, logoDataUrl: null };
+      return {
+        title: null,
+        shortName: null,
+        signature: null,
+        logoDataUrl: null,
+        aboutTitle: null,
+        aboutText: null,
+      };
     },
     async updateBranding() {
       return {
-        branding: { title: null, shortName: null, signature: null, logoDataUrl: null },
-        before: { title: null, shortName: null, signature: null, logoDataUrl: null },
+        branding: {
+          title: null,
+          shortName: null,
+          signature: null,
+          logoDataUrl: null,
+          aboutTitle: null,
+          aboutText: null,
+        },
+        before: {
+          title: null,
+          shortName: null,
+          signature: null,
+          logoDataUrl: null,
+          aboutTitle: null,
+          aboutText: null,
+        },
         changed: {},
       };
     },

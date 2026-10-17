@@ -2,7 +2,7 @@ import type { SessionResponseDto } from '@edu-diary/contracts';
 
 import { Card } from '../components/ui';
 import { Page, PageHeader, QueryState } from '../components/layout';
-import { useNews } from '../lib/queries';
+import { useAbout, useNews } from '../lib/queries';
 import { NewsArticle, NewsCollapsedItem } from '../components/NewsList';
 
 /**
@@ -19,16 +19,32 @@ import { NewsArticle, NewsCollapsedItem } from '../components/NewsList';
  */
 export function DashboardScreen(_props: { session: SessionResponseDto }) {
   const news = useNews();
+  const about = useAbout();
+
+  /**
+   * Блок «О колледже» показываем, только если администратор его заполнил: пустой блок на первой
+   * странице выглядел бы недоделкой, а не приглашением заполнить настройки.
+   */
+  const aboutTitle = about.data?.title ?? null;
+  const aboutText = about.data?.text ?? null;
+  const showAbout = (aboutTitle ?? '') !== '' || (aboutText ?? '') !== '';
 
   const items = news.data?.items ?? [];
   const [latest, ...previous] = items;
 
   return (
     <Page>
-      <PageHeader
-        title="Новости заведения"
-        description="Что нового в колледже. Предыдущие новости свёрнуты — нажмите, чтобы прочитать."
-      />
+      <PageHeader title="Новости" />
+
+      {/*
+        «О колледже» — заполняется в настройках администратором (решение владельца).
+        Показываем **сверху новостей**: это постоянные сведения о заведении, а новости меняются.
+      */}
+      {showAbout && (
+        <Card title={aboutTitle ?? 'О колледже'}>
+          {aboutText !== null && <p className="whitespace-pre-wrap text-slate-800">{aboutText}</p>}
+        </Card>
+      )}
 
       <QueryState
         isLoading={news.isLoading}
@@ -40,7 +56,7 @@ export function DashboardScreen(_props: { session: SessionResponseDto }) {
         {latest !== undefined && <NewsArticle item={latest} />}
 
         {previous.length > 0 && (
-          <Card title="Ранее">
+          <Card title="Предыдущие новости">
             <ul className="flex flex-col">
               {previous.map((item) => (
                 <NewsCollapsedItem key={item.id} item={item} />

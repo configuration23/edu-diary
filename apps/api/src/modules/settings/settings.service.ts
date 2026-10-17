@@ -15,6 +15,9 @@ export const SETTING_KEYS = {
   brandingShortName: 'branding.short_name',
   brandingSignature: 'branding.signature',
   brandingLogo: 'branding.logo',
+  /** Блок «О колледже» на странице «Обзор»: заголовок и текст. */
+  brandingAboutTitle: 'branding.about_title',
+  brandingAboutText: 'branding.about_text',
   appearance: 'appearance.lessons',
   /**
    * Хранилище файлов (Этап 5). Ключи заготовлены с самого начала: переключение между
@@ -47,6 +50,9 @@ export interface Branding {
   shortName: string | null;
   signature: string | null;
   logoDataUrl: string | null;
+  /** Блок «О колледже»: заголовок и текст, заполняет администратор. */
+  aboutTitle: string | null;
+  aboutText: string | null;
 }
 
 export interface BrandingUpdate {
@@ -54,6 +60,8 @@ export interface BrandingUpdate {
   shortName?: string | null | undefined;
   signature?: string | null | undefined;
   logoDataUrl?: string | null | undefined;
+  aboutTitle?: string | null | undefined;
+  aboutText?: string | null | undefined;
 }
 
 export interface BrandingChange {
@@ -109,14 +117,16 @@ export function createSettingsService(repository: SettingsRepository): SettingsS
   };
 
   const readBranding = async (executor?: Executor): Promise<Branding> => {
-    const [title, shortName, signature, logoDataUrl] = await Promise.all([
+    const [title, shortName, signature, logoDataUrl, aboutTitle, aboutText] = await Promise.all([
       get<string | null>(SETTING_KEYS.brandingTitle, executor),
       get<string | null>(SETTING_KEYS.brandingShortName, executor),
       get<string | null>(SETTING_KEYS.brandingSignature, executor),
       get<string | null>(SETTING_KEYS.brandingLogo, executor),
+      get<string | null>(SETTING_KEYS.brandingAboutTitle, executor),
+      get<string | null>(SETTING_KEYS.brandingAboutText, executor),
     ]);
 
-    return { title, shortName, signature, logoDataUrl };
+    return { title, shortName, signature, logoDataUrl, aboutTitle, aboutText };
   };
 
   /** Тип берём из интерфейса сервиса: у возвращаемого объекта нет своего имени. */

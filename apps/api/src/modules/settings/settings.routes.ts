@@ -1,4 +1,5 @@
 import {
+  aboutSchema,
   appearanceSchema,
   brandingSchema,
   updateAppearanceRequestSchema,
@@ -35,6 +36,22 @@ export function registerSettingsRoutes(
     },
   );
 
+  /**
+   * Блок «О колледже» для страницы «Обзор».
+   *
+   * Отдельный маршрут, а не брендинг: брендинг требует `academics:read`, и у ученика с
+   * представителем его нет — «Обзор» отвечал `403` на весь запрос. Здесь отдаём **только**
+   * заголовок и текст, ничего служебного, и открываем **всем вошедшим**: это сведения о заведении,
+   * которые видит каждый.
+   */
+  app.get('/settings/about', { preHandler: requirePermission('news:read', 'all') }, async () => {
+    const branding = await settings.readBranding();
+
+    return aboutSchema.parse({
+      title: branding.aboutTitle,
+      text: branding.aboutText,
+    });
+  });
   app.put(
     '/settings/branding',
     { preHandler: requirePermission('settings:write', 'all') },

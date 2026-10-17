@@ -287,6 +287,16 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
     (grant) => grant.permission === 'grades:read' && grant.scope === 'own',
   );
 
+  /**
+   * Год для подписи. Берём из своего списка групп, а не только из справочника: справочник годов
+   * закрыт правом `academics:read`, и у ученика подпись оставалась без года (дефект, замеченный
+   * владельцем).
+   *
+   * Используем уже загруженный `ownGroups`: второй такой же запрос дал бы два одинаковых ответа и
+   * лишний `403` у тех, кому группы недоступны.
+   */
+  const yearLabel = activeYearTitle ?? ownGroups.data?.academicYearTitle ?? null;
+
   const items = lessons.data?.items ?? [];
   const marks = useLessonMarks(showMarks ? items.map((lesson) => lesson.id) : []);
 
@@ -333,7 +343,12 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
     <div className="flex flex-col gap-6">
       <Card
         title="Расписание"
-        description={`Занятия на дату${activeYearTitle === null ? '' : ` · ${activeYearTitle}`}. Замена, отмена и перенос видны в карточке занятия.`}
+        /**
+         * Подпись — только дата и учебный год (просьба владельца): пояснение про замену, отмену и
+         * перенос дублировало то, что видно в карточке занятия. Год у ученика не показывался, потому
+         * что справочник годов ему недоступен — берём год из своего списка групп.
+         */
+        description={`Занятия на дату${yearLabel === null ? '' : ` · ${yearLabel}`}`}
       >
         <div className="flex flex-wrap items-end gap-3">
           <Field label="Группа" hint="«Все доступные» — занятия по всем группам">

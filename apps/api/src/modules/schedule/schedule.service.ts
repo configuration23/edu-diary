@@ -59,6 +59,14 @@ export interface UserLookupPort {
 }
 
 export interface CatalogLookupPort {
+  /**
+   * Название активного учебного года.
+   *
+   * Нужно подписи расписания: год показывается всем ролям, а справочник годов закрыт правом
+   * cademics:read — ученику и представителю он недоступен.
+   */
+  activeYearTitle(): Promise<string | null>;
+
   findAssignment(id: string): Promise<AssignmentLookup | null>;
   /**
    * Действующее назначение «преподаватель ↔ предмет ↔ группа» на дату.

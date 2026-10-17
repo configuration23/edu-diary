@@ -198,6 +198,17 @@ export async function buildApp({
    * модулей `staffing`/`academics`), а также имена преподавателей.
    */
   const scheduleCatalog: ScheduleCatalogPort = {
+    /**
+     * Название активного года для подписи расписания.
+     *
+     * Отдаётся через порт, а не запросом справочника с клиента: справочник годов закрыт правом
+     * `academics:read`, и у ученика с представителем год в подписи отсутствовал.
+     */
+    async activeYearTitle() {
+      const years = await academicsRepository.listAcademicYears();
+
+      return years.find((year) => year.isActive)?.title ?? null;
+    },
     async findAssignment(id) {
       const assignment = await staffingRepository.find(id);
       if (assignment === null) return null;

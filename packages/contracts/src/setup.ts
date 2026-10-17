@@ -28,6 +28,14 @@ export const brandingSchema = z.object({
   shortName: z.string().nullable(),
   signature: z.string().nullable(),
   logoDataUrl: z.string().nullable(),
+  /**
+   * Блок «О колледже» на странице «Обзор»: заголовок и текст, заполняет администратор.
+   *
+   * Необязательные: у установок до этого поля их нет, и «О колледже» не должно ломать ни экран
+   * входа, ни шапку.
+   */
+  aboutTitle: z.string().nullable(),
+  aboutText: z.string().nullable(),
 });
 export type BrandingDto = z.infer<typeof brandingSchema>;
 

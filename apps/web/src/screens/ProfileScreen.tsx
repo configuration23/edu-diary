@@ -5,6 +5,7 @@ import { Badge, formatDateTime } from '../components/ui';
 import { ChangePasswordCard } from '../components/ChangePasswordCard';
 import { SystemStatus, type HealthState } from '../components/SystemStatus';
 import { Page, PageHeader, Section } from '../components/layout';
+import { Spoiler } from '../components/Spoiler';
 import type { SessionResponseDto } from '@edu-diary/contracts';
 
 /**
@@ -97,7 +98,11 @@ export function ProfileScreen({ session }: { session: SessionResponseDto }) {
 
       <ChangePasswordCard />
 
-      <Section title="Ваш доступ" description="Права выданы ролями; изменяет их администратор.">
+      {/*
+        «Ваш доступ» — спойлером (просьба владельца): список прав длинный и отодвигает остальное.
+        Текст спойлера — прежняя подпись раздела, она же объясняет, кто меняет права.
+      */}
+      <Spoiler title="Ваш доступ" summary="Права выданы ролями; изменяет их администратор.">
         <p className="flex flex-wrap gap-2">
           {session.user.roles.map((role) => (
             <Badge key={role.code} tone="success">
@@ -124,7 +129,7 @@ export function ProfileScreen({ session }: { session: SessionResponseDto }) {
           Область действия: <code>own</code> — своё, <code>group</code> — своя группа,{' '}
           <code>assigned</code> — свои назначения, <code>all</code> — всё.
         </p>
-      </Section>
+      </Spoiler>
 
       {/*
         Технические блоки — **только системному администратору**.

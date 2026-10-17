@@ -34,6 +34,7 @@ import {
   listRoomsResponseSchema,
   listSecurityEventsResponseSchema,
   listStudentsResponseSchema,
+  aboutSchema,
   appearanceSchema,
   listSubjectsResponseSchema,
   listSubstituteCandidatesResponseSchema,
@@ -1311,6 +1312,9 @@ export function useUpdateBranding() {
       shortName?: string | null;
       signature?: string | null;
       logoDataUrl?: string | null;
+      /** Блок «О колледже»: заголовок и текст. */
+      aboutTitle?: string | null;
+      aboutText?: string | null;
     }) => apiRequest('/api/settings/branding', brandingSchema, { method: 'PUT', body: input }),
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: ['branding'] });
@@ -1583,6 +1587,19 @@ export function useSubmittedWorks(
  * Читают **все вошедшие**, публикует администратор. Список отдаётся от свежих к старым, поэтому
  * «последняя новость» — это первая в списке: интерфейс не выбирает её сам.
  */
+/**
+ * Блок «О колледже»: заголовок и текст из настроек заведения.
+ *
+ * Отдельный запрос, а не брендинг: брендинг требует `academics:read`, и у ученика с представителем
+ * «Обзор» отвечал `403`. Здесь только сведения о заведении, они открыты всем вошедшим.
+ */
+export function useAbout() {
+  return useQuery({
+    queryKey: ['settings', 'about'],
+    queryFn: () => apiRequest('/api/settings/about', aboutSchema),
+  });
+}
+
 export function useNews(input: { forEditing?: boolean } = {}) {
   const query = toQueryString({ forEditing: input.forEditing === true ? 'true' : undefined });
 

@@ -430,6 +430,18 @@ export type CloseAssignmentsForTeacherRequestDto = z.infer<
  * Правка брендинга после мастера. Схема самого брендинга живёт в `setup.ts`
  * (мастер и настройки отдают один и тот же DTO), здесь — только запрос.
  */
+/**
+ * Блок «О колледже» для страницы «Обзор».
+ *
+ * Отдаётся отдельно от брендинга: брендинг требует cademics:read, а его у ученика и
+ * представителя нет. Здесь только сведения о заведении, и они видны всем вошедшим.
+ */
+export const aboutSchema = z.object({
+  title: z.string().nullable(),
+  text: z.string().nullable(),
+});
+export type AboutDto = z.infer<typeof aboutSchema>;
+
 export const updateBrandingRequestSchema = z
   .object({
     title: z.string().min(1).max(120).nullable().optional(),
@@ -437,6 +449,14 @@ export const updateBrandingRequestSchema = z
     signature: z.string().max(200).nullable().optional(),
     /** Логотип — data URL: внешние ссылки запрещены (ADR-019). */
     logoDataUrl: logoDataUrlSchema.nullable().optional(),
+    /**
+     * Блок «О колледже» на «Обзоре»: заголовок и текст.
+     *
+     * Ограничения как у обычного текста: заголовок короткий, описание — несколько абзацев. Внешние
+     * ссылки и разметку не поддерживаем: это простой текст, и он не должен ломать вёрстку.
+     */
+    aboutTitle: z.string().max(120).nullable().optional(),
+    aboutText: z.string().max(4000).nullable().optional(),
   })
   .refine((value) => Object.keys(value).length > 0, { message: 'Нет полей для изменения' });
 export type UpdateBrandingRequestDto = z.infer<typeof updateBrandingRequestSchema>;

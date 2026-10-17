@@ -38,7 +38,17 @@ export const dayOfWeekSchema = z.number().int().min(MIN_DAY_OF_WEEK).max(MAX_DAY
 export const groupOptionSchema = z.object({ id: uuidSchema, name: z.string() });
 export type GroupOptionDto = z.infer<typeof groupOptionSchema>;
 
-export const listGroupOptionsResponseSchema = z.object({ items: z.array(groupOptionSchema) });
+/**
+ * Группы, доступные смотрящему, и **название активного учебного года**.
+ *
+ * Год нужен для подписи расписания всем ролям, а справочник годов закрыт правом `academics:read`:
+ * ученику и представителю он недоступен. Отдаём год здесь, где группы уже запрашиваются.
+ */
+export const listGroupOptionsResponseSchema = z.object({
+  items: z.array(groupOptionSchema),
+  /** `null` — учебный год не задан. */
+  academicYearTitle: z.string().nullable().optional(),
+});
 export type ListGroupOptionsResponseDto = z.infer<typeof listGroupOptionsResponseSchema>;
 
 /**
