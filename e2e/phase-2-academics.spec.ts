@@ -15,7 +15,7 @@ import { expect, test, type Page } from '@playwright/test';
  */
 
 /**
- * Раскрыть раздел «Учебного процесса».
+ * Раскрыть раздел «Настроек обучения».
  *
  * Разделы свёрнуты по умолчанию (решение владельца): страница должна открываться обзором. Строка
  * `<summary>` — единственная нажимаемая часть спойлера.
@@ -109,7 +109,7 @@ test.describe('Этап 2: год, группа, назначения', () => {
     const teacherUserId = await ensureTeacher(page);
 
     // --- Учебный год ---
-    await page.getByRole('link', { name: 'Учебный процесс' }).click();
+    await page.getByRole('link', { name: 'Настройки обучения' }).click();
     /** Раздел свёрнут: сначала раскрываем, потом ищем кнопку внутри. */
     await openSection(page, 'Учебные годы');
     /** Форма скрыта до нажатия: кнопка в шапке блока «Учебные годы». */
@@ -182,7 +182,7 @@ test.describe('Этап 2: год, группа, назначения', () => {
     await expect(page.getByRole('cell', { name: SUBJECT })).toBeVisible();
 
     // --- Назначение ---
-    await page.getByRole('link', { name: 'Учебный процесс' }).click();
+    await page.getByRole('link', { name: 'Настройки обучения' }).click();
     await openSection(page, 'Назначения');
     await page.getByRole('button', { name: 'Создать назначение' }).click();
     await expect(page.getByRole('heading', { name: 'Новое назначение' })).toBeVisible();
@@ -207,7 +207,7 @@ test.describe('Этап 2: год, группа, назначения', () => {
     await page.getByRole('button', { name: 'Выйти' }).click();
     await login(page, CURATOR.username, CURATOR.password);
 
-    await page.getByRole('link', { name: 'Учебный процесс' }).click();
+    await page.getByRole('link', { name: 'Настройки обучения' }).click();
     await openSection(page, 'Назначения');
     await expect(page.getByText('Здесь видны только ваши назначения')).toBeVisible();
     await expect(page.getByRole('cell', { name: SUBJECT })).toBeVisible();

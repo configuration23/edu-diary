@@ -14,7 +14,7 @@ import { expect, test, type Page } from '@playwright/test';
  */
 
 /**
- * Раскрыть раздел «Учебного процесса».
+ * Раскрыть раздел «Настроек обучения».
  *
  * Разделы свёрнуты по умолчанию; заголовок ищем **точно**, потому что те же слова встречаются в
  * описаниях соседних разделов.
@@ -211,7 +211,7 @@ test.describe('Этап 3: звонки, расписание, уроки', () =
     await expect(bells.getByRole('cell', { name: '11:30' })).toBeVisible();
 
     // --- Шаблон недели: занятие группы ---
-    await page.getByRole('link', { name: 'Учебный процесс' }).click();
+    await page.getByRole('link', { name: 'Настройки обучения' }).click();
     await openSection(page, 'Шаблон недели');
     // Форма добавления скрыта: открываем её кнопкой в шапке блока «Шаблон недели».
     await page.getByRole('button', { name: 'Добавить занятие' }).click();
@@ -301,7 +301,7 @@ test.describe('Этап 3: звонки, расписание, уроки', () =
     // Дневной вид: преподаватель выбирает свою группу.
     await page.locator('select[name="studyGroupId"]').selectOption({ label: GROUP });
     // Расписание преподаватель только смотрит: конструктора сетки у него нет.
-    await expect(page.getByRole('link', { name: 'Учебный процесс' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Настройки обучения' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Добавить занятие' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Убрать' })).toHaveCount(0);
 

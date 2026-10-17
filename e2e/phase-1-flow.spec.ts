@@ -119,7 +119,7 @@ test.describe.serial('Этап 1: настройка, вход, права', () 
      * Аудит живёт разделом внутри «Настроек»: открываем страницу и раскрываем спойлер.
      * Заголовок ищем точно — «аудит» встречается и в описании других разделов.
      */
-    await page.getByRole('link', { name: 'Настройки' }).click();
+    await page.getByRole('link', { name: 'Настройки', exact: true }).click();
     await page
       .locator('summary')
       .filter({ has: page.getByText('Аудит', { exact: true }) })
@@ -294,7 +294,7 @@ test.describe.serial('Этап 1: настройка, вход, права', () 
     }
 
     /**
-     * Старые адреса объединённых разделов **перенаправляют** на «Учебный процесс».
+     * Старые адреса объединённых разделов **перенаправляют** на «Настройки обучения».
      *
      * Без перенаправления закладки на «Учебный год», «Группы и ученики» и «Назначения» отдавали бы
      * «страница не найдена» — человек решил бы, что раздел пропал.
@@ -308,7 +308,7 @@ test.describe.serial('Этап 1: настройка, вход, права', () 
     ]) {
       await page.goto(legacy);
       await expect(page).toHaveURL(/\/academic-process$/);
-      await expect(page.getByRole('heading', { name: 'Учебный процесс' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Настройки обучения' })).toBeVisible();
     }
 
     /**
@@ -443,7 +443,7 @@ test.describe.serial('Этап 1: настройка, вход, права', () 
     }
 
     /** В меню ученика объединённого раздела нет: ему там нечего делать. */
-    await expect(page.getByRole('link', { name: 'Учебный процесс' })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Настройки обучения' })).toHaveCount(0);
 
     /**
      * На **разрешённых** экранах ученик не должен получать `403` и `400`.

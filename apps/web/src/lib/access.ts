@@ -58,43 +58,10 @@ export const NAVIGATION: NavigationItem[] = [
    * Маршрут `/profile` при этом существует и защищён сессией — просто в списке не объявлен.
    */
   { to: '/', label: 'Обзор', visible: () => true },
-  /**
-   * «Учебный процесс» — годы, группы, ученики и назначения одной страницей (решение владельца).
-   *
-   * Раньше это были три пункта меню, хотя работа идёт по одной цепочке: год → группы → ученики →
-   * назначения. Три перехода между связанными разделами только мешали.
-   */
-  {
-    to: '/academic-process',
-    label: 'Учебный процесс',
-    visible: (session) => has(session, 'academics:read') || has(session, 'assignments:read'),
-  },
-  {
-    to: '/catalogs',
-    label: 'Справочники',
-    visible: (session) => has(session, 'academics:read'),
-  },
   {
     to: '/schedule',
     label: 'Расписание',
     visible: (session) => has(session, 'schedule:read'),
-  },
-  {
-    to: '/lessons',
-    label: 'Уроки',
-    // Раздел рабочий: сетка периода, правка и замены. Ученику и родителю он не нужен —
-    // у них есть «Расписание», поэтому оставляем его тем, кто ведёт занятия.
-    visible: (session) => hasScope(session, 'lessons:read', ['all', 'assigned']),
-  },
-  {
-    to: '/users',
-    label: 'Учётные записи и роли',
-    visible: (session) => has(session, 'users:read'),
-  },
-  {
-    to: '/privacy',
-    label: 'Согласия и политика',
-    visible: (session) => has(session, 'consents:read'),
   },
   {
     to: '/homework',
@@ -105,6 +72,8 @@ export const NAVIGATION: NavigationItem[] = [
      * Преподавателю он не нужен (решение владельца): задания он ставит в журнале урока, а
      * работы учеников смотрит в «Сданных работах». Раньше раздел показывался всем, у кого есть
      * `homework:read`, и у преподавателя это был список без дела.
+     *
+     * Стоит **перед** «Сданными работами»: это пара — задание и его проверка.
      */
     visible: (session) => hasScope(session, 'homework:read', ['own']),
   },
@@ -126,6 +95,40 @@ export const NAVIGATION: NavigationItem[] = [
      * ролей, разница только в области.
      */
     visible: (session) => has(session, 'analytics:read'),
+  },
+  {
+    to: '/catalogs',
+    label: 'Справочники',
+    visible: (session) => has(session, 'academics:read'),
+  },
+  /**
+   * «Настройки обучения» — годы, группы, ученики, назначения, шаблон недели и замены одной
+   * страницей (решение владельца).
+   *
+   * Раньше это были отдельные пункты меню, хотя работа идёт по одной цепочке: год → группы →
+   * ученики → назначения → шаблон → замены. Переходы между связанными разделами только мешали.
+   */
+  {
+    to: '/academic-process',
+    label: 'Настройки обучения',
+    visible: (session) => has(session, 'academics:read') || has(session, 'assignments:read'),
+  },
+  {
+    to: '/lessons',
+    label: 'Уроки и журналы',
+    // Раздел рабочий: сетка периода, журнал урока, правка и замены. Ученику и родителю он не
+    // нужен — у них есть «Расписание», поэтому оставляем его тем, кто ведёт занятия.
+    visible: (session) => hasScope(session, 'lessons:read', ['all', 'assigned']),
+  },
+  {
+    to: '/users',
+    label: 'Учётные записи и роли',
+    visible: (session) => has(session, 'users:read'),
+  },
+  {
+    to: '/privacy',
+    label: 'Согласия и политика',
+    visible: (session) => has(session, 'consents:read'),
   },
   {
     to: '/settings',
