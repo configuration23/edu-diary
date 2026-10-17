@@ -16,7 +16,7 @@ import {
 
 const ACCESS_ACTIONS = new Set(['access', 'export']);
 
-export function AuditScreen() {
+export function AuditScreen({ heading = true }: { heading?: boolean } = {}) {
   const [entityKind, setEntityKind] = useState('');
   const [action, setAction] = useState('');
   const [accessOnly, setAccessOnly] = useState(false);
@@ -44,8 +44,12 @@ export function AuditScreen() {
 
   return (
     <Card
-      title="Журнал изменений и доступа"
-      description="Записи только добавляются: изменить или удалить их через API невозможно."
+      title={heading ? 'Журнал изменений и доступа' : undefined}
+      description={
+        heading
+          ? 'Записи только добавляются: изменить или удалить их через API невозможно.'
+          : undefined
+      }
     >
       <div className="mb-4 flex flex-wrap items-end gap-3">
         <label className="text-sm">

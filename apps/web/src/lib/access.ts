@@ -97,16 +97,6 @@ export const NAVIGATION: NavigationItem[] = [
     visible: (session) => has(session, 'consents:read'),
   },
   {
-    to: '/audit',
-    label: 'Аудит',
-    visible: (session) => has(session, 'audit:read'),
-  },
-  {
-    to: '/security',
-    label: 'Безопасность',
-    visible: (session) => has(session, 'security:read'),
-  },
-  {
     to: '/homework',
     label: 'Мои задания',
     /**

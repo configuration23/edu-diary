@@ -16,7 +16,6 @@ import { Alert } from './components/ui';
 import { errorMessage } from './lib/api-client';
 import { useSession, useSetupStatus } from './lib/queries';
 import { AcademicProcessScreen } from './screens/AcademicProcessScreen';
-import { AuditScreen } from './screens/AuditScreen';
 import { CatalogsScreen } from './screens/CatalogsScreen';
 import { DashboardScreen } from './screens/DashboardScreen';
 import { LoginScreen } from './screens/LoginScreen';
@@ -28,7 +27,6 @@ import { SubmittedWorksScreen } from './screens/SubmittedWorksScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
 import { PrivacyScreen } from './screens/PrivacyScreen';
 import { ScheduleScreen } from './screens/ScheduleScreen';
-import { SecurityScreen } from './screens/SecurityScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { SetupScreen } from './screens/SetupScreen';
 import { UsersScreen } from './screens/UsersScreen';
@@ -125,16 +123,21 @@ const privacyRoute = createRoute({
   component: withSession(() => <PrivacyScreen />),
 });
 
-const auditRoute = createRoute({
+/** «Аудит» и «Безопасность» переехали в «Настройки»: адреса ведут туда. */
+const legacyAuditRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/audit',
-  component: withSession(() => <AuditScreen />),
+  beforeLoad: () => {
+    throw redirect({ to: '/settings' });
+  },
 });
 
-const securityRoute = createRoute({
+const legacySecurityRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/security',
-  component: withSession(() => <SecurityScreen />),
+  beforeLoad: () => {
+    throw redirect({ to: '/settings' });
+  },
 });
 
 /**
@@ -294,8 +297,8 @@ const routeTree = rootRoute.addChildren([
   lessonJournalRoute,
   usersRoute,
   privacyRoute,
-  auditRoute,
-  securityRoute,
+  legacyAuditRoute,
+  legacySecurityRoute,
   settingsRoute,
 ]);
 

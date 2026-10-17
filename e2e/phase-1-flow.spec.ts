@@ -115,7 +115,15 @@ test.describe.serial('Этап 1: настройка, вход, права', () 
 
   test('журнал аудита показывает настройку системы и изменение пользователей', async ({ page }) => {
     await ensureSession(page, ADMIN.username, ADMIN.password);
-    await page.getByRole('link', { name: 'Аудит' }).click();
+    /**
+     * Аудит живёт разделом внутри «Настроек»: открываем страницу и раскрываем спойлер.
+     * Заголовок ищем точно — «аудит» встречается и в описании других разделов.
+     */
+    await page.getByRole('link', { name: 'Настройки' }).click();
+    await page
+      .locator('summary')
+      .filter({ has: page.getByText('Аудит', { exact: true }) })
+      .click();
 
     await expect(page.getByText('setup_completed')).toBeVisible();
     await expect(page.getByText('create', { exact: true }).first()).toBeVisible();
@@ -277,8 +285,6 @@ test.describe.serial('Этап 1: настройка, вход, права', () 
       ...(lessonId === undefined ? [] : [`/lessons/${lessonId}`]),
       '/users',
       '/privacy',
-      '/audit',
-      '/security',
       '/settings',
     ];
 
@@ -293,10 +299,29 @@ test.describe.serial('Этап 1: настройка, вход, права', () 
      * Без перенаправления закладки на «Учебный год», «Группы и ученики» и «Назначения» отдавали бы
      * «страница не найдена» — человек решил бы, что раздел пропал.
      */
-    for (const legacy of ['/academics', '/groups', '/assignments', '/schedule/template']) {
+    for (const legacy of [
+      '/academics',
+      '/groups',
+      '/assignments',
+      '/schedule/template',
+      '/substitutions',
+    ]) {
       await page.goto(legacy);
       await expect(page).toHaveURL(/\/academic-process$/);
       await expect(page.getByRole('heading', { name: 'Учебный процесс' })).toBeVisible();
+    }
+
+    /**
+     * «Аудит» и «Безопасность» переехали в «Настройки»: их адреса ведут туда же.
+     */
+    for (const legacy of ['/audit', '/security']) {
+      await page.goto(legacy);
+      await expect(page).toHaveURL(/\/settings$/);
+    }
+
+    /** Пунктов «Аудит» и «Безопасность» в меню больше нет. */
+    for (const label of ['Аудит', 'Безопасность']) {
+      await expect(page.getByRole('link', { name: label, exact: true })).toHaveCount(0);
     }
 
     /**
@@ -355,7 +380,7 @@ test.describe.serial('Этап 1: настройка, вход, права', () 
 
     // Администратор: доступно всё, включая разделы, закрытые остальным.
     await ensureSession(page, ADMIN.username, ADMIN.password);
-    for (const path of ['/', '/users', '/audit', '/security', '/settings', '/academic-process']) {
+    for (const path of ['/', '/users', '/settings', '/academic-process']) {
       await allowed(path);
     }
 
@@ -389,8 +414,6 @@ test.describe.serial('Этап 1: настройка, вход, права', () 
 
     for (const path of [
       '/users',
-      '/audit',
-      '/security',
       '/settings',
       '/catalogs',
       '/lessons',
@@ -412,6 +435,8 @@ test.describe.serial('Этап 1: настройка, вход, права', () 
       '/assignments',
       '/schedule/template',
       '/substitutions',
+      '/audit',
+      '/security',
     ]) {
       await page.goto(legacy);
       await expect(page.getByText('Страница не найдена', { exact: false })).toBeVisible();

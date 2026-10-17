@@ -161,7 +161,17 @@ function AboutSettings() {
   );
 }
 
-export function NewsSettingsCard() {
+export function NewsSettingsCard({
+  heading = true,
+}: {
+  /**
+   * Показывать свой заголовок и описание.
+   *
+   * В «Настройках» блок стоит под **спойлером**: название и описание уже в его сводке, и второй
+   * заголовок внутри был бы дублем. По умолчанию — показывать.
+   */
+  heading?: boolean;
+} = {}) {
   const news = useNews({ forEditing: true });
   const create = useCreateNews();
   const update = useUpdateNews();
@@ -202,8 +212,10 @@ export function NewsSettingsCard() {
 
   return (
     <Section
-      title="Настройки страницы Обзор"
-      description="Что видит человек на странице «Обзор»: описание заведения и новости."
+      title={heading ? 'Настройки страницы Обзор' : undefined}
+      description={
+        heading ? 'Что видит человек на странице «Обзор»: описание заведения и новости.' : undefined
+      }
     >
       {/*
         Два саб-блока: сначала описание заведения, под ним новости. Так видно, что обе настройки

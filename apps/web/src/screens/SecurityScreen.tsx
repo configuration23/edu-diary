@@ -19,7 +19,7 @@ const SEVERITY_TONES = {
   critical: 'danger',
 } as const;
 
-export function SecurityScreen() {
+export function SecurityScreen({ heading = true }: { heading?: boolean } = {}) {
   const [acknowledged, setAcknowledged] = useState<'all' | 'pending' | 'done'>('pending');
   const [resolution, setResolution] = useState('');
 
@@ -31,8 +31,12 @@ export function SecurityScreen() {
 
   return (
     <Card
-      title="Безопасность"
-      description="События, требующие внимания: всплеск неудачных входов, блокировки, изменение прав, доступ вне области действия."
+      title={heading ? 'Безопасность' : undefined}
+      description={
+        heading
+          ? 'События, требующие внимания: всплеск неудачных входов, блокировки, изменение прав, доступ вне области действия.'
+          : undefined
+      }
     >
       <div className="mb-4 flex flex-wrap items-end gap-3">
         <label className="text-sm">

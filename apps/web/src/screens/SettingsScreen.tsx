@@ -6,6 +6,9 @@ import { errorMessage } from '../lib/api-client';
 import { useAppearance, useBranding, useUpdateAppearance, useUpdateBranding } from '../lib/queries';
 import { NewsSettingsCard } from '../components/NewsSettingsCard';
 import { StorageSettingsCard } from '../components/StorageSettingsCard';
+import { Spoiler } from '../components/Spoiler';
+import { AuditScreen } from './AuditScreen';
+import { SecurityScreen } from './SecurityScreen';
 
 /**
  * Настройки заведения: название, короткое имя, подпись и логотип.
@@ -28,7 +31,17 @@ const selectClass = 'w-full rounded-md border border-slate-300 px-3 py-2 text-sm
  * выбирается из набора: значение попадает в разметку, поэтому произвольная
  * строка недопустима. Настройку меняет только администратор.
  */
-function AppearanceForm() {
+function AppearanceForm({
+  heading = true,
+}: {
+  /**
+   * Показывать свой заголовок.
+   *
+   * В «Настройках» блоки живут под спойлерами, и название с описанием уже стоят в сводке спойлера.
+   * Второй заголовок внутри — дубль, поэтому там `heading={false}`.
+   */
+  heading?: boolean;
+} = {}) {
   const appearance = useAppearance();
   const update = useUpdateAppearance();
 
@@ -71,8 +84,12 @@ function AppearanceForm() {
 
   return (
     <Card
-      title="Оформление уроков"
-      description="Цвет означает предмет, значки — события. Здесь выбирается, какими значками показывать замену и отмену."
+      title={heading ? 'Оформление уроков' : undefined}
+      description={
+        heading
+          ? 'Цвет означает предмет, значки — события. Здесь выбирается, какими значками показывать замену и отмену.'
+          : undefined
+      }
     >
       <form
         className="flex flex-col gap-4"
@@ -176,90 +193,129 @@ export function SettingsScreen() {
   return (
     <div className="flex flex-col gap-6">
       {/*
-        Новости заведения и описание заведения: публикуются здесь, здесь же правятся и убираются.
-        Список показывает и подготовленные, и просроченные — иначе новость, поставленную на будущее,
-        не найти.
+        Все блоки настроек — под **спойлерами** (решение владельца). Настроек много, и открытая
+        страница превращалась в длинную простыню, где нужное приходилось искать прокруткой. Сводка
+        спойлера сразу говорит, что внутри, поэтому раскрывают только нужное.
+
+        Название и описание блока стоят **в сводке спойлера**, а сам блок рисуется без своего
+        заголовка (`heading={false}`): два одинаковых заголовка подряд — дубль.
+
+        «Аудит» и «Безопасность» переехали сюда же, вниз: это тоже настройки — надзор за тем, что
+        происходит в дневнике, — и держать их отдельными пунктами меню рядом с настройками значило
+        разносить одно по трём разделам.
       */}
-      <NewsSettingsCard />
-
-      <Card
-        title="Настройки заведения"
-        description="Название и логотип показываются на экране входа и в шапке дневника."
+      <Spoiler
+        title="Страница «Обзор»"
+        summary="Описание заведения и новости: что видит человек на первой странице."
       >
-        <form
-          className="flex flex-col gap-4"
-          onSubmit={async (event) => {
-            event.preventDefault();
-            setSaved(false);
-            try {
-              await update.mutateAsync({
-                title: title === '' ? null : title,
-                shortName: shortName === '' ? null : shortName,
-                signature: signature === '' ? null : signature,
-                logoDataUrl,
-              });
-              setSaved(true);
-            } catch {
-              // Ошибка показывается ниже.
-            }
-          }}
-        >
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Название учебного заведения">
-              <TextInput
-                required
-                value={title}
-                onChange={(event) => setTitle(event.target.value)}
-              />
-            </Field>
-            <Field label="Короткое название" hint="Для шапки: «КС-54»">
-              <TextInput value={shortName} onChange={(event) => setShortName(event.target.value)} />
-            </Field>
-            <Field label="Подпись" hint="Строка под названием на экране входа">
-              <TextInput value={signature} onChange={(event) => setSignature(event.target.value)} />
-            </Field>
-            <Field label="Логотип" hint="PNG, JPEG или SVG до 256 КБ">
-              <FilePicker
-                accept="image/png,image/jpeg,image/svg+xml"
-                name="logo"
-                onSelect={(file) => {
-                  if (file !== undefined) readLogo(file);
-                }}
-              />
-            </Field>
-          </div>
+        <NewsSettingsCard heading={false} />
+      </Spoiler>
 
-          {logoError !== null && <Alert tone="warning">{logoError}</Alert>}
-          {logoDataUrl !== null && (
-            <div className="flex items-center gap-3">
-              <img src={logoDataUrl} alt="Логотип" className="h-12 w-12 object-contain" />
-              <Button tone="ghost" onClick={() => setLogoDataUrl(null)}>
-                Убрать логотип
+      <Spoiler
+        title="Заведение"
+        summary="Название, короткое имя, подпись и логотип: показываются на экране входа и в шапке."
+      >
+        <Card>
+          <form
+            className="flex flex-col gap-4"
+            onSubmit={async (event) => {
+              event.preventDefault();
+              setSaved(false);
+              try {
+                await update.mutateAsync({
+                  title: title === '' ? null : title,
+                  shortName: shortName === '' ? null : shortName,
+                  signature: signature === '' ? null : signature,
+                  logoDataUrl,
+                });
+                setSaved(true);
+              } catch {
+                // Ошибка показывается ниже.
+              }
+            }}
+          >
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Название учебного заведения">
+                <TextInput
+                  required
+                  value={title}
+                  onChange={(event) => setTitle(event.target.value)}
+                />
+              </Field>
+              <Field label="Короткое название" hint="Для шапки: «КС-54»">
+                <TextInput
+                  value={shortName}
+                  onChange={(event) => setShortName(event.target.value)}
+                />
+              </Field>
+              <Field label="Подпись" hint="Строка под названием на экране входа">
+                <TextInput
+                  value={signature}
+                  onChange={(event) => setSignature(event.target.value)}
+                />
+              </Field>
+              <Field label="Логотип" hint="PNG, JPEG или SVG до 256 КБ">
+                <FilePicker
+                  accept="image/png,image/jpeg,image/svg+xml"
+                  name="logo"
+                  onSelect={(file) => {
+                    if (file !== undefined) readLogo(file);
+                  }}
+                />
+              </Field>
+            </div>
+
+            {logoError !== null && <Alert tone="warning">{logoError}</Alert>}
+            {logoDataUrl !== null && (
+              <div className="flex items-center gap-3">
+                <img src={logoDataUrl} alt="Логотип" className="h-12 w-12 object-contain" />
+                <Button tone="ghost" onClick={() => setLogoDataUrl(null)}>
+                  Убрать логотип
+                </Button>
+              </div>
+            )}
+
+            {update.isError && <Alert tone="error">{errorMessage(update.error)}</Alert>}
+            {saved && (
+              <Alert tone="success">Сохранено: шапка и экран входа покажут новые значения.</Alert>
+            )}
+
+            <div>
+              <Button type="submit" disabled={update.isPending}>
+                Сохранить
               </Button>
             </div>
-          )}
+          </form>
+        </Card>
+      </Spoiler>
 
-          {update.isError && <Alert tone="error">{errorMessage(update.error)}</Alert>}
-          {saved && (
-            <Alert tone="success">Сохранено: шапка и экран входа покажут новые значения.</Alert>
-          )}
+      <Spoiler
+        title="Оформление уроков"
+        summary="Цвет означает предмет, значки — события: чем показывать замену и отмену."
+      >
+        <AppearanceForm heading={false} />
+      </Spoiler>
 
-          <div>
-            <Button type="submit" disabled={update.isPending}>
-              Сохранить
-            </Button>
-          </div>
-        </form>
-      </Card>
+      <Spoiler
+        title="Хранилище файлов"
+        summary="Куда складывать вложения домашних заданий и картинки новостей. Обновление программы их не затрагивает."
+      >
+        <StorageSettingsCard heading={false} />
+      </Spoiler>
 
-      <AppearanceForm />
+      <Spoiler
+        title="Аудит"
+        summary="Журнал изменений и доступа: кто что сделал и когда. Записи только добавляются."
+      >
+        <AuditScreen heading={false} />
+      </Spoiler>
 
-      {/*
-        Хранилище файлов — **системная** настройка: адрес хранилища и ключи доступа. Здесь же
-        кнопка проверки подключения: она пишет настоящий файл, поэтому администратор узнаёт о
-        проблеме сразу, а когда ученик не сможет приложить решение — уже поздно.
-      */}
-      <StorageSettingsCard />
+      <Spoiler
+        title="Безопасность"
+        summary="События, требующие внимания: всплеск неудачных входов, блокировки, изменение прав."
+      >
+        <SecurityScreen heading={false} />
+      </Spoiler>
     </div>
   );
 }

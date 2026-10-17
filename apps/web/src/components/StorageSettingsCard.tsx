@@ -25,7 +25,7 @@ import { Alert, Button, Card, Field, TextInput } from './ui';
 
 type Mode = 'local' | 's3';
 
-export function StorageSettingsCard() {
+export function StorageSettingsCard({ heading = true }: { heading?: boolean } = {}) {
   const settings = useStorageSettings();
   const update = useUpdateStorageSettings();
   const test = useTestStorage();
@@ -76,8 +76,12 @@ export function StorageSettingsCard() {
 
   return (
     <Card
-      title="Хранилище файлов"
-      description="Куда складывать вложения домашних заданий. Файлы лежат в хранилище, а не внутри приложения, поэтому обновление программы их не затрагивает."
+      title={heading ? 'Хранилище файлов' : undefined}
+      description={
+        heading
+          ? 'Куда складывать вложения домашних заданий. Файлы лежат в хранилище, а не внутри приложения, поэтому обновление программы их не затрагивает.'
+          : undefined
+      }
     >
       <div className="flex flex-col gap-4">
         <Field label="Где хранить файлы">
