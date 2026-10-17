@@ -439,6 +439,8 @@ export type CloseAssignmentsForTeacherRequestDto = z.infer<
 export const aboutSchema = z.object({
   title: z.string().nullable(),
   text: z.string().nullable(),
+  /** Показывать блок на «Обзоре». Явная настройка, а не «заполнено значит показать». */
+  visible: z.boolean(),
 });
 export type AboutDto = z.infer<typeof aboutSchema>;
 
@@ -457,6 +459,8 @@ export const updateBrandingRequestSchema = z
      */
     aboutTitle: z.string().max(120).nullable().optional(),
     aboutText: z.string().max(4000).nullable().optional(),
+    /** Показывать блок «Об учебном заведении» на «Обзоре». */
+    aboutVisible: z.boolean().optional(),
   })
   .refine((value) => Object.keys(value).length > 0, { message: 'Нет полей для изменения' });
 export type UpdateBrandingRequestDto = z.infer<typeof updateBrandingRequestSchema>;

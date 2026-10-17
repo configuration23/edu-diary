@@ -50,6 +50,8 @@ export function registerSettingsRoutes(
     return aboutSchema.parse({
       title: branding.aboutTitle,
       text: branding.aboutText,
+      /** Явная настройка видимости: «заполнено» — плохой переключатель. */
+      visible: branding.aboutVisible,
     });
   });
   app.put(

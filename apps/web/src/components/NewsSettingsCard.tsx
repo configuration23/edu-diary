@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import type { NewsItemDto } from '@edu-diary/contracts';
 
@@ -6,9 +6,11 @@ import { Alert, Badge, Button, Field, TextInput } from './ui';
 import { Section } from './layout';
 import { errorMessage } from '../lib/api-client';
 import {
+  useBranding,
   useCreateNews,
   useNews,
   useRemoveNews,
+  useUpdateBranding,
   useUpdateNews,
   useUploadNewsImage,
 } from '../lib/queries';
@@ -67,6 +69,95 @@ function draftOf(item: NewsItemDto): Draft {
   };
 }
 
+/**
+ * Блок «Об учебном заведении» для страницы «Обзор».
+ *
+ * Перенесён сюда из настроек заведения (решение владельца): и это, и новости — про **содержимое**
+ * первой страницы, поэтому живут рядом.
+ *
+ * Видимость — **явный чек-бокс**, а не «заполнено значит показать»: администратор мог заполнить
+ * текст, но не хотеть блок на первой странице. И наоборот: не заполнил ничего — и не понял, почему
+ * блока нет.
+ */
+function AboutSettings() {
+  const branding = useBranding();
+  const update = useUpdateBranding();
+
+  const [title, setTitle] = useState('');
+  const [text, setText] = useState('');
+  const [visible, setVisible] = useState(true);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  /** Поля заполняются один раз, когда загрузились: иначе правки затирались бы обновлением. */
+  useEffect(() => {
+    if (branding.data === undefined) return;
+    setTitle(branding.data.aboutTitle ?? '');
+    setText(branding.data.aboutText ?? '');
+    setVisible(branding.data.aboutVisible);
+  }, [branding.data]);
+
+  return (
+    <form
+      className="flex flex-col gap-4 rounded-md border border-slate-300 bg-slate-50 p-4"
+      onSubmit={async (event) => {
+        event.preventDefault();
+        setSaved(false);
+        setError(null);
+
+        try {
+          await update.mutateAsync({
+            aboutTitle: title.trim() === '' ? null : title,
+            aboutText: text.trim() === '' ? null : text,
+            aboutVisible: visible,
+          });
+          setSaved(true);
+        } catch (caught) {
+          setError(errorMessage(caught));
+        }
+      }}
+    >
+      <p className="text-sm font-medium text-slate-700">Об учебном заведении</p>
+      <p className="text-xs text-slate-500">Показывается на «Обзоре» сверху новостей.</p>
+
+      <Field label="Заголовок">
+        <TextInput
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
+          placeholder="Об учебном заведении"
+        />
+      </Field>
+
+      <Field label="Текст">
+        <textarea
+          className="min-h-28 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+          value={text}
+          onChange={(event) => setText(event.target.value)}
+          placeholder="История, направления, контакты"
+        />
+      </Field>
+
+      <label className="flex items-center gap-2 text-sm text-slate-800">
+        <input
+          type="checkbox"
+          checked={visible}
+          onChange={(event) => setVisible(event.target.checked)}
+        />
+        Показывать блок на странице «Обзор»
+      </label>
+
+      {error !== null && <Alert tone="error">{error}</Alert>}
+      {saved && <Alert tone="success">Сохранено: блок покажется на «Обзоре».</Alert>}
+
+      <div>
+        <Button type="submit" disabled={update.isPending}>
+          Сохранить описание
+        </Button>
+      </div>
+    </form>
+  );
+}
+
 export function NewsSettingsCard() {
   const news = useNews({ forEditing: true });
   const create = useCreateNews();
@@ -116,6 +207,8 @@ export function NewsSettingsCard() {
         ) : undefined
       }
     >
+      <AboutSettings />
+
       {draft !== null && (
         <form
           className="flex flex-col gap-4 rounded-md border border-slate-300 bg-slate-50 p-4"

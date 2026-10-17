@@ -27,6 +27,7 @@ function createFakeSettings(values: Map<string, unknown>): {
         logoDataUrl: null,
         aboutTitle: null,
         aboutText: null,
+        aboutVisible: true,
       };
     },
     async updateBranding() {
@@ -38,6 +39,7 @@ function createFakeSettings(values: Map<string, unknown>): {
           logoDataUrl: null,
           aboutTitle: null,
           aboutText: null,
+          aboutVisible: true,
         },
         before: {
           title: null,
@@ -46,6 +48,7 @@ function createFakeSettings(values: Map<string, unknown>): {
           logoDataUrl: null,
           aboutTitle: null,
           aboutText: null,
+          aboutVisible: true,
         },
         changed: {},
       };

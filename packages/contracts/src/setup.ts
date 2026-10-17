@@ -36,6 +36,8 @@ export const brandingSchema = z.object({
    */
   aboutTitle: z.string().nullable(),
   aboutText: z.string().nullable(),
+  /** Показывать блок «Об учебном заведении» на «Обзоре». */
+  aboutVisible: z.boolean(),
 });
 export type BrandingDto = z.infer<typeof brandingSchema>;
 

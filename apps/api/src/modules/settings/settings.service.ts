@@ -18,6 +18,8 @@ export const SETTING_KEYS = {
   /** Блок «О колледже» на странице «Обзор»: заголовок и текст. */
   brandingAboutTitle: 'branding.about_title',
   brandingAboutText: 'branding.about_text',
+  /** Показывать блок «Об учебном заведении» на «Обзоре». */
+  brandingAboutVisible: 'branding.about_visible',
   appearance: 'appearance.lessons',
   /**
    * Хранилище файлов (Этап 5). Ключи заготовлены с самого начала: переключение между
@@ -53,6 +55,8 @@ export interface Branding {
   /** Блок «О колледже»: заголовок и текст, заполняет администратор. */
   aboutTitle: string | null;
   aboutText: string | null;
+  /** Показывать блок на «Обзоре». По умолчанию — да. */
+  aboutVisible: boolean;
 }
 
 export interface BrandingUpdate {
@@ -62,6 +66,7 @@ export interface BrandingUpdate {
   logoDataUrl?: string | null | undefined;
   aboutTitle?: string | null | undefined;
   aboutText?: string | null | undefined;
+  aboutVisible?: boolean | undefined;
 }
 
 export interface BrandingChange {
@@ -117,16 +122,19 @@ export function createSettingsService(repository: SettingsRepository): SettingsS
   };
 
   const readBranding = async (executor?: Executor): Promise<Branding> => {
-    const [title, shortName, signature, logoDataUrl, aboutTitle, aboutText] = await Promise.all([
-      get<string | null>(SETTING_KEYS.brandingTitle, executor),
-      get<string | null>(SETTING_KEYS.brandingShortName, executor),
-      get<string | null>(SETTING_KEYS.brandingSignature, executor),
-      get<string | null>(SETTING_KEYS.brandingLogo, executor),
-      get<string | null>(SETTING_KEYS.brandingAboutTitle, executor),
-      get<string | null>(SETTING_KEYS.brandingAboutText, executor),
-    ]);
+    const [title, shortName, signature, logoDataUrl, aboutTitle, aboutText, aboutVisible] =
+      await Promise.all([
+        get<string | null>(SETTING_KEYS.brandingTitle, executor),
+        get<string | null>(SETTING_KEYS.brandingShortName, executor),
+        get<string | null>(SETTING_KEYS.brandingSignature, executor),
+        get<string | null>(SETTING_KEYS.brandingLogo, executor),
+        get<string | null>(SETTING_KEYS.brandingAboutTitle, executor),
+        get<string | null>(SETTING_KEYS.brandingAboutText, executor),
+        /** По умолчанию показываем: пустой блок скрыт всё равно — по пустым полям. */
+        get<boolean>(SETTING_KEYS.brandingAboutVisible, executor).then((value) => value ?? true),
+      ]);
 
-    return { title, shortName, signature, logoDataUrl, aboutTitle, aboutText };
+    return { title, shortName, signature, logoDataUrl, aboutTitle, aboutText, aboutVisible };
   };
 
   /** Тип берём из интерфейса сервиса: у возвращаемого объекта нет своего имени. */
@@ -193,13 +201,31 @@ export function createSettingsService(repository: SettingsRepository): SettingsS
     async updateBranding(input, actorUserId = null, executor): Promise<BrandingChange> {
       const before = await readBranding(executor);
 
-      // Пишем только переданные поля: `undefined` — «не трогать», `null` —
-      // «очистить». Иначе частичная правка затирала бы остальное.
-      const plainFields: Array<[keyof BrandingUpdate, string]> = [
+      /**
+       * Поля, которые пишутся как есть: `undefined` — «не трогать», `null` — «очистить».
+       *
+       * **Тип значения сужен до `string | null`**, а не до `keyof BrandingUpdate`: в этом же наборе
+       * есть булево `aboutVisible`, и оно пишется отдельно. Раньше список был объявлен по ключам
+       * целиком, и `aboutVisible` попало бы сюда по типу, а затем записалось бы как `null` —
+       * то есть «скрыть» превратилось бы в «не показывать никогда».
+       */
+      type PlainBrandingField =
+        'title' | 'shortName' | 'signature' | 'logoDataUrl' | 'aboutTitle' | 'aboutText';
+
+      const plainFields: Array<[PlainBrandingField, string]> = [
         ['title', SETTING_KEYS.brandingTitle],
         ['shortName', SETTING_KEYS.brandingShortName],
         ['signature', SETTING_KEYS.brandingSignature],
         ['logoDataUrl', SETTING_KEYS.brandingLogo],
+        /**
+         * Блок «Об учебном заведении» на «Обзоре».
+         *
+         * **Дефект, найденный владельцем:** поля читались и показывались в форме, но в этот список
+         * не попали — поэтому **не сохранялись**. Выглядело как «блок не сохраняет данные»:
+         * администратор заполнял, жал «Сохранить», а после перезагрузки поля были пустыми.
+         */
+        ['aboutTitle', SETTING_KEYS.brandingAboutTitle],
+        ['aboutText', SETTING_KEYS.brandingAboutText],
       ];
 
       const changed: BrandingUpdate = {};
@@ -210,6 +236,23 @@ export function createSettingsService(repository: SettingsRepository): SettingsS
 
         await repository.upsert({ key, value: value ?? null, actorUserId }, executor);
         changed[field] = value;
+      }
+
+      /**
+       * Видимость блока «Об учебном заведении» — **булево**, поэтому в общий список не подходит:
+       * там значения `null` означают «очистить». Здесь `undefined` — «не трогать», а `false` —
+       * это осознанное «скрыть», и записывать его нужно.
+       */
+      if (input.aboutVisible !== undefined) {
+        await repository.upsert(
+          {
+            key: SETTING_KEYS.brandingAboutVisible,
+            value: input.aboutVisible,
+            actorUserId,
+          },
+          executor,
+        );
+        changed.aboutVisible = input.aboutVisible;
       }
 
       return {

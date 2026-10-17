@@ -1315,6 +1315,8 @@ export function useUpdateBranding() {
       /** Блок «О колледже»: заголовок и текст. */
       aboutTitle?: string | null;
       aboutText?: string | null;
+      /** Показывать блок «Об учебном заведении» на «Обзоре». */
+      aboutVisible?: boolean;
     }) => apiRequest('/api/settings/branding', brandingSchema, { method: 'PUT', body: input }),
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: ['branding'] });

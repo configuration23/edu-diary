@@ -22,12 +22,17 @@ export function DashboardScreen(_props: { session: SessionResponseDto }) {
   const about = useAbout();
 
   /**
-   * Блок «О колледже» показываем, только если администратор его заполнил: пустой блок на первой
-   * странице выглядел бы недоделкой, а не приглашением заполнить настройки.
+   * Блок «Об учебном заведении» показывается по **явной настройке** (чек-бокс в настройках):
+   * «заполнено значит показать» не подходит — администратор мог заполнить текст, но не хотеть блок
+   * на первой странице.
+   *
+   * Пустое содержимое всё равно не рисуем: пустая карточка выглядела бы недоделкой.
    */
   const aboutTitle = about.data?.title ?? null;
   const aboutText = about.data?.text ?? null;
-  const showAbout = (aboutTitle ?? '') !== '' || (aboutText ?? '') !== '';
+  const aboutVisible = about.data?.visible ?? false;
+  const hasAbout = (aboutTitle ?? '') !== '' || (aboutText ?? '') !== '';
+  const showAbout = aboutVisible && hasAbout;
 
   const items = news.data?.items ?? [];
   const [latest, ...previous] = items;
@@ -41,7 +46,7 @@ export function DashboardScreen(_props: { session: SessionResponseDto }) {
         Показываем **сверху новостей**: это постоянные сведения о заведении, а новости меняются.
       */}
       {showAbout && (
-        <Card title={aboutTitle ?? 'О колледже'}>
+        <Card title={aboutTitle ?? 'Об учебном заведении'}>
           {aboutText !== null && <p className="whitespace-pre-wrap text-slate-800">{aboutText}</p>}
         </Card>
       )}

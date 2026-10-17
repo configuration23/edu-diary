@@ -142,9 +142,6 @@ export function SettingsScreen() {
   const [title, setTitle] = useState('');
   const [shortName, setShortName] = useState('');
   const [signature, setSignature] = useState('');
-  /** Блок «О колледже»: заголовок и текст, показываются на «Обзоре». */
-  const [aboutTitle, setAboutTitle] = useState('');
-  const [aboutText, setAboutText] = useState('');
   const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null);
   const [logoError, setLogoError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -156,8 +153,6 @@ export function SettingsScreen() {
     setTitle(branding.data.title ?? '');
     setShortName(branding.data.shortName ?? '');
     setSignature(branding.data.signature ?? '');
-    setAboutTitle(branding.data.aboutTitle ?? '');
-    setAboutText(branding.data.aboutText ?? '');
     setLogoDataUrl(branding.data.logoDataUrl ?? null);
   }, [branding.data]);
 
@@ -180,6 +175,13 @@ export function SettingsScreen() {
 
   return (
     <div className="flex flex-col gap-6">
+      {/*
+        Новости заведения и описание заведения: публикуются здесь, здесь же правятся и убираются.
+        Список показывает и подготовленные, и просроченные — иначе новость, поставленную на будущее,
+        не найти.
+      */}
+      <NewsSettingsCard />
+
       <Card
         title="Настройки заведения"
         description="Название и логотип показываются на экране входа и в шапке дневника."
@@ -194,8 +196,6 @@ export function SettingsScreen() {
                 title: title === '' ? null : title,
                 shortName: shortName === '' ? null : shortName,
                 signature: signature === '' ? null : signature,
-                aboutTitle: aboutTitle.trim() === '' ? null : aboutTitle,
-                aboutText: aboutText.trim() === '' ? null : aboutText,
                 logoDataUrl,
               });
               setSaved(true);
@@ -218,16 +218,6 @@ export function SettingsScreen() {
             <Field label="Подпись" hint="Строка под названием на экране входа">
               <TextInput value={signature} onChange={(event) => setSignature(event.target.value)} />
             </Field>
-            <Field
-              label="Заголовок блока «О колледже»"
-              hint="Показывается на «Обзоре» сверху новостей"
-            >
-              <TextInput
-                value={aboutTitle}
-                onChange={(event) => setAboutTitle(event.target.value)}
-                placeholder="О колледже"
-              />
-            </Field>
             <Field label="Логотип" hint="PNG, JPEG или SVG до 256 КБ">
               <FilePicker
                 accept="image/png,image/jpeg,image/svg+xml"
@@ -238,17 +228,6 @@ export function SettingsScreen() {
               />
             </Field>
           </div>
-
-          <Field
-            label="Текст блока «О колледже»"
-            hint="Несколько строк: история, направления, контакты"
-          >
-            <textarea
-              className="min-h-28 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-              value={aboutText}
-              onChange={(event) => setAboutText(event.target.value)}
-            />
-          </Field>
 
           {logoError !== null && <Alert tone="warning">{logoError}</Alert>}
           {logoDataUrl !== null && (
@@ -274,12 +253,6 @@ export function SettingsScreen() {
       </Card>
 
       <AppearanceForm />
-
-      {/*
-        Новости заведения: публикуются здесь, здесь же правятся и убираются. Список показывает и
-        подготовленные, и просроченные — иначе новость, поставленную на будущее, не найти.
-      */}
-      <NewsSettingsCard />
 
       {/*
         Хранилище файлов — **системная** настройка: адрес хранилища и ключи доступа. Здесь же
