@@ -185,8 +185,13 @@ function HomeworkItem({ assignment }: { assignment: HomeworkAssignmentSummaryDto
             }}
           >
             <Field label="Решение">
+              {/*
+                `w-full` обязателен: без него `<textarea>` берёт ширину по умолчанию (около 20
+                символов) и выглядит узкой колонкой внутри широкого блока — владелец это заметил.
+                Поле ввода решения — главное на экране, ему нужна вся ширина.
+              */}
               <textarea
-                className="min-h-20 rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+                className="min-h-20 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
                 value={text}
                 onChange={(event) => setText(event.target.value)}
                 placeholder="Ответ или пояснение к работе"

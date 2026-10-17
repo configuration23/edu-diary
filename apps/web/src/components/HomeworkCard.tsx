@@ -163,8 +163,13 @@ export function HomeworkCard({
             }}
           >
             <Field label="Что задано">
+              {/*
+                `w-full` обязателен: без него `<textarea>` берёт ширину по умолчанию и выглядит
+                узкой колонкой внутри широкого блока — владелец это заметил. Задание пишут
+                несколько строк, поэтому поле должно занимать всю ширину.
+              */}
               <textarea
-                className="min-h-20 rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+                className="min-h-20 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
                 value={text}
                 onChange={(event) => setText(event.target.value)}
                 placeholder="Прочитать главу 3 и ответить на вопросы"
@@ -346,8 +351,9 @@ function AssignmentBlock({
         }}
       >
         <Field label="Что задано">
+          {/* Та же правка, что в форме создания: поле задания — на всю ширину блока. */}
           <textarea
-            className="min-h-20 rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+            className="min-h-20 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
             value={text}
             onChange={(event) => setText(event.target.value)}
           />
