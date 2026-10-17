@@ -116,9 +116,16 @@ function CreateGroupCard({ onDone }: { onDone: () => void }) {
 
         {create.isError && <Alert tone="error">{errorMessage(create.error)}</Alert>}
 
-        <div>
+        {/*
+          «Отмена» обязательна: форма открывается кнопкой, и без неё единственный способ её закрыть —
+          создать группу или перезагрузить страницу. Владелец это заметил.
+        */}
+        <div className="flex flex-wrap gap-2">
           <Button type="submit" disabled={create.isPending || activeYear === null}>
             Создать группу
+          </Button>
+          <Button tone="secondary" onClick={onDone}>
+            Отмена
           </Button>
         </div>
       </form>

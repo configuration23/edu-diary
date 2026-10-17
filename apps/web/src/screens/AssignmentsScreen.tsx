@@ -271,9 +271,16 @@ function CreateAssignmentCard({ onDone }: { onDone: () => void }) {
           </div>
         )}
 
-        <div>
+        {/*
+          «Отмена» обязательна: форма открывается кнопкой, и без неё единственный способ её
+          закрыть — создать назначение или перезагрузить страницу.
+        */}
+        <div className="flex flex-wrap gap-2">
           <Button type="submit" disabled={create.isPending}>
             Назначить
+          </Button>
+          <Button tone="secondary" onClick={onDone}>
+            Отмена
           </Button>
         </div>
       </form>

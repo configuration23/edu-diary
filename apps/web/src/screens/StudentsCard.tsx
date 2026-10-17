@@ -187,9 +187,16 @@ function CreateStudentForm({
 
         {createStudent.isError && <Alert tone="error">{errorMessage(createStudent.error)}</Alert>}
 
-        <div>
+        {/*
+          «Отмена» обязательна: форма открывается кнопкой, и без неё единственный способ её
+          закрыть — завести ученика или перезагрузить страницу.
+        */}
+        <div className="flex flex-wrap gap-2">
           <Button type="submit" disabled={createStudent.isPending}>
             Завести ученика
+          </Button>
+          <Button tone="secondary" onClick={onDone}>
+            Отмена
           </Button>
         </div>
       </form>
