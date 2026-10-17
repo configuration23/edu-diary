@@ -30,6 +30,7 @@
     "check:version": "node tools/quality/sync-version.mjs",
     "check:bundle-domains": "node tools/quality/check-bundle-domains.mjs apps/web/dist",
     "check:secrets": "node tools/quality/scan-secrets.mjs",
+    "ui:inventory": "node tools/quality/write-ui-inventory.mjs",
     "check:registry": "node tools/quality/check-registry-access.mjs",
     "check:startup-secrets": "node tools/quality/check-startup-secrets.mjs",
     "format": "prettier --write .",
