@@ -36,7 +36,7 @@ import {
 /** Значение селекта «Группа», означающее все группы активного года. */
 const ALL_GROUPS = '__all__';
 
-function CreateAssignmentCard() {
+function CreateAssignmentCard({ onDone }: { onDone: () => void }) {
   const teachers = useTeachers();
   const subjects = useSubjects();
   const groups = useGroups();
@@ -150,6 +150,12 @@ function CreateAssignmentCard() {
           if (created > 0) {
             setEndsOn('');
             setHoursPlanned('');
+
+            /**
+             * Закрываем форму после создания — но **не** когда есть массовый результат: его надо
+             * прочитать (сколько создано и что не удалось), а не потерять вместе с формой.
+             */
+            if (allGroups.length <= 1 && targetGroups.length <= 1) onDone();
           }
         }}
       >
@@ -284,12 +290,14 @@ export function AssignmentsScreen({ session }: { session: SessionResponseDto }) 
   const groups = useGroups();
   const assignments = useAssignments({ studyGroupId: groupId === '' ? undefined : groupId });
   const close = useCloseAssignment();
+  /** Форма назначения скрыта, пока её не позовут кнопкой: список важнее формы. */
+  const [creating, setCreating] = useState(false);
 
   return (
     <div className="flex flex-col gap-6">
-      {canManage ? (
-        <CreateAssignmentCard />
-      ) : (
+      {creating && <CreateAssignmentCard onDone={() => setCreating(false)} />}
+
+      {!canManage && (
         <Alert tone="info">
           Здесь видны только ваши назначения. Назначения выдаёт администратор.
         </Alert>
@@ -299,6 +307,22 @@ export function AssignmentsScreen({ session }: { session: SessionResponseDto }) 
         title="Назначения"
         description={canManage ? 'Все назначения колледжа.' : 'Ваши назначения: предметы и группы.'}
         actions={
+          canManage ? (
+            /**
+             * Скрыта, пока форма открыта: у самой формы есть «создать» и «отмена», а две кнопки,
+             * делающие одно и то же, только путают.
+             */
+            creating ? undefined : (
+              <Button onClick={() => setCreating(true)}>Создать назначение</Button>
+            )
+          ) : undefined
+        }
+      >
+        {/**
+         * Выбор группы остаётся отдельной строкой: это фильтр списка, а не действие.
+         * Кнопка создания — в шапке, там же, где на других страницах.
+         */}
+        <div className="mb-3">
           <select
             className="rounded-md border border-slate-300 px-3 py-2 text-sm"
             value={groupId}
@@ -311,8 +335,8 @@ export function AssignmentsScreen({ session }: { session: SessionResponseDto }) 
               </option>
             ))}
           </select>
-        }
-      >
+        </div>
+
         {assignments.isLoading && <p className="text-sm text-slate-500">Загружаем…</p>}
         {assignments.isError && <Alert tone="error">{errorMessage(assignments.error)}</Alert>}
         {close.isError && <Alert tone="error">{errorMessage(close.error)}</Alert>}

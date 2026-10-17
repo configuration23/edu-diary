@@ -50,7 +50,7 @@ const groupFormSchema = z
     path: ['endsOn'],
   });
 
-function CreateGroupCard() {
+function CreateGroupCard({ onDone }: { onDone: () => void }) {
   const years = useAcademicYears();
   const create = useCreateGroup();
 
@@ -88,6 +88,8 @@ function CreateGroupCard() {
               endsOn: values.endsOn,
             });
             form.reset({ name: '', course: '', specialty: '', startsOn: '', endsOn: '' });
+            /** Форму закрываем: дальше человек работает со списком групп. */
+            onDone();
           } catch {
             // Ошибка показывается ниже.
           }
@@ -386,14 +388,19 @@ function EditGroupForm({
 }
 
 export function GroupsScreen({ canManageStudents = false }: { canManageStudents?: boolean }) {
-  const [search, setSearch] = useState('');
-  const groups = useGroups({ search: search === '' ? undefined : search });
+  /**
+   * Поиска по названию больше нет: в шапке блока «Группы» теперь кнопка «Создать группу» (решение
+   * владельца). Список групп короткий, и поиск занимал место без пользы.
+   */
+  const groups = useGroups();
   const [openGroup, setOpenGroup] = useState<{ id: string; name: string } | null>(null);
   const [editingGroup, setEditingGroup] = useState<StudyGroupDto | null>(null);
   // Два независимых уведомления: сообщение об ученике не должно подменяться
   // сообщением о группе и наоборот.
   const [studentNotice, setStudentNotice] = useState<string | null>(null);
   const [groupNotice, setGroupNotice] = useState<string | null>(null);
+  /** Форма группы скрыта, пока её не позовут кнопкой. */
+  const [creatingGroup, setCreatingGroup] = useState(false);
   const removeGroup = useDeleteGroup();
 
   return (
@@ -407,7 +414,7 @@ export function GroupsScreen({ canManageStudents = false }: { canManageStudents?
           ниже, под карточкой группы, и читалось как сообщение о группе. */}
       {canManageStudents && studentNotice !== null && <Alert tone="success">{studentNotice}</Alert>}
 
-      <CreateGroupCard />
+      {creatingGroup && <CreateGroupCard onDone={() => setCreatingGroup(false)} />}
 
       {groupNotice !== null && <Alert tone="success">{groupNotice}</Alert>}
       {removeGroup.isError && <Alert tone="error">{errorMessage(removeGroup.error)}</Alert>}
@@ -416,12 +423,17 @@ export function GroupsScreen({ canManageStudents = false }: { canManageStudents?
         title="Группы"
         description="«Состав» — зачисление и отчисление, «Править» — название и период."
         actions={
-          <TextInput
-            placeholder="Поиск по названию"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            className="sm:w-64"
-          />
+          /**
+           * Кнопка **вместо поиска** (решение владельца): группы ищут редко, а заводят каждый раз.
+           * Список групп короткий, и поиск по названию только занимал место в шапке.
+           */
+          /**
+           * Скрыта, пока форма открыта: у самой формы есть «создать» и «отмена», а две одинаковые
+           * кнопки на экране путают — этим и попался сквозной сценарий.
+           */
+          creatingGroup ? undefined : (
+            <Button onClick={() => setCreatingGroup(true)}>Создать группу</Button>
+          )
         }
       >
         {groups.isLoading && <p className="text-sm text-slate-500">Загружаем…</p>}

@@ -50,30 +50,37 @@ const session: SessionResponseDto = {
 };
 
 describe('экраны Этапа 2 монтируются', () => {
-  it('учебный год: форма создания и список', () => {
+  it('учебный год: список и кнопка создания, форма скрыта', () => {
     const html = renderWithQueries(<AcademicsScreen />);
 
-    expect(html).toContain('Новый учебный год');
+    /** Список — главное на странице; форма открывается кнопкой (решение владельца). */
     expect(html).toContain('Учебные годы');
-    expect(html).toContain('Сделать активным');
+    expect(html).toContain('Создать год');
+
+    /** По умолчанию формы нет: иначе она снова займёт первый экран. */
+    expect(html).not.toContain('Сделать активным');
   });
 
-  it('группы: ученики первыми, затем группы', () => {
+  it('группы: ученики первыми, затем группы; формы по кнопкам', () => {
     const html = renderWithQueries(<GroupsScreen canManageStudents />);
 
     // Порядок отражает работу: сначала люди, потом группа из них.
-    expect(html.indexOf('Новый ученик')).toBeGreaterThan(-1);
-    expect(html.indexOf('Новый ученик')).toBeLessThan(html.indexOf('Новая группа'));
-    expect(html).toContain('Ученики');
-    expect(html).toContain('Поиск по названию');
+    expect(html.indexOf('Ученики')).toBeLessThan(html.indexOf('Группы'));
+
+    /** Обе формы открываются кнопками, а не висят на странице. */
+    expect(html).toContain('Завести ученика');
+    expect(html).toContain('Создать группу');
+
+    /** Поиска по названию группы больше нет: на его месте кнопка. */
+    expect(html).not.toContain('Поиск по названию');
     expect(html).toContain('Загружаем');
   });
 
   it('группы: преподавателю блоки учеников не показывают', () => {
     const html = renderWithQueries(<GroupsScreen />);
 
-    expect(html).not.toContain('Новый ученик');
-    expect(html).toContain('Новая группа');
+    expect(html).not.toContain('Завести ученика');
+    expect(html).toContain('Создать группу');
   });
 
   it('справочники: предметы, аудитории, причины оценок и знаки', () => {
@@ -87,11 +94,15 @@ describe('экраны Этапа 2 монтируются', () => {
     expect(html).toContain('Знаки: сколько нужно для оценки');
   });
 
-  it('назначения: администратор видит форму создания', () => {
+  it('назначения: администратор видит кнопку создания, форма скрыта', () => {
     const html = renderWithQueries(<AssignmentsScreen session={session} />);
 
-    expect(html).toContain('Новое назначение');
+    /** Форма открывается кнопкой в шапке списка (решение владельца). */
+    expect(html).toContain('Создать назначение');
     expect(html).toContain('Все группы');
+
+    /** Фильтр по группе остался: это не действие, а отбор списка. */
+    expect(html).not.toContain('Новое назначение');
   });
 
   it('назначения: преподавателю форму не показывают', () => {
@@ -121,15 +132,13 @@ describe('экраны Этапа 2 монтируются', () => {
     expect(html).toContain('Логотип');
   });
 
-  it('новый ученик: учётная запись по выбору, без обязательных пустых полей', () => {
+  it('новый ученик: кнопка создания, форма скрыта до нажатия', () => {
     const html = renderWithQueries(<StudentsCard onNotice={() => {}} />);
 
-    // Карточка ученика — основное действие, учётная запись — по выбору.
-    expect(html).toContain('Новый ученик');
-    expect(html).toContain('Сразу создать учётную запись');
+    /** Форма открывается кнопкой «Завести ученика» в шапке блока «Ученики». */
+    expect(html).toContain('Завести ученика');
     expect(html).toContain('Ученики');
-    // Дата рождения и примечание — необязательные.
-    expect(html).toContain('Необязательно');
+    expect(html).not.toContain('Сразу создать учётную запись');
   });
 
   it('роли ученика и родителя в общей форме не предлагаются', () => {

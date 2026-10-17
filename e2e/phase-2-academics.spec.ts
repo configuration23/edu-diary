@@ -94,6 +94,8 @@ test.describe('Этап 2: год, группа, назначения', () => {
 
     // --- Учебный год ---
     await page.getByRole('link', { name: 'Учебный год' }).click();
+    /** Форма скрыта до нажатия: кнопка в шапке блока «Учебные годы». */
+    await page.getByRole('button', { name: 'Создать год' }).click();
     await expect(page.getByRole('heading', { name: 'Новый учебный год' })).toBeVisible();
 
     const yearTitle = `E2E ${new Date().getFullYear()}/${new Date().getFullYear() + 1}`;
@@ -121,6 +123,8 @@ test.describe('Этап 2: год, группа, назначения', () => {
 
     // --- Группа ---
     await page.getByRole('link', { name: 'Группы и ученики' }).click();
+    /** Та же схема: кнопка «Создать группу» в шапке блока «Группы». */
+    await page.getByRole('button', { name: 'Создать группу' }).click();
     await expect(page.getByRole('heading', { name: 'Новая группа' })).toBeVisible();
     // Группа создаётся в активном году: отдельного выбора года в форме нет.
     await expect(page.getByText('Группа войдёт в активный год')).toBeVisible();
@@ -143,6 +147,7 @@ test.describe('Этап 2: год, группа, назначения', () => {
 
     // --- Назначение ---
     await page.getByRole('link', { name: 'Назначения' }).click();
+    await page.getByRole('button', { name: 'Создать назначение' }).click();
     await expect(page.getByRole('heading', { name: 'Новое назначение' })).toBeVisible();
 
     // Формы назначения ищем внутри её карточки: на странице есть и другие поля

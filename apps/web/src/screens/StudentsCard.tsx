@@ -50,7 +50,14 @@ function relationLabel(value: string | null): string {
   return RELATIONS.find((item) => item.value === value)?.label ?? 'Не указано';
 }
 
-function CreateStudentForm({ onCreated }: { onCreated: (message: string) => void }) {
+function CreateStudentForm({
+  onCreated,
+  onDone,
+}: {
+  onCreated: (message: string) => void;
+  /** Закрыть форму после создания: человеку нужен список, а не пустая форма. */
+  onDone: () => void;
+}) {
   const createStudent = useCreateStudent();
 
   const [fullName, setFullName] = useState('');
@@ -110,6 +117,8 @@ function CreateStudentForm({ onCreated }: { onCreated: (message: string) => void
                 ? `Ученик «${created}» заведён вместе с учётной записью.`
                 : `Ученик «${created}» заведён. Учётную запись можно создать позже.`,
             );
+            /** Форму закрываем: дальше человек работает со списком. */
+            onDone();
           } catch {
             // Ошибка показывается ниже из состояния запроса.
           }
@@ -391,13 +400,29 @@ export function StudentsCard({ onNotice }: { onNotice: (message: string) => void
   const [pageSize, setPageSize] = usePageSize(10);
   const students = useStudents({ search, limit: pageSize, offset: (page - 1) * pageSize });
   const [accountFor, setAccountFor] = useState<{ id: string; name: string } | null>(null);
+  /** Форма ученика скрыта, пока её не позовут кнопкой: список важнее формы. */
+  const [creating, setCreating] = useState(false);
   const [accountNotice, setAccountNotice] = useState<string | null>(null);
 
   return (
     <div className="flex flex-col gap-6">
-      <CreateStudentForm onCreated={onNotice} />
+      {/**
+       * Форма — **над списком** и только по кнопке (просьба владельца). Так первый экран занят
+       * учениками, а не полями создания.
+       */}
+      {creating && <CreateStudentForm onCreated={onNotice} onDone={() => setCreating(false)} />}
 
-      <Card title="Ученики" description="Карточка ученика — основа зачисления, согласий и журнала.">
+      <Card
+        title="Ученики"
+        description="Карточка ученика — основа зачисления, согласий и журнала."
+        actions={
+          /**
+           * Скрыта, пока форма открыта: у самой формы есть «создать» и «отмена», а две одинаковые
+           * кнопки на экране путают — этим и попался сквозной сценарий.
+           */
+          creating ? undefined : <Button onClick={() => setCreating(true)}>Завести ученика</Button>
+        }
+      >
         <div className="mb-3">
           <Field label="Поиск">
             <TextInput

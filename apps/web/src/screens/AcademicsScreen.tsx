@@ -70,7 +70,7 @@ function kindLabel(kind: string): string {
   return PERIOD_KINDS.find((item) => item.value === kind)?.label ?? kind;
 }
 
-function CreateYearCard() {
+function CreateYearCard({ onDone }: { onDone: () => void }) {
   const create = useCreateAcademicYear();
   const form = useForm<z.infer<typeof yearFormSchema>>({
     resolver: zodResolver(yearFormSchema),
@@ -86,6 +86,8 @@ function CreateYearCard() {
           try {
             await create.mutateAsync(values);
             form.reset({ title: '', startsOn: '', endsOn: '', isActive: false });
+            /** Закрываем форму: после создания человеку нужен список, а не пустая форма. */
+            onDone();
           } catch {
             // Ошибка показывается ниже из состояния запроса.
           }
@@ -109,9 +111,12 @@ function CreateYearCard() {
 
         {create.isError && <Alert tone="error">{errorMessage(create.error)}</Alert>}
 
-        <div>
+        <div className="flex flex-wrap gap-2">
           <Button type="submit" disabled={create.isPending}>
             Создать год
+          </Button>
+          <Button tone="secondary" onClick={onDone}>
+            Отмена
           </Button>
         </div>
       </form>
@@ -375,10 +380,16 @@ export function AcademicsScreen() {
   const [openYearId, setOpenYearId] = useState<string | null>(null);
   const [editingYear, setEditingYear] = useState<AcademicYearDto | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  /** Форма создания года скрыта, пока её не позовут кнопкой: список важнее формы. */
+  const [creating, setCreating] = useState(false);
 
   return (
     <div className="flex flex-col gap-6">
-      <CreateYearCard />
+      {/*
+        Форма — **над списком** и только по кнопке (просьба владельца). Так первый экран занят тем,
+        ради чего страницу открывают: самими годами.
+      */}
+      {creating && <CreateYearCard onDone={() => setCreating(false)} />}
 
       {notice !== null && <Alert tone="success">{notice}</Alert>}
       {activate.isError && <Alert tone="error">{errorMessage(activate.error)}</Alert>}
@@ -386,6 +397,13 @@ export function AcademicsScreen() {
       <Card
         title="Учебные годы"
         description="Активный год один: на него ориентируются группы и назначения."
+        actions={
+          /**
+           * Скрыта, пока форма открыта: у самой формы есть «создать» и «отмена», а две одинаковые
+           * кнопки на экране путают — этим и попался сквозной сценарий.
+           */
+          creating ? undefined : <Button onClick={() => setCreating(true)}>Создать год</Button>
+        }
       >
         {years.isLoading && <p className="text-sm text-slate-500">Загружаем…</p>}
         {years.isError && <Alert tone="error">{errorMessage(years.error)}</Alert>}
