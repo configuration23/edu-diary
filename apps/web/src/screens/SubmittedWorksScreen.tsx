@@ -170,7 +170,7 @@ export function SubmittedWorksScreen({ session }: { session: SessionResponseDto 
               таблица перестаёт читаться построчно.
             */}
             {assignment.rows.some((row) => (row.submission?.text ?? '') !== '') && (
-              <div className="flex flex-col gap-1 rounded-md bg-[var(--color-surface-muted)] p-3">
+              <div className="flex flex-col gap-1 rounded-md bg-muted p-3">
                 {assignment.rows.map((row) =>
                   row.submission === null || row.submission.text === '' ? null : (
                     <p key={row.studentId} className="text-sm">

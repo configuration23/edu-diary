@@ -39,7 +39,7 @@ export function Spoiler({
   return (
     <details
       open={defaultOpen}
-      className="group rounded-lg border border-slate-200 bg-[var(--color-surface)] shadow-sm"
+      className="group rounded-lg border border-slate-200 bg-card shadow-sm"
     >
       {/*
         `<summary>` — единственная нажимаемая часть. Убираем системный маркер (`list-none`) и

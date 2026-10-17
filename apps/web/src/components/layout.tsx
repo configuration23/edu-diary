@@ -88,9 +88,7 @@ export function Section({
   tone?: 'surface' | 'plain';
 }) {
   const frame =
-    tone === 'surface'
-      ? 'rounded-lg border border-slate-200 bg-[var(--color-surface)] p-4 shadow-sm'
-      : '';
+    tone === 'surface' ? 'rounded-lg border border-slate-200 bg-card p-4 shadow-sm' : '';
 
   return (
     <section className={`flex flex-col gap-4 ${frame}`}>
@@ -122,7 +120,7 @@ export function Section({
  */
 export function Toolbar({ children, actions }: { children: ReactNode; actions?: ReactNode }) {
   return (
-    <div className="flex flex-wrap items-end gap-4 rounded-lg border border-slate-200 bg-[var(--color-surface)] p-4 shadow-sm">
+    <div className="flex flex-wrap items-end gap-4 rounded-lg border border-slate-200 bg-card p-4 shadow-sm">
       {children}
       {actions !== undefined && (
         <div className="ml-auto flex flex-wrap items-center gap-2">{actions}</div>
