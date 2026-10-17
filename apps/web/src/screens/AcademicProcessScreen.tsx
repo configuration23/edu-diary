@@ -6,6 +6,8 @@ import { StudentsCard } from './StudentsCard';
 import { AcademicsScreen } from './AcademicsScreen';
 import { GroupsScreen } from './GroupsScreen';
 import { AssignmentsScreen } from './AssignmentsScreen';
+import { ScheduleTemplateScreen } from './ScheduleTemplateScreen';
+import { SubstitutionsScreen } from './SubstitutionsScreen';
 
 /**
  * «Учебный процесс» — три раздела одной страницей.
@@ -30,12 +32,31 @@ function canManageStudents(session: SessionResponseDto): boolean {
   );
 }
 
-export function AcademicProcessScreen({ session }: { session: SessionResponseDto }) {
+/** Может ли человек оформлять замены: право `substitutions:write` в объёме «все». */
+function canManageSubstitutions(session: SessionResponseDto): boolean {
+  return session.permissions.some(
+    (grant) => grant.permission === 'substitutions:write' && grant.scope === 'all',
+  );
+}
+
+export function AcademicProcessScreen({
+  session,
+  substitutionLessonId = null,
+}: {
+  session: SessionResponseDto;
+  /**
+   * Урок, выбранный по ссылке из раздела «Уроки».
+   *
+   * Раньше это был адрес `/substitutions?lessonId=…`. Теперь замены живут здесь, но ссылка должна
+   * по-прежнему сразу открывать форму с заполненным занятием — поэтому параметр доезжает сюда.
+   */
+  substitutionLessonId?: string | null;
+}) {
   return (
     <Page>
       <PageHeader
         title="Учебный процесс"
-        description="Год, группы, ученики и назначения — по порядку, сверху вниз. Раскройте нужный раздел."
+        description="Год, группы, ученики, назначения, шаблон недели и замены — по порядку, сверху вниз. Раскройте нужный раздел."
       />
 
       <Spoiler
@@ -70,6 +91,35 @@ export function AcademicProcessScreen({ session }: { session: SessionResponseDto
         summary="Кто ведёт предмет в группе и с какого по какое число. Урока без назначения не бывает."
       >
         <AssignmentsScreen session={session} />
+      </Spoiler>
+
+      {/*
+        Шаблон недели и замены перенесены сюда из отдельных страниц «Сетка (шаблон)» и «Замены»
+        (решение владельца). Обе — про то же самое расписание, что и назначения: назначение даёт
+        уроку преподавателя, шаблон ставит урок в неделю, замена подменяет преподавателя на один
+        урок. Держать их в отдельных пунктах меню значило разрывать одну цепочку.
+      */}
+      <Spoiler
+        title="Шаблон недели"
+        summary="Постоянное расписание на неделю: какой предмет, в какой день и на какой паре. Уроки по датам появляются в «Уроках»."
+      >
+        <ScheduleTemplateScreen session={session} />
+      </Spoiler>
+
+      <Spoiler
+        title="Замены"
+        summary="Кто кого заменяет и на какой срок. Замена оформляется на один урок и публикуется сразу."
+        /**
+         * Открываем сразу, если пришли по ссылке из «Уроков»: человек уже выбрал занятие и ждёт
+         * форму, а не список свёрнутых разделов.
+         */
+        defaultOpen={substitutionLessonId !== null}
+      >
+        <SubstitutionsScreen
+          groupId={null}
+          canManage={canManageSubstitutions(session)}
+          initialLessonId={substitutionLessonId}
+        />
       </Spoiler>
     </Page>
   );

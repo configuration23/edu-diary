@@ -10,7 +10,7 @@ import type { ReactNode } from 'react';
 
 import { AppLayout } from './components/AppLayout';
 import { NotFoundPage, PageGuard } from './components/PageGuard';
-import { AcademicContextProvider, useAcademicContext } from './components/AcademicContext';
+import { AcademicContextProvider } from './components/AcademicContext';
 import { AppearanceProvider } from './components/AppearanceContext';
 import { Alert } from './components/ui';
 import { errorMessage } from './lib/api-client';
@@ -28,8 +28,6 @@ import { SubmittedWorksScreen } from './screens/SubmittedWorksScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
 import { PrivacyScreen } from './screens/PrivacyScreen';
 import { ScheduleScreen } from './screens/ScheduleScreen';
-import { SubstitutionsScreen } from './screens/SubstitutionsScreen';
-import { ScheduleTemplateScreen } from './screens/ScheduleTemplateScreen';
 import { SecurityScreen } from './screens/SecurityScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { SetupScreen } from './screens/SetupScreen';
@@ -148,7 +146,21 @@ const securityRoute = createRoute({
 const academicProcessRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/academic-process',
-  component: withSession((session) => <AcademicProcessScreen session={session} />),
+  /** Ссылка из «Уроков» приводит уже выбранный урок: он раскрывает раздел «Замены». */
+  validateSearch: (search: Record<string, unknown>) => ({
+    substitutionLessonId:
+      typeof search.substitutionLessonId === 'string' ? search.substitutionLessonId : undefined,
+  }),
+  component: withSession((session) => {
+    const search = academicProcessRoute.useSearch();
+
+    return (
+      <AcademicProcessScreen
+        session={session}
+        substitutionLessonId={search.substitutionLessonId ?? null}
+      />
+    );
+  }),
 });
 
 /**
@@ -161,7 +173,7 @@ const legacyAcademicsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/academics',
   beforeLoad: () => {
-    throw redirect({ to: '/academic-process' });
+    throw redirect({ to: '/academic-process', search: { substitutionLessonId: undefined } });
   },
 });
 
@@ -169,7 +181,7 @@ const legacyGroupsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/groups',
   beforeLoad: () => {
-    throw redirect({ to: '/academic-process' });
+    throw redirect({ to: '/academic-process', search: { substitutionLessonId: undefined } });
   },
 });
 
@@ -183,7 +195,7 @@ const legacyAssignmentsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/assignments',
   beforeLoad: () => {
-    throw redirect({ to: '/academic-process' });
+    throw redirect({ to: '/academic-process', search: { substitutionLessonId: undefined } });
   },
 });
 
@@ -193,26 +205,28 @@ const scheduleRoute = createRoute({
   component: withSession((session) => <ScheduleScreen session={session} />),
 });
 
-const scheduleTemplateRoute = createRoute({
+/** «Сетка (шаблон)» стала разделом «Шаблон недели» внутри «Учебного процесса». */
+const legacyTemplateRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/schedule/template',
-  component: withSession((session) => <ScheduleTemplateScreen session={session} />),
+  beforeLoad: () => {
+    throw redirect({ to: '/academic-process', search: { substitutionLessonId: undefined } });
+  },
 });
 
-const substitutionsRoute = createRoute({
+/** «Замены» стала разделом внутри «Учебного процесса»; выбранный урок переносим в новый адрес. */
+const legacySubstitutionsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/substitutions',
-  // `lessonId` приходит ссылкой из раздела «Уроки»: так администратор попадает в
-  // форму замены с уже выбранным занятием.
   validateSearch: (search: Record<string, unknown>) => ({
     lessonId: typeof search.lessonId === 'string' ? search.lessonId : undefined,
   }),
-  /*
-    Замены — единственный маршрут, который сам читает сессию (он берёт ещё и поиск из
-    адреса). Гейт навешиваем внутри него: без этого раздел открывался по прямой ссылке,
-    как и остальные закрытые экраны.
-  */
-  component: () => <SubstitutionsRoute />,
+  beforeLoad: ({ search }) => {
+    throw redirect({
+      to: '/academic-process',
+      search: { substitutionLessonId: search.lessonId },
+    });
+  },
 });
 
 const lessonsRoute = createRoute({
@@ -261,29 +275,6 @@ const settingsRoute = createRoute({
   component: withSession(() => <SettingsScreen />),
 });
 
-/** Замены: группа берётся из контекста, право — из сессии. */
-function SubstitutionsRoute() {
-  const { selectedGroupId } = useAcademicContext();
-  const session = useSession();
-  const search = substitutionsRoute.useSearch();
-
-  if (session.data == null) return <Splash />;
-
-  const canManage = session.data.permissions.some(
-    (grant) => grant.permission === 'substitutions:write' && grant.scope === 'all',
-  );
-
-  return (
-    <PageGuard session={session.data}>
-      <SubstitutionsScreen
-        groupId={selectedGroupId}
-        canManage={canManage}
-        initialLessonId={search.lessonId ?? null}
-      />
-    </PageGuard>
-  );
-}
-
 const routeTree = rootRoute.addChildren([
   indexRoute,
   academicProcessRoute,
@@ -291,10 +282,10 @@ const routeTree = rootRoute.addChildren([
   legacyAcademicsRoute,
   legacyGroupsRoute,
   legacyAssignmentsRoute,
+  legacyTemplateRoute,
+  legacySubstitutionsRoute,
   catalogsRoute,
   scheduleRoute,
-  scheduleTemplateRoute,
-  substitutionsRoute,
   homeworkRoute,
   submittedRoute,
   profileRoute,

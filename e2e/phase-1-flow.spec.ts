@@ -273,8 +273,6 @@ test.describe.serial('Этап 1: настройка, вход, права', () 
       '/academic-process',
       '/catalogs',
       '/schedule',
-      '/schedule/template',
-      '/substitutions',
       '/lessons',
       ...(lessonId === undefined ? [] : [`/lessons/${lessonId}`]),
       '/users',
@@ -295,7 +293,7 @@ test.describe.serial('Этап 1: настройка, вход, права', () 
      * Без перенаправления закладки на «Учебный год», «Группы и ученики» и «Назначения» отдавали бы
      * «страница не найдена» — человек решил бы, что раздел пропал.
      */
-    for (const legacy of ['/academics', '/groups', '/assignments']) {
+    for (const legacy of ['/academics', '/groups', '/assignments', '/schedule/template']) {
       await page.goto(legacy);
       await expect(page).toHaveURL(/\/academic-process$/);
       await expect(page.getByRole('heading', { name: 'Учебный процесс' })).toBeVisible();
@@ -357,7 +355,7 @@ test.describe.serial('Этап 1: настройка, вход, права', () 
 
     // Администратор: доступно всё, включая разделы, закрытые остальным.
     await ensureSession(page, ADMIN.username, ADMIN.password);
-    for (const path of ['/', '/users', '/audit', '/security', '/settings', '/schedule/template']) {
+    for (const path of ['/', '/users', '/audit', '/security', '/settings', '/academic-process']) {
       await allowed(path);
     }
 
@@ -395,8 +393,6 @@ test.describe.serial('Этап 1: настройка, вход, права', () 
       '/security',
       '/settings',
       '/catalogs',
-      '/schedule/template',
-      '/substitutions',
       '/lessons',
       /** Объединённая страница: ученику не положена — там годы, группы и назначения. */
       '/academic-process',
@@ -410,7 +406,13 @@ test.describe.serial('Этап 1: настройка, вход, права', () 
      * Проверяем, что это «Страница не найдена», а не ошибка: перенаправление не должно выдавать
      * ученику существование раздела и не должно показывать ему `403`.
      */
-    for (const legacy of ['/academics', '/groups', '/assignments']) {
+    for (const legacy of [
+      '/academics',
+      '/groups',
+      '/assignments',
+      '/schedule/template',
+      '/substitutions',
+    ]) {
       await page.goto(legacy);
       await expect(page.getByText('Страница не найдена', { exact: false })).toBeVisible();
     }

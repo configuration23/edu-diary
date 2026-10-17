@@ -13,6 +13,19 @@ import { expect, test, type Page } from '@playwright/test';
  * администратора и активный год).
  */
 
+/**
+ * Раскрыть раздел «Учебного процесса».
+ *
+ * Разделы свёрнуты по умолчанию; заголовок ищем **точно**, потому что те же слова встречаются в
+ * описаниях соседних разделов.
+ */
+async function openSection(page: Page, title: string): Promise<void> {
+  await page
+    .locator('summary')
+    .filter({ has: page.getByText(title, { exact: true }) })
+    .click();
+}
+
 const ADMIN = {
   username: 'admin',
   password: 'e2e-rukovoditel-2025',
@@ -197,16 +210,17 @@ test.describe('Этап 3: звонки, расписание, уроки', () =
 
     await expect(bells.getByRole('cell', { name: '11:30' })).toBeVisible();
 
-    // --- Сетка (шаблон): занятие группы ---
-    await page.getByRole('link', { name: 'Сетка (шаблон)' }).click();
-    // Форма добавления скрыта: открываем её кнопкой в шапке блока «Занятия в сетке».
+    // --- Шаблон недели: занятие группы ---
+    await page.getByRole('link', { name: 'Учебный процесс' }).click();
+    await openSection(page, 'Шаблон недели');
+    // Форма добавления скрыта: открываем её кнопкой в шапке блока «Шаблон недели».
     await page.getByRole('button', { name: 'Добавить занятие' }).click();
 
     // Группа выбирается в форме добавления: список ниже подгружается по выбранной
     // группе, а отдельного селекта в шапке на этом экране нет.
     const entryForm = page
       .locator('section')
-      .filter({ has: page.getByRole('heading', { name: 'Занятия в сетке' }) });
+      .filter({ has: page.getByRole('heading', { name: 'Шаблон недели' }) });
 
     await entryForm.getByLabel('Группа').selectOption({ label: GROUP });
     await expect(page.getByText('В расписании этой группы пока нет занятий')).toBeVisible();
@@ -287,7 +301,7 @@ test.describe('Этап 3: звонки, расписание, уроки', () =
     // Дневной вид: преподаватель выбирает свою группу.
     await page.locator('select[name="studyGroupId"]').selectOption({ label: GROUP });
     // Расписание преподаватель только смотрит: конструктора сетки у него нет.
-    await expect(page.getByRole('link', { name: 'Сетка (шаблон)' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Учебный процесс' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Добавить занятие' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Убрать' })).toHaveCount(0);
 

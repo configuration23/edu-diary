@@ -80,29 +80,10 @@ export const NAVIGATION: NavigationItem[] = [
     visible: (session) => has(session, 'schedule:read'),
   },
   {
-    to: '/schedule/template',
-    label: 'Сетка (шаблон)',
-    /**
-     * Только те, кто составляет расписание: администратор и преподаватель.
-     *
-     * Ученику и представителю этот раздел ни к чему — им нужен «Расписание» с готовыми
-     * занятиями. Права `schedule:read` у них есть, поэтому раньше раздел был виден всем:
-     * право отвечает на вопрос «можно ли читать расписание», а не «нужен ли инструмент
-     * составления».
-     */
-    visible: (session) =>
-      has(session, 'schedule:write') || hasScope(session, 'schedule:read', ['assigned', 'all']),
-  },
-  {
     to: '/lessons',
     label: 'Уроки',
     // Раздел рабочий: сетка периода, правка и замены. Ученику и родителю он не нужен —
     // у них есть «Расписание», поэтому оставляем его тем, кто ведёт занятия.
-    visible: (session) => hasScope(session, 'lessons:read', ['all', 'assigned']),
-  },
-  {
-    to: '/substitutions',
-    label: 'Замены',
     visible: (session) => hasScope(session, 'lessons:read', ['all', 'assigned']),
   },
   {

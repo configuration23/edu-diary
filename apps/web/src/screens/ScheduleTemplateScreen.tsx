@@ -493,9 +493,14 @@ export function ScheduleTemplateScreen({ session }: { session: SessionResponseDt
 
   return (
     <div className="flex flex-col gap-6">
+      {/*
+        Заголовок блока — «Шаблон недели» (решение владельца). Прежнее «Занятия в сетке» описывало
+        то же самое словами из другого раздела, а сам раздел теперь называется «Шаблон недели» в
+        «Учебном процессе».
+      */}
       <Card
-        title="Занятия в сетке"
-        description={`Шаблон занятий на неделю${activeYearTitle === null ? '' : ` · ${activeYearTitle}`}. Занятие повторяется каждую неделю в указанных датах действия; уроки по датам появляются на экране «Уроки».`}
+        title="Шаблон недели"
+        description={`Постоянное расписание на неделю${activeYearTitle === null ? '' : ` · ${activeYearTitle}`}. Занятие повторяется каждую неделю в указанных датах действия; уроки по датам появляются на экране «Уроки».`}
         actions={
           editable ? (
             creating ? undefined : (

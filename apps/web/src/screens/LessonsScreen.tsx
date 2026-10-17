@@ -318,7 +318,12 @@ function LessonDetails({
           <Button
             tone="ghost"
             type="button"
-            onClick={() => void navigate({ to: '/substitutions', search: { lessonId: lesson.id } })}
+            onClick={() =>
+              void navigate({
+                to: '/academic-process',
+                search: { substitutionLessonId: lesson.id },
+              })
+            }
           >
             Заменить
           </Button>
@@ -364,7 +369,10 @@ function LessonDetails({
               tone="ghost"
               type="button"
               onClick={() =>
-                void navigate({ to: '/substitutions', search: { lessonId: undefined } })
+                void navigate({
+                  to: '/academic-process',
+                  search: { substitutionLessonId: undefined },
+                })
               }
             >
               Открыть журнал замен

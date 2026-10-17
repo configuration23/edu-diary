@@ -54,19 +54,36 @@ const teacher: SessionResponseDto = {
 };
 
 describe('страница «Учебный процесс»', () => {
-  it('все четыре раздела на месте и свёрнуты', () => {
+  it('все шесть разделов на месте и свёрнуты', () => {
     const html = render(admin);
 
     expect(html).toContain('Учебные годы');
     expect(html).toContain('Группы');
     expect(html).toContain('Ученики');
     expect(html).toContain('Назначения');
+    expect(html).toContain('Шаблон недели');
+    expect(html).toContain('Замены');
 
     /**
      * Спойлер свёрнут по умолчанию: в разметке нет `open`. Если разделы окажутся раскрытыми,
      * страница снова станет простынёй — это и была причина объединения.
      */
     expect(html).not.toContain('<details open');
+  });
+
+  it('шаблон недели и замены идут последними, в этом порядке', () => {
+    /**
+     * Порядок — решение владельца: сначала то, из чего состоит обучение (год → группы → ученики →
+     * назначения), затем расписание (шаблон) и его отклонения (замены).
+     */
+    const html = render(admin);
+
+    const assignments = html.indexOf('Назначения');
+    const template = html.indexOf('Шаблон недели');
+    const substitutions = html.indexOf('Замены');
+
+    expect(template).toBeGreaterThan(assignments);
+    expect(substitutions).toBeGreaterThan(template);
   });
 
   it('у каждого раздела есть короткое описание', () => {
@@ -76,6 +93,8 @@ describe('страница «Учебный процесс»', () => {
     expect(html).toContain('На активный год ориентируются группы и назначения');
     expect(html).toContain('зачисление и отчисление');
     expect(html).toContain('Урока без назначения не бывает');
+    expect(html).toContain('Постоянное расписание на неделю');
+    expect(html).toContain('Замена оформляется на один урок');
   });
 
   it('преподавателю блок учеников не показывают', () => {
