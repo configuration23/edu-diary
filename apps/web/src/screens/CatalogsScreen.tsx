@@ -73,7 +73,7 @@ function SubjectEditForm({ subject, onDone }: { subject: SubjectDto; onDone: () 
 
   return (
     <form
-      className="flex flex-wrap items-end gap-3 rounded-md border border-border bg-card p-3"
+      className="rounded-md border border-border bg-card p-3"
       onSubmit={async (event) => {
         event.preventDefault();
         try {
@@ -90,39 +90,50 @@ function SubjectEditForm({ subject, onDone }: { subject: SubjectDto; onDone: () 
         }
       }}
     >
-      <Field label="Название">
-        <TextInput required value={name} onChange={(event) => setName(event.target.value)} />
-      </Field>
-      <Field label="Короткое имя" hint="Код для плиток расписания, 2–4 символа">
-        <TextInput value={shortName} onChange={(event) => setShortName(event.target.value)} />
-      </Field>
-      <Field label="Вид">
-        <Select
-          value={kind}
-          onChange={(event) => setKind(event.target.value as 'mandatory' | 'optional' | 'practice')}
-        >
-          {SUBJECT_KINDS.map((item) => (
-            <option key={item.value} value={item.value}>
-              {item.label}
-            </option>
-          ))}
-        </Select>
-      </Field>
-      <Field label="Цвет" hint="Заливка плиток и маркер в строках">
-        <span className="flex items-center gap-2">
-          <input
-            type="color"
-            name="editColor"
-            className="h-9 w-12 rounded border border-border"
-            value={color === '' ? subjectColor(subject.id) : color}
-            onChange={(event) => setColor(event.target.value)}
-          />
-          <Button tone="ghost" type="button" onClick={() => setColor('')}>
-            Автоматически
-          </Button>
-        </span>
-      </Field>
-      <FormActions submitLabel="Сохранить" pending={update.isPending} onCancel={onDone} />
+      <div className="grid gap-3 sm:grid-cols-4">
+        <Field label="Название">
+          <TextInput required value={name} onChange={(event) => setName(event.target.value)} />
+        </Field>
+        <Field label="Короткое имя" hint="Код для плиток расписания, 2–4 символа">
+          <TextInput value={shortName} onChange={(event) => setShortName(event.target.value)} />
+        </Field>
+        <Field label="Вид">
+          <Select
+            value={kind}
+            onChange={(event) =>
+              setKind(event.target.value as 'mandatory' | 'optional' | 'practice')
+            }
+          >
+            {SUBJECT_KINDS.map((item) => (
+              <option key={item.value} value={item.value}>
+                {item.label}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Цвет" hint="Заливка плиток и маркер в строках">
+          <span className="flex items-center gap-2">
+            <input
+              type="color"
+              name="editColor"
+              className="h-9 w-12 rounded border border-border"
+              value={color === '' ? subjectColor(subject.id) : color}
+              onChange={(event) => setColor(event.target.value)}
+            />
+            <Button tone="ghost" type="button" onClick={() => setColor('')}>
+              Автоматически
+            </Button>
+          </span>
+        </Field>
+      </div>
+
+      <FormActions
+        submitLabel="Сохранить"
+        pending={update.isPending}
+        onCancel={onDone}
+        align="end"
+        className="mt-3"
+      />
       {update.isError && <Alert tone="error">{errorMessage(update.error)}</Alert>}
     </form>
   );
@@ -233,21 +244,18 @@ function SubjectsCard() {
                   )}
                 </span>
               </Field>
-              <div className="flex items-end pb-2">
-                <Button type="submit" disabled={create.isPending}>
-                  Добавить предмет
-                </Button>
-              </div>
             </div>
 
             {create.isError && <Alert tone="error">{errorMessage(create.error)}</Alert>}
             {remove.isError && <Alert tone="error">{errorMessage(remove.error)}</Alert>}
             {remove.isSuccess && <Alert tone="success">Предмет удалён.</Alert>}
-            <div className="mt-3">
-              <Button tone="secondary" onClick={() => setCreating(false)}>
-                Отмена
-              </Button>
-            </div>
+            <FormActions
+              submitLabel="Добавить предмет"
+              pending={create.isPending}
+              onCancel={() => setCreating(false)}
+              align="end"
+              className="mt-3"
+            />
           </form>
         </>
       )}
@@ -315,7 +323,7 @@ function RoomEditForm({ room, onDone }: { room: RoomDto; onDone: () => void }) {
 
   return (
     <form
-      className="flex flex-wrap items-end gap-3 rounded-md border border-border bg-card p-3"
+      className="rounded-md border border-border bg-card p-3"
       onSubmit={async (event) => {
         event.preventDefault();
         try {
@@ -331,20 +339,29 @@ function RoomEditForm({ room, onDone }: { room: RoomDto; onDone: () => void }) {
         }
       }}
     >
-      <Field label="Название">
-        <TextInput required value={name} onChange={(event) => setName(event.target.value)} />
-      </Field>
-      <Field label="Вместимость">
-        <TextInput
-          inputMode="numeric"
-          value={capacity}
-          onChange={(event) => setCapacity(event.target.value)}
-        />
-      </Field>
-      <Field label="Примечание">
-        <TextInput value={note} onChange={(event) => setNote(event.target.value)} />
-      </Field>
-      <FormActions submitLabel="Сохранить" pending={update.isPending} onCancel={onDone} />
+      <div className="grid gap-3 sm:grid-cols-4">
+        <Field label="Название">
+          <TextInput required value={name} onChange={(event) => setName(event.target.value)} />
+        </Field>
+        <Field label="Вместимость">
+          <TextInput
+            inputMode="numeric"
+            value={capacity}
+            onChange={(event) => setCapacity(event.target.value)}
+          />
+        </Field>
+        <Field label="Примечание">
+          <TextInput value={note} onChange={(event) => setNote(event.target.value)} />
+        </Field>
+      </div>
+
+      <FormActions
+        submitLabel="Сохранить"
+        pending={update.isPending}
+        onCancel={onDone}
+        align="end"
+        className="mt-3"
+      />
       {update.isError && <Alert tone="error">{errorMessage(update.error)}</Alert>}
     </form>
   );
@@ -409,19 +426,16 @@ function RoomsCard() {
               <Field label="Примечание" hint="Необязательно">
                 <TextInput value={note} onChange={(event) => setNote(event.target.value)} />
               </Field>
-              <div className="flex items-end pb-2">
-                <Button type="submit" disabled={create.isPending}>
-                  Добавить аудиторию
-                </Button>
-              </div>
             </div>
 
             {create.isError && <Alert tone="error">{errorMessage(create.error)}</Alert>}
-            <div className="mt-3">
-              <Button tone="secondary" onClick={() => setCreating(false)}>
-                Отмена
-              </Button>
-            </div>
+            <FormActions
+              submitLabel="Добавить аудиторию"
+              pending={create.isPending}
+              onCancel={() => setCreating(false)}
+              align="end"
+              className="mt-3"
+            />
           </form>
         </>
       )}
@@ -488,7 +502,7 @@ function CategoryEditForm({
 
   return (
     <form
-      className="flex flex-wrap items-end gap-3 rounded-md border border-border bg-card p-3"
+      className="rounded-md border border-border bg-card p-3"
       onSubmit={async (event) => {
         event.preventDefault();
         try {
@@ -499,18 +513,27 @@ function CategoryEditForm({
         }
       }}
     >
-      <Field label="Название">
-        <TextInput required value={title} onChange={(event) => setTitle(event.target.value)} />
-      </Field>
-      <Field label="Вес" hint="1–5">
-        <TextInput
-          required
-          inputMode="numeric"
-          value={weight}
-          onChange={(event) => setWeight(event.target.value)}
-        />
-      </Field>
-      <FormActions submitLabel="Сохранить" pending={update.isPending} onCancel={onDone} />
+      <div className="grid gap-3 sm:grid-cols-4">
+        <Field label="Название">
+          <TextInput required value={title} onChange={(event) => setTitle(event.target.value)} />
+        </Field>
+        <Field label="Вес" hint="1–5">
+          <TextInput
+            required
+            inputMode="numeric"
+            value={weight}
+            onChange={(event) => setWeight(event.target.value)}
+          />
+        </Field>
+      </div>
+
+      <FormActions
+        submitLabel="Сохранить"
+        pending={update.isPending}
+        onCancel={onDone}
+        align="end"
+        className="mt-3"
+      />
       {update.isError && <Alert tone="error">{errorMessage(update.error)}</Alert>}
     </form>
   );
@@ -576,19 +599,16 @@ function CategoriesCard() {
                   onChange={(event) => setWeight(event.target.value)}
                 />
               </Field>
-              <div className="flex items-end pb-2">
-                <Button type="submit" disabled={create.isPending}>
-                  Добавить причину
-                </Button>
-              </div>
             </div>
 
             {create.isError && <Alert tone="error">{errorMessage(create.error)}</Alert>}
-            <div className="mt-3">
-              <Button tone="secondary" onClick={() => setCreating(false)}>
-                Отмена
-              </Button>
-            </div>
+            <FormActions
+              submitLabel="Добавить причину"
+              pending={create.isPending}
+              onCancel={() => setCreating(false)}
+              align="end"
+              className="mt-3"
+            />
           </form>
         </>
       )}
@@ -737,7 +757,7 @@ function BellEditForm({ bell, onDone }: { bell: BellScheduleDto; onDone: () => v
 
   return (
     <form
-      className="flex flex-wrap items-end gap-3 rounded-md border border-border bg-card p-3"
+      className="rounded-md border border-border bg-card p-3"
       onSubmit={async (event) => {
         event.preventDefault();
         try {
@@ -753,32 +773,41 @@ function BellEditForm({ bell, onDone }: { bell: BellScheduleDto; onDone: () => v
         }
       }}
     >
-      <Field label="Начало">
-        <TextInput
-          required
-          inputMode="numeric"
-          placeholder="08:30"
-          value={timeStart}
-          onChange={(event) => setTimeStart(event.target.value)}
-        />
-      </Field>
-      <Field label="Окончание">
-        <TextInput
-          required
-          inputMode="numeric"
-          placeholder="10:00"
-          value={timeEnd}
-          onChange={(event) => setTimeEnd(event.target.value)}
-        />
-      </Field>
-      <Field label="Перемена" hint="Минуты, необязательно">
-        <TextInput
-          inputMode="numeric"
-          value={breakMinutes}
-          onChange={(event) => setBreakMinutes(event.target.value)}
-        />
-      </Field>
-      <FormActions submitLabel="Сохранить" pending={save.isPending} onCancel={onDone} />
+      <div className="grid gap-3 sm:grid-cols-4">
+        <Field label="Начало">
+          <TextInput
+            required
+            inputMode="numeric"
+            placeholder="08:30"
+            value={timeStart}
+            onChange={(event) => setTimeStart(event.target.value)}
+          />
+        </Field>
+        <Field label="Окончание">
+          <TextInput
+            required
+            inputMode="numeric"
+            placeholder="10:00"
+            value={timeEnd}
+            onChange={(event) => setTimeEnd(event.target.value)}
+          />
+        </Field>
+        <Field label="Перемена" hint="Минуты, необязательно">
+          <TextInput
+            inputMode="numeric"
+            value={breakMinutes}
+            onChange={(event) => setBreakMinutes(event.target.value)}
+          />
+        </Field>
+      </div>
+
+      <FormActions
+        submitLabel="Сохранить"
+        pending={save.isPending}
+        onCancel={onDone}
+        align="end"
+        className="mt-3"
+      />
       {save.isError && <Alert tone="error">{errorMessage(save.error)}</Alert>}
     </form>
   );
@@ -867,18 +896,14 @@ function BellsCard() {
               </Field>
             </div>
 
-            <div>
-              <Button type="submit" disabled={save.isPending}>
-                Сохранить звонок
-              </Button>
-            </div>
-
             {save.isError && <Alert tone="error">{errorMessage(save.error)}</Alert>}
-            <div className="mt-3">
-              <Button tone="secondary" onClick={() => setCreating(false)}>
-                Отмена
-              </Button>
-            </div>
+            <FormActions
+              submitLabel="Сохранить звонок"
+              pending={save.isPending}
+              onCancel={() => setCreating(false)}
+              align="end"
+              className="mt-3"
+            />
           </form>
         </>
       )}

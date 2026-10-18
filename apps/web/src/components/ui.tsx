@@ -130,6 +130,7 @@ export function Button({
 export function Field({
   label,
   hint,
+  hintAlign = 'start',
   error,
   className,
   children,
@@ -139,6 +140,13 @@ export function Field({
   error?: string;
   /** Дополнительные классы обёртки: например `ml-auto`, чтобы увести поле вправо. */
   className?: string;
+  /**
+   * Выравнивание подсказки.
+   *
+   * `center` нужен там, где поле — группа элементов (дата со стрелками и кнопкой «Сегодня»):
+   * подсказка слева от такой группы выглядит оторванной от того, что поясняет.
+   */
+  hintAlign?: 'start' | 'center';
   children: ReactNode;
 }) {
   // Подсказка и ошибка вынесены за пределы <label>: иначе они попадают в
@@ -150,7 +158,13 @@ export function Field({
         {children}
       </label>
       {hint !== undefined && error === undefined && (
-        <span className="mt-1 block text-xs text-muted-foreground">{hint}</span>
+        <span
+          className={`mt-1 block text-xs text-muted-foreground ${
+            hintAlign === 'center' ? 'text-center' : ''
+          }`}
+        >
+          {hint}
+        </span>
       )}
       {error !== undefined && (
         <span className="mt-1 block text-xs text-danger-foreground">{error}</span>
@@ -307,15 +321,28 @@ export function FormActions({
   pending = false,
   disabled = false,
   cancelLabel = 'Отмена',
+  align = 'start',
+  className,
 }: {
   submitLabel: string;
   onCancel?: () => void;
   pending?: boolean;
   disabled?: boolean;
   cancelLabel?: string;
+  /**
+   * Куда ставить действия.
+   *
+   * `end` — главное действие справа: его ищут там же, где кнопку «Далее» в диалогах, и в формах
+   * создания оно не спорит с полями за левый край.
+   */
+  align?: 'start' | 'end';
+  /** Отступ сверху: действия стоят под сеткой полей. */
+  className?: string;
 }) {
   return (
-    <div className="flex flex-wrap gap-2">
+    <div
+      className={`flex flex-wrap gap-2 ${align === 'end' ? 'justify-end' : ''} ${className ?? ''}`}
+    >
       <Button type="submit" disabled={pending || disabled}>
         {pending ? 'Сохраняем…' : submitLabel}
       </Button>

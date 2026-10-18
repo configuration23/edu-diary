@@ -7,6 +7,7 @@ import {
   Card,
   EmptyState,
   Field,
+  FormActions,
   formatDate,
   Select,
   Table,
@@ -179,19 +180,17 @@ function QuickSubstitution({
         </div>
       )}
 
-      <div>
-        <Button
-          type="submit"
-          disabled={
-            create.isPending || lessonId === '' || substituteUserId === '' || finalReason === ''
-          }
-        >
-          Оформить замену
-        </Button>
-        <Button tone="secondary" onClick={onDone}>
-          Отмена
-        </Button>
-      </div>
+      {/*
+        Действия — примитивом: он держит порядок и выравнивание, и в нём нет второй «Отмены».
+        Ранее их было две подряд: правка добавляла отмену, не проверяя, что она уже есть.
+      */}
+      <FormActions
+        submitLabel="Оформить замену"
+        pending={create.isPending}
+        onCancel={onDone}
+        align="end"
+        className="mt-3"
+      />
 
       {create.isSuccess && <Alert tone="success">Замена оформлена и опубликована.</Alert>}
       {create.isError && <Alert tone="error">{errorMessage(create.error)}</Alert>}

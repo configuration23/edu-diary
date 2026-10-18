@@ -392,7 +392,7 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
             </Field>
           )}
 
-          <Field label="Дата" hint="Стрелки листают неделю">
+          <Field label="Дата" hint="Стрелки листают неделю" hintAlign="center">
             <span className="flex items-center gap-2">
               <Button tone="ghost" type="button" onClick={() => shiftWeek(-1)}>
                 ←

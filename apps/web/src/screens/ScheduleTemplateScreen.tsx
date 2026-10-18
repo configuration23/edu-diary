@@ -2,7 +2,17 @@ import type { ScheduleEntryDto, SessionResponseDto } from '@edu-diary/contracts'
 import { Fragment, useEffect, useRef, useState } from 'react';
 
 import { useAcademicContext } from '../components/AcademicContext';
-import { Alert, Button, Card, EmptyState, Field, Select, Table, TextInput } from '../components/ui';
+import {
+  Alert,
+  Button,
+  Card,
+  EmptyState,
+  Field,
+  FormActions,
+  Select,
+  Table,
+  TextInput,
+} from '../components/ui';
 import { errorMessage } from '../lib/api-client';
 import { hasBells, pairsFromBells } from '../lib/schedule-pairs';
 import {
@@ -320,19 +330,16 @@ function EntryForm({
         )}
       </div>
 
-      <div>
-        <Button type="submit" disabled={create.isPending || assignmentId === ''}>
-          Добавить в расписание
-        </Button>
-      </div>
-
       {create.isError && <Alert tone="error">{errorMessage(create.error)}</Alert>}
 
-      <div className="mt-3">
-        <Button tone="secondary" onClick={onDone}>
-          Отмена
-        </Button>
-      </div>
+      <FormActions
+        submitLabel="Добавить в расписание"
+        pending={create.isPending}
+        disabled={assignmentId === ''}
+        onCancel={onDone}
+        align="end"
+        className="mt-3"
+      />
     </form>
   );
 }

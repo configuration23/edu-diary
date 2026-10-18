@@ -33,6 +33,8 @@ const SCREENS = [
   { path: '/analytics', name: '03-grades' },
   { path: '/submitted', name: '04-submitted' },
   { path: '/catalogs', name: '05-catalogs', expand: true, firstEdit: true },
+  /** Форма создания: проверяем, что действия стоят одной строкой справа. */
+  { path: '/catalogs', name: '05b-catalogs-create', expand: true, openCreate: 'Добавить предмет' },
   { path: '/academic-process', name: '06-academic-process', expand: true },
   { path: '/lessons', name: '07-lessons' },
   { path: '/users', name: '08-users' },
@@ -79,6 +81,10 @@ test.describe('снимки экранов', () => {
          * ради двух строк не стоит. Значение берётся из `THEMES`, то есть из литерала.
          */
         await page.evaluate(`document.documentElement.dataset.theme = '${theme}'`);
+
+        if (screen.openCreate !== undefined) {
+          await page.getByRole('button', { name: screen.openCreate }).click();
+        }
 
         if (screen.firstEdit === true) {
           /** Первая кнопка «Править» — форма правки открывается строкой в таблице. */
