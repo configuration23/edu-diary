@@ -104,6 +104,8 @@ export interface UsersService {
   registerFailedLogin(userId: string, options: MutationOptions): Promise<FailedLoginState>;
   registerSuccessfulLogin(userId: string, actor: AuditActor, executor?: Executor): Promise<void>;
   resolveAccess(userId: string): Promise<UserAccess>;
+  /** Смена темы оформления: своя учётная запись, без прав администратора. */
+  setTheme(id: string, theme: string): Promise<void>;
   count(): Promise<number>;
 }
 
@@ -348,6 +350,11 @@ export function createUsersService(dependencies: UsersServiceDependencies): User
     },
 
     setPassword: applyPassword,
+
+    async setTheme(id, theme): Promise<void> {
+      await requireUser(id);
+      await users.setTheme(id, theme);
+    },
 
     async resetPasswordByAdmin(id, password, options): Promise<void> {
       await applyPassword(

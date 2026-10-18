@@ -37,6 +37,7 @@ const session: SessionResponseDto = {
     phone: null,
     isActive: true,
     mustChangePassword: false,
+    theme: 'system',
     roles: [{ code: 'admin', title: 'Администратор' }],
   },
   permissions: [
@@ -174,6 +175,7 @@ describe('экраны Этапа 2 монтируются', () => {
             phone: null,
             isActive: true,
             mustChangePassword: false,
+            theme: 'system',
             roles: [{ code: 'admin', title: 'Администратор' }],
           },
           permissions: [],
@@ -207,6 +209,7 @@ describe('экраны Этапа 2 монтируются', () => {
             phone: '+7 900 000-00-00',
             isActive: true,
             mustChangePassword: false,
+            theme: 'system',
             roles: [{ code: 'admin', title: 'Администратор' }],
           },
           permissions: [{ permission: 'settings:write', scope: 'all' }],
@@ -217,6 +220,17 @@ describe('экраны Этапа 2 монтируются', () => {
     expect(html).toContain('Данные профиля');
     expect(html).toContain('admin@example.ru');
     expect(html).toContain('Смена пароля');
+
+    /**
+     * Тема — личная настройка, поэтому живёт в профиле.
+     *
+     * Проверяем **три состояния**, а не два: «как в системе» — отдельное намерение, и без него
+     * человек с тёмной ОС получал бы светлый дневник по умолчанию.
+     */
+    expect(html).toContain('Оформление');
+    expect(html).toContain('Как в системе');
+    expect(html).toContain('Светлая');
+    expect(html).toContain('Тёмная');
     expect(html).toContain('Ваш доступ');
     expect(html).toContain('О версии');
     expect(html).toContain('Схема БД (миграций)');
@@ -238,6 +252,7 @@ describe('экраны Этапа 2 монтируются', () => {
             phone: null,
             isActive: true,
             mustChangePassword: false,
+            theme: 'system',
             roles: [{ code: 'teacher', title: 'Преподаватель' }],
           },
           permissions: [{ permission: 'grades:write', scope: 'assigned' }],

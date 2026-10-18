@@ -14,6 +14,7 @@ export interface UserRow {
   phone: string | null;
   isActive: boolean;
   mustChangePassword: boolean;
+  theme: string;
   failedLoginCount: number;
   lockedUntil: Date | null;
   createdAt: Date;
@@ -66,6 +67,8 @@ export interface UsersRepository {
   /** Возвращает созданную строку целиком: читать её обратно внутри транзакции нельзя. */
   insert(input: CreateUserRow, executor?: Executor): Promise<UserRow>;
   update(id: string, input: UpdateUserRow, executor?: Executor): Promise<UserRow | null>;
+  /** Смена темы оформления: личная настройка, без прав администратора. */
+  setTheme(id: string, theme: string, executor?: Executor): Promise<void>;
   updatePassword(
     id: string,
     input: { passwordHash: string; mustChangePassword: boolean },
@@ -91,6 +94,7 @@ function toUserRow(row: typeof appUser.$inferSelect): UserRow {
     phone: row.phone,
     isActive: row.isActive,
     mustChangePassword: row.mustChangePassword,
+    theme: row.theme,
     failedLoginCount: row.failedLoginCount,
     lockedUntil: row.lockedUntil,
     createdAt: row.createdAt,
@@ -248,6 +252,14 @@ export function createUsersRepository(db: Database): UsersRepository {
 
       const updated = rows[0];
       return updated === undefined ? null : toUserRow(updated);
+    },
+
+    /** Смена темы: личная настройка, пишется в строку пользователя. */
+    async setTheme(id: string, theme: string, executor: Executor = db.orm): Promise<void> {
+      await executor
+        .update(appUser)
+        .set({ theme, updatedAt: new Date() })
+        .where(eq(appUser.id, id));
     },
 
     async updatePassword(id, input, executor: Executor = db.orm): Promise<void> {

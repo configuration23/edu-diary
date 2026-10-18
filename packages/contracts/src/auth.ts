@@ -4,6 +4,13 @@ import { permissionGrantSchema, roleSummarySchema, uuidSchema } from './common';
 
 /** Вход, текущий пользователь, смена пароля (ARCHITECTURE.md §8). */
 
+/** Тема оформления: личный выбор, `system` — следовать настройке ОС. */
+export const themePreferenceSchema = z.enum(['light', 'dark', 'system']);
+export type ThemePreference = z.infer<typeof themePreferenceSchema>;
+
+/** Смена темы: только своя учётная запись. */
+export const updateThemeRequestSchema = z.object({ theme: themePreferenceSchema });
+
 export const currentUserSchema = z.object({
   id: uuidSchema,
   username: z.string(),
@@ -12,6 +19,7 @@ export const currentUserSchema = z.object({
   phone: z.string().nullable(),
   isActive: z.boolean(),
   mustChangePassword: z.boolean(),
+  theme: themePreferenceSchema,
   roles: z.array(roleSummarySchema),
 });
 export type CurrentUserDto = z.infer<typeof currentUserSchema>;

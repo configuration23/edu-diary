@@ -47,6 +47,9 @@ export interface AuthService extends SessionRevokerPort {
   /** Возвращает контекст по токену cookie; null — сессии нет или она истекла. */
   resolveSession(token: string): Promise<AuthContext | null>;
   logout(token: string, actor: AuditActor): Promise<void>;
+  /** Смена темы оформления: своя учётная запись, права администратора не нужны. */
+  changeTheme(userId: string, theme: 'light' | 'dark' | 'system'): Promise<void>;
+
   changePassword(
     input: { userId: string; sessionId: string; currentPassword: string; newPassword: string },
     actor: AuditActor,
@@ -96,6 +99,7 @@ export function createAuthService(dependencies: AuthServiceDependencies): AuthSe
       phone: user.phone,
       isActive: user.isActive,
       mustChangePassword: user.mustChangePassword,
+      theme: user.theme as 'light' | 'dark' | 'system',
       roles: access.roles.map((role) => ({ code: role.code, title: role.title })),
       permissions: access.permissions,
     };
@@ -206,6 +210,9 @@ export function createAuthService(dependencies: AuthServiceDependencies): AuthSe
       await sessions.deleteByTokenHash(tokenHash);
 
       await audit.record({ action: 'logout', entityKind: 'user', entityId: actor.userId }, actor);
+    },
+    async changeTheme(userId, theme): Promise<void> {
+      await users.setTheme(userId, theme);
     },
 
     async changePassword(input, actor): Promise<void> {

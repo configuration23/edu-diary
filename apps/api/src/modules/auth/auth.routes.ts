@@ -1,5 +1,6 @@
 import {
   changePasswordRequestSchema,
+  updateThemeRequestSchema,
   loginRequestSchema,
   sessionResponseSchema,
   type SessionResponseDto,
@@ -27,6 +28,7 @@ function toSessionDto(context: AuthContext): SessionResponseDto {
       phone: context.phone,
       isActive: context.isActive,
       mustChangePassword: context.mustChangePassword,
+      theme: context.theme,
       roles: context.roles,
     },
     permissions: [...context.permissions].map(([permission, scope]) => ({ permission, scope })),
@@ -94,6 +96,16 @@ export function registerAuthRoutes(app: FastifyInstance, auth: AuthService): voi
     }
 
     return toSessionDto(request.auth);
+  });
+
+  /** Тема оформления: личная настройка, применяется при следующей загрузке сессии. */
+  app.put('/auth/theme', async (request: FastifyRequest) => {
+    const context = authOf(request);
+    const body = updateThemeRequestSchema.parse(request.body);
+
+    await auth.changeTheme(context.userId, body.theme);
+
+    return { ok: true };
   });
 
   app.post('/auth/change-password', async (request: FastifyRequest) => {
