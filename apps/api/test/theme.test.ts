@@ -83,6 +83,45 @@ describeWithDatabase('тема оформления', () => {
     expect(response.statusCode).toBe(400);
   });
 
+  it('вид страниц по умолчанию — «компактно»', async () => {
+    /**
+     * Компактный вид — прежнее поведение спойлеров. Если сделать по умолчанию «развёрнуто», у всех
+     * существующих учётных записей страницы внезапно удлинились бы.
+     */
+    expect((await me()).json().user.viewMode).toBe('compact');
+  });
+
+  it('вид страниц сохраняется и возвращается в сессии', async () => {
+    const saved = await testApp.app.inject({
+      method: 'PUT',
+      url: '/api/auth/view-mode',
+      payload: { viewMode: 'expanded' },
+      headers: { cookie },
+    });
+
+    expect(saved.statusCode).toBe(200);
+    expect((await me()).json().user.viewMode).toBe('expanded');
+
+    /** Возвращаем компактный: следующие проверки не должны зависеть от порядка. */
+    await testApp.app.inject({
+      method: 'PUT',
+      url: '/api/auth/view-mode',
+      payload: { viewMode: 'compact' },
+      headers: { cookie },
+    });
+  });
+
+  it('недопустимый вид отвергается', async () => {
+    const response = await testApp.app.inject({
+      method: 'PUT',
+      url: '/api/auth/view-mode',
+      payload: { viewMode: 'huge' },
+      headers: { cookie },
+    });
+
+    expect(response.statusCode).toBe(400);
+  });
+
   it('без сессии менять тему нельзя', async () => {
     const response = await testApp.app.inject({
       method: 'PUT',

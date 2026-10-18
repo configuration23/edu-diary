@@ -38,6 +38,8 @@ export const appUser = pgTable('app_user', {
   mustChangePassword: boolean('must_change_password').notNull().default(false),
   /** Тема оформления: личный выбор человека, `system` — следовать настройке ОС. */
   theme: text('theme').notNull().default('system'),
+  /** Вид страниц: `compact` — блоки в спойлерах, `expanded` — блоки подряд. */
+  viewMode: text('view_mode').notNull().default('compact'),
   failedLoginCount: integer('failed_login_count').notNull().default(0),
   lockedUntil: timestamp('locked_until', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

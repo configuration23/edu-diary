@@ -60,6 +60,7 @@ export function registerSetupRoutes(
           isActive: session.auth.isActive,
           mustChangePassword: session.auth.mustChangePassword,
           theme: session.auth.theme,
+          viewMode: session.auth.viewMode,
           roles: session.auth.roles,
         },
         permissions: [...session.auth.permissions].map(([permission, scope]) => ({

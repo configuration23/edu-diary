@@ -25,6 +25,7 @@ function sessionOf(
       isActive: true,
       mustChangePassword: false,
       theme: 'system',
+      viewMode: 'compact',
       roles,
     },
     permissions,

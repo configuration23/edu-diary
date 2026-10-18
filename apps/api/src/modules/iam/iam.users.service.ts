@@ -106,6 +106,8 @@ export interface UsersService {
   resolveAccess(userId: string): Promise<UserAccess>;
   /** Смена темы оформления: своя учётная запись, без прав администратора. */
   setTheme(id: string, theme: string): Promise<void>;
+  /** Вид страниц: своя учётная запись, без прав администратора. */
+  setViewMode(id: string, viewMode: string): Promise<void>;
   count(): Promise<number>;
 }
 
@@ -354,6 +356,11 @@ export function createUsersService(dependencies: UsersServiceDependencies): User
     async setTheme(id, theme): Promise<void> {
       await requireUser(id);
       await users.setTheme(id, theme);
+    },
+
+    async setViewMode(id, viewMode): Promise<void> {
+      await requireUser(id);
+      await users.setViewMode(id, viewMode);
     },
 
     async resetPasswordByAdmin(id, password, options): Promise<void> {

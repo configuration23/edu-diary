@@ -194,6 +194,9 @@ test.describe('Этап 3: звонки, расписание, уроки', () =
     // перезагрузкой: иначе шапка и списки показывают прежний активный год.
     await page.reload();
     await page.getByRole('link', { name: 'Справочники' }).click();
+
+    /** Блоки справочников свёрнуты: раскрываем нужный раздел. */
+    await openSection(page, 'Звонки');
     await expect(page.getByRole('heading', { level: 2, name: 'Звонки' })).toBeVisible();
 
     const bells = page

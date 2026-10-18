@@ -1,6 +1,7 @@
 import {
   changePasswordRequestSchema,
   updateThemeRequestSchema,
+  updateViewModeRequestSchema,
   loginRequestSchema,
   sessionResponseSchema,
   type SessionResponseDto,
@@ -29,6 +30,7 @@ function toSessionDto(context: AuthContext): SessionResponseDto {
       isActive: context.isActive,
       mustChangePassword: context.mustChangePassword,
       theme: context.theme,
+      viewMode: context.viewMode,
       roles: context.roles,
     },
     permissions: [...context.permissions].map(([permission, scope]) => ({ permission, scope })),
@@ -104,6 +106,16 @@ export function registerAuthRoutes(app: FastifyInstance, auth: AuthService): voi
     const body = updateThemeRequestSchema.parse(request.body);
 
     await auth.changeTheme(context.userId, body.theme);
+
+    return { ok: true };
+  });
+
+  /** Вид страниц: компактно (спойлеры) или развёрнуто (блоки подряд). */
+  app.put('/auth/view-mode', async (request: FastifyRequest) => {
+    const context = authOf(request);
+    const body = updateViewModeRequestSchema.parse(request.body);
+
+    await auth.changeViewMode(context.userId, body.viewMode);
 
     return { ok: true };
   });

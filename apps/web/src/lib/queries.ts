@@ -66,6 +66,7 @@ import {
   type SetupStatusResponseDto,
   type UpdateStorageSettingsRequest,
   type ThemePreference,
+  type ViewMode,
 } from '@edu-diary/contracts';
 import {
   useMutation,
@@ -210,6 +211,27 @@ export function useUpdateTheme(): UseMutationResult<void, Error, { theme: ThemeP
         current === undefined
           ? current
           : { ...current, user: { ...current.user, theme: variables.theme } },
+      );
+    },
+  });
+}
+
+/**
+ * Смена вида страниц: компактно (спойлеры) или развёрнуто (блоки подряд).
+ *
+ * Как и тема, значение приходит из сессии — поэтому после успеха обновляем её кэш, иначе
+ * переключатель показывал бы прежнее значение до перезагрузки.
+ */
+export function useUpdateViewMode(): UseMutationResult<void, Error, { viewMode: ViewMode }> {
+  const client = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input) => apiSend('/api/auth/view-mode', { method: 'PUT', body: input }),
+    onSuccess: (_data, variables) => {
+      client.setQueryData<SessionResponseDto>(['session'], (current) =>
+        current === undefined
+          ? current
+          : { ...current, user: { ...current.user, viewMode: variables.viewMode } },
       );
     },
   });

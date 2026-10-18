@@ -49,6 +49,8 @@ export interface AuthService extends SessionRevokerPort {
   logout(token: string, actor: AuditActor): Promise<void>;
   /** Смена темы оформления: своя учётная запись, права администратора не нужны. */
   changeTheme(userId: string, theme: 'light' | 'dark' | 'system'): Promise<void>;
+  /** Вид страниц: своя учётная запись. */
+  changeViewMode(userId: string, viewMode: 'compact' | 'expanded'): Promise<void>;
 
   changePassword(
     input: { userId: string; sessionId: string; currentPassword: string; newPassword: string },
@@ -100,6 +102,7 @@ export function createAuthService(dependencies: AuthServiceDependencies): AuthSe
       isActive: user.isActive,
       mustChangePassword: user.mustChangePassword,
       theme: user.theme as 'light' | 'dark' | 'system',
+      viewMode: user.viewMode as 'compact' | 'expanded',
       roles: access.roles.map((role) => ({ code: role.code, title: role.title })),
       permissions: access.permissions,
     };
@@ -213,6 +216,10 @@ export function createAuthService(dependencies: AuthServiceDependencies): AuthSe
     },
     async changeTheme(userId, theme): Promise<void> {
       await users.setTheme(userId, theme);
+    },
+
+    async changeViewMode(userId, viewMode): Promise<void> {
+      await users.setViewMode(userId, viewMode);
     },
 
     async changePassword(input, actor): Promise<void> {

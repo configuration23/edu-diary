@@ -5,7 +5,6 @@ import {
   Alert,
   Badge,
   Button,
-  Card,
   Checkbox,
   EmptyState,
   Field,
@@ -15,6 +14,7 @@ import {
   TextInput,
 } from '../components/ui';
 import { SUBJECT_COLOR_PALETTE, SubjectDot, subjectColor } from '../lib/appearance';
+import { Spoiler } from '../components/Spoiler';
 import { errorMessage } from '../lib/api-client';
 import {
   useBells,
@@ -169,9 +169,9 @@ function SubjectsCard() {
   const [editing, setEditing] = useState<SubjectDto | null>(null);
 
   return (
-    <Card
+    <Spoiler
       title="Предметы"
-      description="По предмету ставятся оценки и строятся назначения."
+      summary="По предмету ставятся оценки и строятся назначения."
       actions={
         creating ? undefined : <Button onClick={() => setCreating(true)}>Добавить предмет</Button>
       }
@@ -309,7 +309,7 @@ function SubjectsCard() {
           </Table>
         )}
       </div>
-    </Card>
+    </Spoiler>
   );
 }
 
@@ -380,9 +380,9 @@ function RoomsCard() {
   const [editing, setEditing] = useState<RoomDto | null>(null);
 
   return (
-    <Card
+    <Spoiler
       title="Аудитории"
-      description="Аудитория указывается в уроке расписания."
+      summary="Аудитория указывается в уроке расписания."
       actions={
         creating ? undefined : <Button onClick={() => setCreating(true)}>Добавить аудиторию</Button>
       }
@@ -483,7 +483,7 @@ function RoomsCard() {
 
         {remove.isError && <Alert tone="error">{errorMessage(remove.error)}</Alert>}
       </div>
-    </Card>
+    </Spoiler>
   );
 }
 
@@ -551,9 +551,9 @@ function CategoriesCard() {
   const [editing, setEditing] = useState<GradeCategoryDto | null>(null);
 
   return (
-    <Card
+    <Spoiler
       title="Причины оценок"
-      description="Причина обязательна при выставлении оценки и задаёт её вес в среднем балле."
+      summary="Причина обязательна при выставлении оценки и задаёт её вес в среднем балле."
       actions={
         creating ? undefined : <Button onClick={() => setCreating(true)}>Добавить причину</Button>
       }
@@ -661,7 +661,7 @@ function CategoriesCard() {
 
         {remove.isError && <Alert tone="error">{errorMessage(remove.error)}</Alert>}
       </div>
-    </Card>
+    </Spoiler>
   );
 }
 
@@ -684,9 +684,9 @@ function SignRulesCard() {
   const update = useUpdateSignRule();
 
   return (
-    <Card
+    <Spoiler
       title="Знаки: сколько нужно для оценки"
-      description="Плюсы дают «5», точки дают «2». Пересчёт запускается вручную из журнала урока."
+      summary="Плюсы дают «5», точки дают «2». Пересчёт запускается вручную из журнала урока."
     >
       {rules.isLoading && <EmptyState>Загружаем…</EmptyState>}
       {rules.isError && <Alert tone="error">{errorMessage(rules.error)}</Alert>}
@@ -741,7 +741,7 @@ function SignRulesCard() {
       )}
 
       {update.isError && <Alert tone="error">{errorMessage(update.error)}</Alert>}
-    </Card>
+    </Spoiler>
   );
 }
 
@@ -828,9 +828,9 @@ function BellsCard() {
   const [breakMinutes, setBreakMinutes] = useState('');
 
   return (
-    <Card
+    <Spoiler
       title="Звонки"
-      description="Время пары подставляется в расписание по номеру пары и остаётся правимым."
+      summary="Время пары подставляется в расписание по номеру пары и остаётся правимым."
       actions={
         creating ? undefined : <Button onClick={() => setCreating(true)}>Добавить звонок</Button>
       }
@@ -956,7 +956,7 @@ function BellsCard() {
 
         {remove.isError && <Alert tone="error">{errorMessage(remove.error)}</Alert>}
       </div>
-    </Card>
+    </Spoiler>
   );
 }
 

@@ -34,6 +34,7 @@ const admin: SessionResponseDto = {
     isActive: true,
     mustChangePassword: false,
     theme: 'system',
+    viewMode: 'compact',
     roles: [{ code: 'admin', title: 'Администратор' }],
   },
   permissions: [

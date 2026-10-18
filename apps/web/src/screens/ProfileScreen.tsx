@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import { useHealth, useUpdateTheme } from '../lib/queries';
+import { useHealth, useUpdateTheme, useUpdateViewMode } from '../lib/queries';
 import { CLIENT_VERSION } from '../lib/version';
 import { isSystemAdmin } from '../lib/access';
 import { Alert, Badge, Segmented, formatDateTime } from '../components/ui';
@@ -9,7 +9,7 @@ import { SystemStatus, type HealthState } from '../components/SystemStatus';
 import { Page, PageHeader, Section } from '../components/layout';
 import { Spoiler } from '../components/Spoiler';
 import { errorMessage } from '../lib/api-client';
-import type { SessionResponseDto, ThemePreference } from '@edu-diary/contracts';
+import type { SessionResponseDto, ThemePreference, ViewMode } from '@edu-diary/contracts';
 
 /**
  * Профиль пользователя.
@@ -94,6 +94,43 @@ function ThemeChoice({ current }: { current: ThemePreference }) {
   );
 }
 
+/**
+ * Вид страниц: компактно (блоки в спойлерах) или развёрнуто (блоки подряд).
+ *
+ * Один переключатель на всё приложение: «Справочники», «Настройки», «Настройки обучения». Решение
+ * владельца: кому-то нужен короткий обзор разделов, кому-то — всё сразу.
+ */
+function ViewModeChoice({ current }: { current: ViewMode }) {
+  const update = useUpdateViewMode();
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <div className="mt-4 flex flex-col gap-3">
+      <Segmented
+        label="Вид страниц"
+        value={current}
+        onChange={(next) => {
+          setError(null);
+          void update
+            .mutateAsync({ viewMode: next })
+            .catch((caught) => setError(errorMessage(caught)));
+        }}
+        options={[
+          { value: 'compact', label: 'Компактно' },
+          { value: 'expanded', label: 'Развёрнуто' },
+        ]}
+      />
+
+      <p className="text-sm text-muted-foreground">
+        «Компактно» сворачивает блоки в спойлеры: видно название и краткое описание, содержимое
+        раскрывается по нажатию. «Развёрнуто» показывает блоки подряд.
+      </p>
+
+      {error !== null && <Alert tone="error">{error}</Alert>}
+    </div>
+  );
+}
+
 export function ProfileScreen({ session }: { session: SessionResponseDto }) {
   const health = useHealth();
   const api = health.data;
@@ -138,6 +175,7 @@ export function ProfileScreen({ session }: { session: SessionResponseDto }) {
 
       <Section title="Оформление">
         <ThemeChoice current={session.user.theme} />
+        <ViewModeChoice current={session.user.viewMode} />
       </Section>
 
       <ChangePasswordCard />

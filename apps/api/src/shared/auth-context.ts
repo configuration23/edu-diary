@@ -24,6 +24,8 @@ export interface AuthContext {
   mustChangePassword: boolean;
   /** Тема оформления пользователя: фронт применяет её при загрузке. */
   theme: 'light' | 'dark' | 'system';
+  /** Вид страниц: `compact` — блоки в спойлерах, `expanded` — подряд. */
+  viewMode: 'compact' | 'expanded';
   /** Роли пользователя. */
   roles: readonly AuthRole[];
   /** Свод прав: `право → максимальная область действия`. */

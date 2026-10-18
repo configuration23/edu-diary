@@ -11,6 +11,16 @@ export type ThemePreference = z.infer<typeof themePreferenceSchema>;
 /** Смена темы: только своя учётная запись. */
 export const updateThemeRequestSchema = z.object({ theme: themePreferenceSchema });
 
+/**
+ * Вид страниц: `compact` — блоки свёрнуты в спойлеры, `expanded` — блоки показаны подряд.
+ *
+ * Личная настройка: одному удобно видеть всё сразу, другому — короткий обзор разделов.
+ */
+export const viewModeSchema = z.enum(['compact', 'expanded']);
+export type ViewMode = z.infer<typeof viewModeSchema>;
+
+export const updateViewModeRequestSchema = z.object({ viewMode: viewModeSchema });
+
 export const currentUserSchema = z.object({
   id: uuidSchema,
   username: z.string(),
@@ -20,6 +30,7 @@ export const currentUserSchema = z.object({
   isActive: z.boolean(),
   mustChangePassword: z.boolean(),
   theme: themePreferenceSchema,
+  viewMode: viewModeSchema,
   roles: z.array(roleSummarySchema),
 });
 export type CurrentUserDto = z.infer<typeof currentUserSchema>;

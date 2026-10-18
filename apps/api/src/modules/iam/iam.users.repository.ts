@@ -15,6 +15,7 @@ export interface UserRow {
   isActive: boolean;
   mustChangePassword: boolean;
   theme: string;
+  viewMode: string;
   failedLoginCount: number;
   lockedUntil: Date | null;
   createdAt: Date;
@@ -69,6 +70,8 @@ export interface UsersRepository {
   update(id: string, input: UpdateUserRow, executor?: Executor): Promise<UserRow | null>;
   /** Смена темы оформления: личная настройка, без прав администратора. */
   setTheme(id: string, theme: string, executor?: Executor): Promise<void>;
+  /** Вид страниц: личная настройка, без прав администратора. */
+  setViewMode(id: string, viewMode: string, executor?: Executor): Promise<void>;
   updatePassword(
     id: string,
     input: { passwordHash: string; mustChangePassword: boolean },
@@ -95,6 +98,7 @@ function toUserRow(row: typeof appUser.$inferSelect): UserRow {
     isActive: row.isActive,
     mustChangePassword: row.mustChangePassword,
     theme: row.theme,
+    viewMode: row.viewMode,
     failedLoginCount: row.failedLoginCount,
     lockedUntil: row.lockedUntil,
     createdAt: row.createdAt,
@@ -255,6 +259,14 @@ export function createUsersRepository(db: Database): UsersRepository {
     },
 
     /** Смена темы: личная настройка, пишется в строку пользователя. */
+    /** Вид страниц: личная настройка, пишется в строку пользователя. */
+    async setViewMode(id: string, viewMode: string, executor: Executor = db.orm): Promise<void> {
+      await executor
+        .update(appUser)
+        .set({ viewMode, updatedAt: new Date() })
+        .where(eq(appUser.id, id));
+    },
+
     async setTheme(id: string, theme: string, executor: Executor = db.orm): Promise<void> {
       await executor
         .update(appUser)

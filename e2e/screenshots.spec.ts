@@ -32,7 +32,13 @@ const SCREENS = [
   { path: '/schedule', name: '02-schedule' },
   { path: '/analytics', name: '03-grades' },
   { path: '/submitted', name: '04-submitted' },
-  { path: '/catalogs', name: '05-catalogs', expand: true, firstEdit: true },
+  {
+    path: '/catalogs',
+    name: '05-catalogs',
+    expand: true,
+    openSpoiler: 'Предметы',
+    firstEdit: true,
+  },
   /** Форма создания: проверяем, что действия стоят одной строкой справа. */
   { path: '/catalogs', name: '05b-catalogs-create', expand: true, openCreate: 'Добавить предмет' },
   { path: '/academic-process', name: '06-academic-process', expand: true },

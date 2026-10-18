@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
 
+import { useViewMode } from '../lib/view-mode';
+
 /**
  * Спойлер: свёрнутый блок с кратким описанием.
  *
@@ -27,6 +29,8 @@ export function Spoiler({
   meta,
   /** Раскрыт по умолчанию: нужен для **последней** новости, она показывается полностью. */
   defaultOpen = false,
+  /** Действия блока: например «Добавить предмет». Видны в обоих режимах. */
+  actions,
   children,
 }: {
   title: string;
@@ -34,47 +38,98 @@ export function Spoiler({
   summary?: string;
   meta?: ReactNode;
   defaultOpen?: boolean;
+  actions?: ReactNode;
   children: ReactNode;
 }) {
+  const viewMode = useViewMode();
+
+  /**
+   * Развёрнутый вид: блоки идут подряд — заголовок, пояснение, содержимое.
+   *
+   * Это не «раскрытые спойлеры»: сводка и кнопка «Развернуть» на длинной странице занимают место
+   * без пользы, если человек выбрал видеть всё сразу.
+   */
+  if (viewMode === 'expanded') {
+    return (
+      <section className="rounded-lg border border-border bg-card p-4 shadow-sm">
+        <header className="mb-3 flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-base font-semibold text-foreground">{title}</h2>
+            {summary !== undefined && (
+              <p className="mt-1 text-sm text-muted-foreground">{summary}</p>
+            )}
+          </div>
+          {actions}
+        </header>
+        {children}
+      </section>
+    );
+  }
+
   return (
-    <details open={defaultOpen} className="group rounded-lg border border-border bg-card shadow-sm">
-      {/*
+    /**
+     * Обёртка `<section>` у обоих видов: блок остаётся **разделом страницы** независимо от того,
+     * свёрнут он или нет. На этом держатся и сквозные сценарии, которые находят блок по разделу.
+     */
+    <section>
+      <details
+        open={defaultOpen}
+        className="group rounded-lg border border-border bg-card shadow-sm"
+      >
+        {/*
         `<summary>` — единственная нажимаемая часть. Убираем системный маркер (`list-none`) и
         рисуем свой, иначе у разных браузеров вид разный.
       */}
-      <summary className="flex cursor-pointer list-none items-start justify-between gap-3 p-4 [&::-webkit-details-marker]:hidden">
-        <span className="flex min-w-0 flex-col gap-1">
-          <span className="flex flex-wrap items-center gap-2">
-            <span className="text-base font-semibold text-foreground">{title}</span>
-            {meta}
-          </span>
+        <summary className="flex cursor-pointer list-none items-start justify-between gap-3 p-4 [&::-webkit-details-marker]:hidden">
+          <span className="flex min-w-0 flex-col gap-1">
+            <span className="flex flex-wrap items-center gap-2">
+              <h2 className="text-base font-semibold text-foreground">{title}</h2>
+              {meta}
+            </span>
 
-          {/*
+            {/*
             Краткое описание. `line-clamp` обрезает по строкам, а не по символам: обрезка
             выглядит опрятно и одинаково на любой ширине экрана.
           */}
-          {summary !== undefined && summary !== '' && (
+            {summary !== undefined && summary !== '' && (
+              <span
+                className="overflow-hidden text-sm text-muted-foreground group-open:hidden"
+                style={{
+                  display: '-webkit-box',
+                  WebkitBoxOrient: 'vertical',
+                  WebkitLineClamp: SUMMARY_LINES,
+                }}
+              >
+                {summary}
+              </span>
+            )}
+          </span>
+
+          {/*
+          Действия блока видны и в свёрнутом виде: иначе вместе с раскрытием пропадает кнопка
+          «Добавить предмет», и функция становится недоступной. Клик по кнопке не должен
+          раскрывать спойлер — `stopPropagation` на обёртке.
+        */}
+          {actions !== undefined && (
             <span
-              className="overflow-hidden text-sm text-muted-foreground group-open:hidden"
-              style={{
-                display: '-webkit-box',
-                WebkitBoxOrient: 'vertical',
-                WebkitLineClamp: SUMMARY_LINES,
+              className="shrink-0"
+              onClick={(event) => {
+                event.stopPropagation();
               }}
             >
-              {summary}
+              {actions}
             </span>
           )}
-        </span>
 
-        {/* Подсказка меняется по состоянию: браузер сам знает, раскрыт блок или нет. */}
-        <span className="shrink-0 pt-0.5 text-sm text-primary">
-          <span className="group-open:hidden">Развернуть</span>
-          <span className="hidden group-open:inline">Свернуть</span>
-        </span>
-      </summary>
+          {/* Подсказка меняется по состоянию: браузер сам знает, раскрыт блок или нет. */}
+          <span className="shrink-0 pt-0.5 text-sm text-primary">
+            <span className="group-open:hidden">Развернуть</span>
+            <span className="hidden group-open:inline">Свернуть</span>
+          </span>
+        </summary>
 
-      <div className="border-t border-border p-4">{children}</div>
-    </details>
+        <div className="border-t border-border p-4">{children}</div>
+      </details>
+    </section>
   );
 }
