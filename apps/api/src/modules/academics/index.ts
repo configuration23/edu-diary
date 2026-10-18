@@ -10,6 +10,7 @@ import {
   type AcademicsService,
   type AssignmentUsagePort,
   type GuardianLookupPort,
+  type ConsentLookupPort,
   type UserLookupPort,
 } from './academics.service';
 
@@ -74,6 +75,8 @@ export function buildAcademicsService(dependencies: {
   assignments: AssignmentUsagePort;
   /** Проверяет существование куратора и преподавателя: реализует модуль `iam`. */
   users: UserLookupPort;
+  /** Согласия ученика: удаление запрещено, пока согласие оформлено. */
+  consents: ConsentLookupPort;
 }): AcademicsService {
   return createAcademicsService({
     db: dependencies.db,
@@ -83,5 +86,6 @@ export function buildAcademicsService(dependencies: {
     guardians: dependencies.guardians,
     assignments: dependencies.assignments,
     users: dependencies.users,
+    consents: dependencies.consents,
   });
 }

@@ -146,6 +146,8 @@ export interface AcademicsRepository {
   findStudent(id: string, executor?: Executor): Promise<StudentRecord | null>;
   /** Ученик по учётной записи: у ролей «ученик» и «родитель» известен её идентификатор. */
   findStudentByUserId(userId: string, executor?: Executor): Promise<StudentRecord | null>;
+  /** Удаление карточки ученика: разрешено только без ссылок — проверяет сервис. */
+  deleteStudent(id: string, executor?: Executor): Promise<void>;
   insertStudent(
     input: {
       userId: string | null;
@@ -432,6 +434,10 @@ export function createAcademicsRepository(db: Database): AcademicsRepository {
         .orderBy(asc(studyGroup.name));
 
       return rows;
+    },
+
+    async deleteStudent(id, executor: Executor = db.orm): Promise<void> {
+      await executor.delete(student).where(eq(student.id, id));
     },
 
     async insertStudent(input, executor: Executor = db.orm): Promise<StudentRecord> {

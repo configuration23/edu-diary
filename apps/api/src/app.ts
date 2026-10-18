@@ -167,6 +167,16 @@ export async function buildApp({
     guardians: guardiansRepository,
     assignments: staffingRepository,
     users: userLookup,
+    /**
+     * Согласия: берём у сервиса `privacy`, который собирается ниже.
+     *
+     * Обращение ленивое — внутри функции: на момент запроса сервис уже создан, а прямой импорт
+     * модуля нарушил бы правило «модули не знают друг о друге».
+     */
+    consents: {
+      hasAnyForStudent: async (studentId) =>
+        (await privacy.listConsents({ studentId, limit: 1, offset: 0 })).total > 0,
+    },
   });
 
   /**

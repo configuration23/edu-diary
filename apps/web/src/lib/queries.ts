@@ -791,6 +791,23 @@ export function useDeleteSubject() {
   });
 }
 
+/**
+ * Удаление карточки ученика.
+ *
+ * Доступно только ученику без учётной записи, согласия и зачислений — проверяет сервер и отвечает
+ * понятной причиной отказа. Ошибку показываем на экране, а не глотаем.
+ */
+export function useDeleteStudent(): UseMutationResult<void, Error, string> {
+  const client = useQueryClient();
+
+  return useMutation({
+    mutationFn: (studentId) => apiSend(`/api/students/${studentId}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ['students'] });
+    },
+  });
+}
+
 export function useRooms() {
   return useQuery({
     queryKey: queryKeys.rooms,

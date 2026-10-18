@@ -5,6 +5,7 @@ import { errorMessage } from '../lib/api-client';
 import {
   useCreateStudent,
   useCreateStudentAccount,
+  useDeleteStudent,
   useGuardianLinks,
   useLinkGuardian,
   useStudents,
@@ -330,10 +331,12 @@ function AccountForm({
   studentId,
   studentName,
   onDone,
+  onCancel,
 }: {
   studentId: string;
   studentName: string;
   onDone: (message: string) => void;
+  onCancel: () => void;
 }) {
   const createAccount = useCreateStudentAccount();
   const [username, setUsername] = useState('');
@@ -373,7 +376,14 @@ function AccountForm({
           <TextInput value={phone} onChange={(event) => setPhone(event.target.value)} />
         </Field>
       </div>
-      <div className="mt-3">
+      {/*
+        Действия справа, отмена — слева от создания. Без неё из формы нельзя было выйти, не создав
+        учётную запись (замечание владельца).
+      */}
+      <div className="mt-3 flex flex-wrap justify-end gap-2">
+        <Button tone="secondary" onClick={onCancel}>
+          Отмена
+        </Button>
         <Button
           disabled={createAccount.isPending || username === '' || password.length < 10}
           onClick={async () => {
@@ -407,6 +417,9 @@ export function StudentsCard({ onNotice }: { onNotice: (message: string) => void
   const [pageSize, setPageSize] = usePageSize(10);
   const students = useStudents({ search, limit: pageSize, offset: (page - 1) * pageSize });
   const [accountFor, setAccountFor] = useState<{ id: string; name: string } | null>(null);
+  /** Причина отказа при удалении: сервер объясняет, что мешает. */
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const deleteStudent = useDeleteStudent();
   /** Форма ученика скрыта, пока её не позовут кнопкой: список важнее формы. */
   const [creating, setCreating] = useState(false);
   const [accountNotice, setAccountNotice] = useState<string | null>(null);
@@ -472,12 +485,31 @@ export function StudentsCard({ onNotice }: { onNotice: (message: string) => void
                 <td className="px-3 py-2 text-muted-foreground">{student.note ?? '—'}</td>
                 <td className="px-3 py-2">
                   {student.username === null && (
-                    <Button
-                      tone="ghost"
-                      onClick={() => setAccountFor({ id: student.id, name: student.fullName })}
-                    >
-                      Создать учётную запись
-                    </Button>
+                    <span className="flex flex-wrap gap-2">
+                      <Button
+                        tone="ghost"
+                        onClick={() => setAccountFor({ id: student.id, name: student.fullName })}
+                      >
+                        Создать учётную запись
+                      </Button>
+                      {/*
+                        Удаление показываем только у ученика без учётной записи. Согласие и
+                        зачисления проверяет сервер и объясняет причину отказа: экран не должен
+                        повторять правила сервера, иначе они разойдутся.
+                      */}
+                      <Button
+                        tone="ghost"
+                        disabled={deleteStudent.isPending}
+                        onClick={() => {
+                          setDeleteError(null);
+                          void deleteStudent.mutateAsync(student.id).catch((caught) => {
+                            setDeleteError(errorMessage(caught));
+                          });
+                        }}
+                      >
+                        Удалить
+                      </Button>
+                    </span>
                   )}
                 </td>
               </tr>
@@ -503,12 +535,14 @@ export function StudentsCard({ onNotice }: { onNotice: (message: string) => void
               setAccountFor(null);
               setAccountNotice(message);
             }}
+            onCancel={() => setAccountFor(null)}
           />
         )}
 
         {/* Результат создания учётной записи показывается здесь же, под списком,
             а не общей плашкой внизу страницы. */}
         {accountNotice !== null && <Alert tone="success">{accountNotice}</Alert>}
+        {deleteError !== null && <Alert tone="error">{deleteError}</Alert>}
       </Card>
     </div>
   );

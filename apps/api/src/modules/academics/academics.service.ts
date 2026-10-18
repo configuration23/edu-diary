@@ -229,6 +229,14 @@ export interface AcademicsService {
     input: UpdateStudentInput,
     options: MutationOptions,
   ): Promise<StudentRecord>;
+  /**
+   * Удаление карточки ученика.
+   *
+   * Владелец: «удалить можно только ученика без УЗ и без Согласия; если есть УЗ или Согласие —
+   * только отключить». Удаление стирает карточку безвозвратно, поэтому запрещено, пока на неё
+   * что-то ссылается: учётная запись, согласие, зачисление.
+   */
+  deleteStudent(id: string, options: MutationOptions): Promise<void>;
   /** Выгрузка списка: создаёт запись аудита доступа (ADR-017). */
   exportStudentsCsv(actor: AuditActor): Promise<{ csv: string; rows: number }>;
 
@@ -327,6 +335,17 @@ export interface AcademicsService {
   deleteGradeCategory(id: string, options: MutationOptions): Promise<void>;
 }
 
+/**
+ * Порт согласий.
+ *
+ * Нужен при удалении ученика: согласие ссылается на ученика, и удалять того, у кого согласие
+ * оформлено, нельзя — запись о согласии должна остаться. Порт, а не импорт модуля, потому что
+ * модули не знают друг о друге (ARCHITECTURE.md §5).
+ */
+export interface ConsentLookupPort {
+  hasAnyForStudent(studentId: string): Promise<boolean>;
+}
+
 export interface AcademicsServiceDependencies {
   db: Database;
   academics: AcademicsRepository;
@@ -335,6 +354,7 @@ export interface AcademicsServiceDependencies {
   guardians: GuardianLookupPort;
   assignments: AssignmentUsagePort;
   users: UserLookupPort;
+  consents: ConsentLookupPort;
 }
 
 /** Зависимости, из-за которых удаление запрещено (ARCHITECTURE.md §5). */
@@ -368,7 +388,7 @@ function csvCell(value: string): string {
 export function createAcademicsService(
   dependencies: AcademicsServiceDependencies,
 ): AcademicsService {
-  const { db, academics, audit, security, guardians, assignments, users } = dependencies;
+  const { db, academics, audit, security, guardians, assignments, users, consents } = dependencies;
 
   /** Инвариант приватности: ученик видит себя, родитель — своих детей (ADR-005). */
   const isAllowedToView = async (
@@ -627,6 +647,53 @@ export function createAcademicsService(
 
         return created;
       });
+    },
+
+    async deleteStudent(id, options): Promise<void> {
+      const student = await requireStudent(id);
+
+      /**
+       * Причина каждого отказа — не «нельзя», а что именно мешает и что делать вместо удаления:
+       * иначе администратор ищет обходной путь и правит базу руками.
+       */
+      if (student.userId !== null) {
+        throw new AppError(
+          'CONFLICT',
+          'У ученика есть учётная запись: отключите её в «Учётных записях», удалять ученика не нужно',
+          { details: { studentId: id, userId: student.userId } },
+        );
+      }
+
+      if (await consents.hasAnyForStudent(id)) {
+        throw new AppError(
+          'CONFLICT',
+          'У ученика есть согласие: запись о согласии должна сохраниться, поэтому ученика нельзя удалить',
+          { details: { studentId: id } },
+        );
+      }
+
+      const enrollments = await academics.listStudentEnrollments(id);
+      if (enrollments.length > 0) {
+        throw new AppError(
+          'CONFLICT',
+          'У ученика есть зачисления: сначала отчислите его из групп',
+          { details: { studentId: id, enrollments: enrollments.length } },
+        );
+      }
+
+      await withDatabaseErrors(() => academics.deleteStudent(id), {
+        foreignKey: 'На ученика ссылаются другие записи: удаление невозможно',
+      });
+
+      await audit.record(
+        {
+          action: 'delete',
+          entityKind: 'student',
+          entityId: id,
+          before: { fullName: student.fullName, shortName: student.shortName },
+        },
+        options.actor,
+      );
     },
 
     async createStudentAccount(studentId, input, options): Promise<StudentRecord> {

@@ -283,6 +283,25 @@ export function registerAcademicsRoutes(
     },
   );
 
+  /**
+   * Удаление карточки ученика: только без учётной записи, согласия и зачислений.
+   *
+   * Правило владельца: «удалить можно только ученика без УЗ и без Согласия; если есть УЗ или
+   * Согласие — только отключить». Проверки живут в сервисе: экран не должен дублировать правила,
+   * иначе они разойдутся.
+   */
+  app.delete(
+    '/students/:id',
+    { preHandler: requirePermission('students:write', 'all') },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      await academics.deleteStudent(id, mutation(request));
+
+      reply.status(204);
+      return null;
+    },
+  );
+
   app.patch(
     '/students/:id',
     { preHandler: requirePermission('students:write', 'all') },
