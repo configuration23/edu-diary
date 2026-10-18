@@ -257,18 +257,24 @@ export function PrivacyScreen() {
               <option value="electronic">Электронно</option>
             </Select>
           </Field>
-          {/* Кнопка — в ряду поля «Документ» и справа: так она на одном уровне с полями. */}
+          {/*
+            «Документ» — половина ширины слева, кнопка справа в том же ряду.
+            Поле занимает всю строку, а поле ввода внутри — половину: так кнопка встаёт у правого
+            края формы, но выровнена по самому полю, а не по подсказке под ним.
+          */}
           <Field
             label="Документ"
             hint="Номер и дата заявления"
-            className="ml-auto"
+            className="w-full"
             actions={
               <Button type="submit" disabled={createConsent.isPending}>
                 Зарегистрировать
               </Button>
             }
           >
-            <TextInput {...consentForm.register('documentRef')} />
+            <span className="block w-full sm:w-1/2">
+              <TextInput {...consentForm.register('documentRef')} />
+            </span>
           </Field>
         </form>
 
