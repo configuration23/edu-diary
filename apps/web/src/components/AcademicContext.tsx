@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useMemo, useState, type ReactNo
 import type { SessionResponseDto } from '@edu-diary/contracts';
 
 import { useAcademicYears, useAssignments, useGroups, useScheduleGroups } from '../lib/queries';
+import { Select } from './ui';
 
 /**
  * Контекст учебного процесса в шапке (ARCHITECTURE.md §4.1).
@@ -165,7 +166,7 @@ export function GroupSwitcher() {
       )}
       <label className="flex items-center gap-1">
         <span className="text-muted-foreground">Группа</span>
-        <select
+        <Select
           className="rounded-md border border-border px-2 py-1 text-xs"
           value={selectedGroupId ?? ''}
           onChange={(event) => selectGroup(event.target.value === '' ? null : event.target.value)}
@@ -176,7 +177,7 @@ export function GroupSwitcher() {
               {group.name}
             </option>
           ))}
-        </select>
+        </Select>
       </label>
     </span>
   );

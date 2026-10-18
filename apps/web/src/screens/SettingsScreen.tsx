@@ -1,7 +1,7 @@
 import { MARKER_SYMBOLS, type MarkerEvent } from '@edu-diary/contracts';
 import { useEffect, useState } from 'react';
 
-import { Alert, Button, Card, Field, FilePicker, TextInput } from '../components/ui';
+import { Alert, Button, Card, Field, FilePicker, Select, TextInput } from '../components/ui';
 import { errorMessage } from '../lib/api-client';
 import { useAppearance, useBranding, useUpdateAppearance, useUpdateBranding } from '../lib/queries';
 import { NewsSettingsCard } from '../components/NewsSettingsCard';
@@ -64,7 +64,7 @@ function AppearanceForm({
 
   const markerField = (event: MarkerEvent, label: string, hint: string) => (
     <Field label={label} hint={hint}>
-      <select
+      <Select
         name={`marker-${event}`}
         className={selectClass}
         value={markers[event]}
@@ -78,7 +78,7 @@ function AppearanceForm({
             {symbol}
           </option>
         ))}
-      </select>
+      </Select>
     </Field>
   );
 

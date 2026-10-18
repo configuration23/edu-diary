@@ -4,7 +4,7 @@ import type { UpdateStorageSettingsRequest } from '@edu-diary/contracts';
 
 import { useStorageSettings, useTestStorage, useUpdateStorageSettings } from '../lib/queries';
 import { errorMessage } from '../lib/api-client';
-import { Alert, Button, Card, Field, TextInput } from './ui';
+import { Alert, Button, Card, Field, Select, TextInput } from './ui';
 
 /**
  * Настройки хранилища файлов.
@@ -85,7 +85,7 @@ export function StorageSettingsCard({ heading = true }: { heading?: boolean } = 
     >
       <div className="flex flex-col gap-4">
         <Field label="Где хранить файлы">
-          <select
+          <Select
             className="rounded-md border border-border px-2 py-1.5 text-sm"
             value={mode}
             onChange={(event) => {
@@ -95,7 +95,7 @@ export function StorageSettingsCard({ heading = true }: { heading?: boolean } = 
           >
             <option value="local">Локальный каталог на сервере</option>
             <option value="s3">Внешнее хранилище (S3)</option>
-          </select>
+          </Select>
         </Field>
 
         {mode === 'local' ? (

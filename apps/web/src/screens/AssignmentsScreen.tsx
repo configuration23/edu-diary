@@ -11,9 +11,10 @@ import {
   Card,
   EmptyState,
   Field,
+  formatDate,
+  Select,
   Table,
   TextInput,
-  formatDate,
 } from '../components/ui';
 import { errorMessage } from '../lib/api-client';
 import {
@@ -171,7 +172,7 @@ function CreateAssignmentCard({ onDone }: { onDone: () => void }) {
 
         <div className="grid gap-4 sm:grid-cols-3">
           <Field label="Преподаватель">
-            <select
+            <Select
               required
               className="rounded-md border border-border px-3 py-2 text-sm"
               value={teacherUserId}
@@ -183,10 +184,10 @@ function CreateAssignmentCard({ onDone }: { onDone: () => void }) {
                   {teacher.fullName}
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
           <Field label="Предмет">
-            <select
+            <Select
               required
               className="rounded-md border border-border px-3 py-2 text-sm"
               value={subjectId}
@@ -198,10 +199,10 @@ function CreateAssignmentCard({ onDone }: { onDone: () => void }) {
                   {subject.name}
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
           <Field label="Группа">
-            <select
+            <Select
               required
               className="rounded-md border border-border px-3 py-2 text-sm"
               value={studyGroupId}
@@ -216,7 +217,7 @@ function CreateAssignmentCard({ onDone }: { onDone: () => void }) {
                   {group.name}
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
           <Field label="Начало" hint="По умолчанию — начало учебного года">
             <TextInput
@@ -330,7 +331,7 @@ export function AssignmentsScreen({ session }: { session: SessionResponseDto }) 
          * Кнопка создания — в шапке, там же, где на других страницах.
          */}
         <div className="mb-3">
-          <select
+          <Select
             className="rounded-md border border-border px-3 py-2 text-sm"
             value={groupId}
             onChange={(event) => setGroupId(event.target.value)}
@@ -341,7 +342,7 @@ export function AssignmentsScreen({ session }: { session: SessionResponseDto }) 
                 {group.name}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
 
         {assignments.isLoading && <p className="text-sm text-muted-foreground">Загружаем…</p>}

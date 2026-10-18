@@ -9,7 +9,16 @@ import {
   useSubmitHomework,
   useUploadHomeworkFile,
 } from '../lib/queries';
-import { Alert, Badge, Button, Card, EmptyState, Field, TextInput } from '../components/ui';
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  Field,
+  Textarea,
+  TextInput,
+} from '../components/ui';
 
 /**
  * «Мои задания»: что задано и что сдано.
@@ -186,11 +195,11 @@ function HomeworkItem({ assignment }: { assignment: HomeworkAssignmentSummaryDto
           >
             <Field label="Решение">
               {/*
-                `w-full` обязателен: без него `<textarea>` берёт ширину по умолчанию (около 20
+                `w-full` обязателен: без него `<Textarea>` берёт ширину по умолчанию (около 20
                 символов) и выглядит узкой колонкой внутри широкого блока — владелец это заметил.
                 Поле ввода решения — главное на экране, ему нужна вся ширина.
               */}
-              <textarea
+              <Textarea
                 className="min-h-20 w-full rounded-md border border-border px-2 py-1.5 text-sm"
                 value={text}
                 onChange={(event) => setText(event.target.value)}

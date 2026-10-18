@@ -6,7 +6,7 @@ import { subjectCode } from '@edu-diary/domain';
 import { useAcademicContext } from '../components/AcademicContext';
 import { useAppearanceSettings } from '../components/AppearanceContext';
 import { LessonAttendance, LessonGrades, LessonGradesCount } from '../components/LessonMarks';
-import { Alert, Badge, Button, Card, EmptyState, Field, Table } from '../components/ui';
+import { Alert, Badge, Button, Card, EmptyState, Field, Select, Table } from '../components/ui';
 import { SubjectDot, lessonMarker, subjectColor } from '../lib/appearance';
 import { errorMessage } from '../lib/api-client';
 import { hasBells, pairsFromBells } from '../lib/schedule-pairs';
@@ -352,7 +352,7 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
       >
         <div className="flex flex-wrap items-end gap-3">
           <Field label="Группа" hint="«Все доступные» — занятия по всем группам">
-            <select
+            <Select
               name="studyGroupId"
               className={selectClass}
               value={selectedGroupId ?? ''}
@@ -366,7 +366,7 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
                   {group.name}
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
 
           <Field label="Вид">

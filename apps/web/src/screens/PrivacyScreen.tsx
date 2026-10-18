@@ -21,9 +21,11 @@ import {
   Card,
   EmptyState,
   Field,
-  Table,
-  TextInput,
   formatDateTime,
+  Select,
+  Table,
+  Textarea,
+  TextInput,
 } from '../components/ui';
 
 /**
@@ -96,7 +98,7 @@ export function PrivacyScreen() {
             </Field>
           </div>
           <Field label="Текст политики" error={policyForm.formState.errors.text?.message}>
-            <textarea
+            <Textarea
               rows={6}
               className="w-full rounded-md border border-border px-3 py-2 text-sm"
               {...policyForm.register('text')}
@@ -218,7 +220,7 @@ export function PrivacyScreen() {
           noValidate
         >
           <Field label="Ученик" error={consentForm.formState.errors.studentId?.message}>
-            <select
+            <Select
               className="rounded-md border border-border px-3 py-2 text-sm"
               {...consentForm.register('studentId')}
             >
@@ -228,10 +230,10 @@ export function PrivacyScreen() {
                   {student.fullName}
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
           <Field label="Представитель" error={consentForm.formState.errors.guardianUserId?.message}>
-            <select
+            <Select
               className="rounded-md border border-border px-3 py-2 text-sm"
               {...consentForm.register('guardianUserId')}
             >
@@ -241,16 +243,16 @@ export function PrivacyScreen() {
                   {user.fullName} ({user.username})
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
           <Field label="Способ">
-            <select
+            <Select
               className="rounded-md border border-border px-3 py-2 text-sm"
               {...consentForm.register('grantedVia')}
             >
               <option value="paper">Бумажное заявление</option>
               <option value="electronic">Электронно</option>
-            </select>
+            </Select>
           </Field>
           <Field label="Документ" hint="Номер и дата заявления">
             <TextInput {...consentForm.register('documentRef')} />

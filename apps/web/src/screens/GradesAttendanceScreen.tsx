@@ -9,7 +9,7 @@ import {
   type SessionResponseDto,
 } from '@edu-diary/contracts';
 
-import { Card, EmptyState, Field, Table } from '../components/ui';
+import { Card, EmptyState, Field, Select, Table } from '../components/ui';
 import {
   useAttendanceBySubject,
   useGradesBySubject,
@@ -269,7 +269,7 @@ export function GradesAttendanceScreen({ session }: { session: SessionResponseDt
           {canChooseStudent && (
             <>
               <Field label="Группа">
-                <select
+                <Select
                   name="studyGroupId"
                   className="w-full rounded-md border border-border px-3 py-2 text-sm"
                   value={adminGroupId}
@@ -284,11 +284,11 @@ export function GradesAttendanceScreen({ session }: { session: SessionResponseDt
                       {group.name}
                     </option>
                   ))}
-                </select>
+                </Select>
               </Field>
 
               <Field label="Ученик">
-                <select
+                <Select
                   name="studentId"
                   className="w-full rounded-md border border-border px-3 py-2 text-sm"
                   value={adminStudentId}
@@ -300,7 +300,7 @@ export function GradesAttendanceScreen({ session }: { session: SessionResponseDt
                       {enrollment.studentName}
                     </option>
                   ))}
-                </select>
+                </Select>
               </Field>
             </>
           )}
@@ -308,7 +308,7 @@ export function GradesAttendanceScreen({ session }: { session: SessionResponseDt
           {isTeacherOnly && (
             <>
               <Field label="Группа">
-                <select
+                <Select
                   name="teacherGroupId"
                   className="w-full rounded-md border border-border px-3 py-2 text-sm"
                   value={teacherGroupId}
@@ -319,11 +319,11 @@ export function GradesAttendanceScreen({ session }: { session: SessionResponseDt
                       {name}
                     </option>
                   ))}
-                </select>
+                </Select>
               </Field>
 
               <Field label="Предмет">
-                <select
+                <Select
                   name="teacherSubjectId"
                   className="w-full rounded-md border border-border px-3 py-2 text-sm"
                   value={teacherSubjectId}
@@ -336,7 +336,7 @@ export function GradesAttendanceScreen({ session }: { session: SessionResponseDt
                       {name}
                     </option>
                   ))}
-                </select>
+                </Select>
               </Field>
             </>
           )}

@@ -5,7 +5,7 @@ import { useState } from 'react';
 
 import { useAcademicContext } from '../components/AcademicContext';
 import { useAppearanceSettings } from '../components/AppearanceContext';
-import { Alert, Badge, Button, Card, EmptyState, Field, TextInput } from '../components/ui';
+import { Alert, Badge, Button, Card, EmptyState, Field, Select, TextInput } from '../components/ui';
 import { SubjectDot, lessonMarker, subjectColor } from '../lib/appearance';
 import { errorMessage } from '../lib/api-client';
 import { hasBells, pairsFromBells } from '../lib/schedule-pairs';
@@ -131,7 +131,7 @@ function ManualLessonForm({
 
       <div className="grid gap-2 sm:grid-cols-2">
         <Field label="Предмет">
-          <select
+          <Select
             required
             name="subjectId"
             className={selectClass}
@@ -144,11 +144,11 @@ function ManualLessonForm({
                 {subject.name}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
 
         <Field label="Преподаватель">
-          <select
+          <Select
             required
             name="teacherUserId"
             className={selectClass}
@@ -161,11 +161,11 @@ function ManualLessonForm({
                 {teacher.fullName}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
 
         <Field label="Аудитория" hint="Необязательно">
-          <select
+          <Select
             name="roomId"
             className={selectClass}
             value={roomId}
@@ -177,7 +177,7 @@ function ManualLessonForm({
                 {room.name}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
 
         <div className="grid grid-cols-2 gap-2">
@@ -419,7 +419,7 @@ function PeriodForm({
   return (
     <div className="flex flex-col gap-3">
       <Field label="Группа" hint="Сетка уроков строится по одной группе">
-        <select
+        <Select
           name="studyGroupId"
           className={selectClass}
           value={selectedGroupId ?? ''}
@@ -431,7 +431,7 @@ function PeriodForm({
               {group.name}
             </option>
           ))}
-        </select>
+        </Select>
       </Field>
 
       {canGenerate && (

@@ -12,9 +12,10 @@ import {
   Card,
   EmptyState,
   Field,
+  formatDate,
+  Select,
   Table,
   TextInput,
-  formatDate,
 } from '../components/ui';
 import { errorMessage } from '../lib/api-client';
 import {
@@ -159,7 +160,7 @@ function AddPeriodCard({ year }: { year: AcademicYearDto }) {
           <TextInput placeholder="1 семестр" {...form.register('title')} />
         </Field>
         <Field label="Тип">
-          <select
+          <Select
             className="rounded-md border border-border px-3 py-2 text-sm"
             {...form.register('kind')}
           >
@@ -168,7 +169,7 @@ function AddPeriodCard({ year }: { year: AcademicYearDto }) {
                 {item.label}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
         <Field label="Начало" error={form.formState.errors.startsOn?.message}>
           <TextInput type="date" {...form.register('startsOn')} />

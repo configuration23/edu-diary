@@ -7,9 +7,10 @@ import {
   Card,
   EmptyState,
   Field,
+  formatDate,
+  Select,
   Table,
   TextInput,
-  formatDate,
 } from '../components/ui';
 import { errorMessage } from '../lib/api-client';
 import {
@@ -99,7 +100,7 @@ function QuickSubstitution({
     >
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Урок" hint="Что заменяем: дата, пара и группа">
-          <select
+          <Select
             required
             name="lessonId"
             className={selectClass}
@@ -116,11 +117,11 @@ function QuickSubstitution({
                 {lesson.groupName} · {lesson.teacherName}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
 
         <Field label="Заменяющий" hint="Сначала свободные на эту пару">
-          <select
+          <Select
             required
             name="substituteUserId"
             className={selectClass}
@@ -140,11 +141,11 @@ function QuickSubstitution({
                     : `${candidate.fullName} — занят: ${candidate.busyGroupName ?? ''}, ${candidate.busySubjectName ?? ''}`}
                 </option>
               ))}
-          </select>
+          </Select>
         </Field>
 
         <Field label="Причина">
-          <select
+          <Select
             required
             name="reason"
             className={selectClass}
@@ -156,7 +157,7 @@ function QuickSubstitution({
                 {item}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
 
         {reason === 'Другое' && (

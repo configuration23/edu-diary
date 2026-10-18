@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { useAssignments, useGroups, useSubmittedWorks } from '../lib/queries';
-import { Badge, Field } from '../components/ui';
+import { Badge, Field, Select } from '../components/ui';
 import {
   Page,
   PageHeader,
@@ -87,7 +87,7 @@ export function SubmittedWorksScreen({ session }: { session: SessionResponseDto 
 
       <Toolbar>
         <Field label="Группа">
-          <select
+          <Select
             className="w-full min-w-56 rounded-md border border-border px-3 py-2 text-sm"
             value={groupId}
             onChange={(event) => setGroupId(event.target.value)}
@@ -97,7 +97,7 @@ export function SubmittedWorksScreen({ session }: { session: SessionResponseDto 
                 {name}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
 
         <Field label="Дата урока-срока">

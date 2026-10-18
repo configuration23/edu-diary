@@ -1,7 +1,17 @@
 import { useState } from 'react';
 
 import type { GradeCategoryDto, RoomDto, SubjectDto } from '@edu-diary/contracts';
-import { Alert, Badge, Button, Card, EmptyState, Field, Table, TextInput } from '../components/ui';
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  Field,
+  Select,
+  Table,
+  TextInput,
+} from '../components/ui';
 import { SUBJECT_COLOR_PALETTE, SubjectDot, subjectColor } from '../lib/appearance';
 import { errorMessage } from '../lib/api-client';
 import {
@@ -124,7 +134,7 @@ function SubjectsCard() {
                 />
               </Field>
               <Field label="Вид">
-                <select
+                <Select
                   className="rounded-md border border-border px-3 py-2 text-sm"
                   value={kind}
                   onChange={(event) =>
@@ -136,7 +146,7 @@ function SubjectsCard() {
                       {item.label}
                     </option>
                   ))}
-                </select>
+                </Select>
               </Field>
               <Field label="Цвет" hint="Пусто — подберём автоматически">
                 <span className="flex items-center gap-2">
@@ -252,7 +262,7 @@ function SubjectsCard() {
               />
             </Field>
             <Field label="Вид">
-              <select
+              <Select
                 className="rounded-md border border-border px-3 py-2 text-sm"
                 value={editKind}
                 onChange={(event) =>
@@ -264,7 +274,7 @@ function SubjectsCard() {
                     {item.label}
                   </option>
                 ))}
-              </select>
+              </Select>
             </Field>
             <Field label="Цвет" hint="Заливка плиток и маркер в строках">
               <span className="flex items-center gap-2">
@@ -761,7 +771,7 @@ function BellsCard() {
           >
             <div className="grid gap-3 sm:grid-cols-4">
               <Field label="Пара">
-                <select
+                <Select
                   className="rounded-md border border-border px-3 py-2 text-sm"
                   value={pairNumber}
                   onChange={(event) => setPairNumber(event.target.value)}
@@ -771,7 +781,7 @@ function BellsCard() {
                       {number}-я пара
                     </option>
                   ))}
-                </select>
+                </Select>
               </Field>
               <Field label="Начало">
                 <TextInput

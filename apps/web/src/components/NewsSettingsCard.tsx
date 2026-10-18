@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 
 import type { NewsItemDto } from '@edu-diary/contracts';
 
-import { Alert, Badge, Button, Field, TextInput } from './ui';
+import { Alert, Badge, Button, Field, Select, Textarea, TextInput } from './ui';
 import { Section } from './layout';
 import { errorMessage } from '../lib/api-client';
 import {
@@ -132,7 +132,7 @@ function AboutSettings() {
       </Field>
 
       <Field label="Текст">
-        <textarea
+        <Textarea
           className="min-h-28 w-full rounded-md border border-border px-3 py-2 text-sm"
           value={text}
           onChange={(event) => setText(event.target.value)}
@@ -248,7 +248,7 @@ export function NewsSettingsCard({
             </Field>
 
             <Field label="Текст новости">
-              <textarea
+              <Textarea
                 className="min-h-32 w-full rounded-md border border-border px-3 py-2 text-sm"
                 value={draft.body}
                 onChange={(event) => setDraft({ ...draft, body: event.target.value })}
@@ -310,7 +310,7 @@ export function NewsSettingsCard({
             </Field>
 
             <Field label="Где показать картинку">
-              <select
+              <Select
                 className="w-full max-w-xs rounded-md border border-border px-3 py-2 text-sm"
                 value={draft.imagePosition}
                 onChange={(event) =>
@@ -322,7 +322,7 @@ export function NewsSettingsCard({
               >
                 <option value="top">Сверху текста</option>
                 <option value="bottom">Снизу текста</option>
-              </select>
+              </Select>
               <span className="text-xs text-muted-foreground">
                 Выбор сохраняется вместе с новостью и действует и на «Обзоре», и в свёрнутом виде.
               </span>

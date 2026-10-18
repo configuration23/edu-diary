@@ -19,9 +19,10 @@ import {
   Card,
   EmptyState,
   Field,
+  formatDate,
+  Select,
   Table,
   TextInput,
-  formatDate,
 } from '../components/ui';
 
 /**
@@ -255,7 +256,7 @@ export function LinkGuardianForm({ onLinked }: { onLinked: (message: string) => 
       >
         <div className="grid gap-4 sm:grid-cols-3">
           <Field label="Ученик">
-            <select
+            <Select
               required
               className="rounded-md border border-border px-3 py-2 text-sm"
               value={studentId}
@@ -267,10 +268,10 @@ export function LinkGuardianForm({ onLinked }: { onLinked: (message: string) => 
                   {student.fullName}
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
           <Field label="Законный представитель">
-            <select
+            <Select
               required
               className="rounded-md border border-border px-3 py-2 text-sm"
               value={guardianUserId}
@@ -282,10 +283,10 @@ export function LinkGuardianForm({ onLinked }: { onLinked: (message: string) => 
                   {user.fullName} ({user.username})
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>{' '}
           <Field label="Кем является">
-            <select
+            <Select
               className="rounded-md border border-border px-3 py-2 text-sm"
               value={relation}
               onChange={(event) => setRelation(event.target.value)}
@@ -295,7 +296,7 @@ export function LinkGuardianForm({ onLinked }: { onLinked: (message: string) => 
                   {item.label}
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
         </div>
 

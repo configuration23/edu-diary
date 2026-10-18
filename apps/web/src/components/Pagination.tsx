@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import { Button, EmptyState, Field } from './ui';
+import { Button, EmptyState, Field, Select } from './ui';
 
 /**
  * Постраничный вывод длинных списков.
@@ -56,7 +56,7 @@ export function Pagination({
   return (
     <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
       <Field label="Строк на странице">
-        <select
+        <Select
           name="pageSize"
           className="rounded-md border border-border px-3 py-2 text-sm"
           value={String(pageSize)}
@@ -67,7 +67,7 @@ export function Pagination({
               {size}
             </option>
           ))}
-        </select>
+        </Select>
       </Field>
 
       {pages > 1 && (

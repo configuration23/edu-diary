@@ -12,7 +12,7 @@ import { Fragment, useState } from 'react';
 
 import { useAppearanceSettings } from '../components/AppearanceContext';
 import { HomeworkCard } from '../components/HomeworkCard';
-import { Alert, Badge, Button, Card, EmptyState, Field, TextInput } from '../components/ui';
+import { Alert, Badge, Button, Card, EmptyState, Field, Select, TextInput } from '../components/ui';
 import { SubjectDot } from '../lib/appearance';
 import { errorMessage } from '../lib/api-client';
 import {
@@ -133,7 +133,7 @@ function ReasonPicker({
 
       <div className="min-w-56 flex-1">
         <Field label="Причина">
-          <select
+          <Select
             name="categoryId"
             className={selectClass}
             value={categoryId}
@@ -144,7 +144,7 @@ function ReasonPicker({
                 {reason.code} — {reason.title}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
       </div>
 
@@ -202,7 +202,7 @@ function EditPanel({
     <div className="mt-2 flex flex-col gap-3 rounded-md border border-border bg-muted p-3">
       <div className="flex flex-wrap items-end gap-2">
         <Field label="Новая оценка">
-          <select
+          <Select
             name="gradeValue"
             className={selectClass}
             value={value}
@@ -214,10 +214,10 @@ function EditPanel({
                 {item}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
         <Field label="Причина отметки">
-          <select
+          <Select
             name="gradeReason"
             className={selectClass}
             value={categoryId}
@@ -229,7 +229,7 @@ function EditPanel({
                 {item.code} — {item.title}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
         <div className="flex-1">
           <Field label="Причина правки" hint="Без причины история правок бесполезна">

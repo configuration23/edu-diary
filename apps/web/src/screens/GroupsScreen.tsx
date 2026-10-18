@@ -13,9 +13,10 @@ import {
   Card,
   EmptyState,
   Field,
+  formatDate,
+  Select,
   Table,
   TextInput,
-  formatDate,
 } from '../components/ui';
 import { errorMessage } from '../lib/api-client';
 import {
@@ -174,7 +175,7 @@ function EnrollForm({ groupId, groupName }: { groupId: string; groupName: string
           колонке подпись и поле наезжают друг на друга. */}
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Ученик">
-          <select
+          <Select
             required
             className="rounded-md border border-border px-3 py-2 text-sm"
             value={studentId}
@@ -186,7 +187,7 @@ function EnrollForm({ groupId, groupName }: { groupId: string; groupName: string
                 {student.fullName}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
         <Field label="Дата зачисления">
           <TextInput

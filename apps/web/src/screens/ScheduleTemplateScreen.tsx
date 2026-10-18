@@ -2,7 +2,7 @@ import type { ScheduleEntryDto, SessionResponseDto } from '@edu-diary/contracts'
 import { Fragment, useEffect, useRef, useState } from 'react';
 
 import { useAcademicContext } from '../components/AcademicContext';
-import { Alert, Button, Card, EmptyState, Field, Table, TextInput } from '../components/ui';
+import { Alert, Button, Card, EmptyState, Field, Select, Table, TextInput } from '../components/ui';
 import { errorMessage } from '../lib/api-client';
 import { hasBells, pairsFromBells } from '../lib/schedule-pairs';
 import {
@@ -67,7 +67,7 @@ function GroupField({
 }) {
   return (
     <Field label="Группа" hint="«Все доступные» — занятия по всем группам">
-      <select
+      <Select
         name="studyGroupId"
         required={disabled}
         className={`${selectClass} max-w-sm`}
@@ -80,7 +80,7 @@ function GroupField({
             {group.name}
           </option>
         ))}
-      </select>
+      </Select>
     </Field>
   );
 }
@@ -186,7 +186,7 @@ function EntryForm({
         <GroupField groups={groups} selectedGroupId={selectedGroupId} selectGroup={selectGroup} />
 
         <Field label="Назначение" hint="Предмет и преподаватель из назначений группы">
-          <select
+          <Select
             required
             name="assignmentId"
             className={selectClass}
@@ -202,11 +202,11 @@ function EntryForm({
                 {item.subjectName} — {item.teacherName}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
 
         <Field label="День недели">
-          <select
+          <Select
             name="dayOfWeek"
             className={selectClass}
             value={dayOfWeek}
@@ -217,11 +217,11 @@ function EntryForm({
                 {day.label}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
 
         <Field label="Пара">
-          <select
+          <Select
             name="pairNumber"
             className={selectClass}
             value={pairNumber}
@@ -232,11 +232,11 @@ function EntryForm({
                 {number}-я пара
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
 
         <Field label="Аудитория" hint="Необязательно">
-          <select
+          <Select
             name="roomId"
             className={selectClass}
             value={roomId}
@@ -248,7 +248,7 @@ function EntryForm({
                 {room.name}
               </option>
             ))}
-          </select>
+          </Select>
           {/* Название серым под селектом: в списке из одних номеров легко запутаться. */}
           {selectedRoom !== undefined && selectedRoom.note !== null && (
             <span className="mt-1 block text-xs text-muted-foreground">{selectedRoom.note}</span>
@@ -387,7 +387,7 @@ function EntryEditor({
       }}
     >
       <Field label="Пара">
-        <select
+        <Select
           className={selectClass}
           value={pairNumber}
           onChange={(event) => setPairNumber(event.target.value)}
@@ -397,11 +397,11 @@ function EntryEditor({
               {number}-я пара
             </option>
           ))}
-        </select>
+        </Select>
       </Field>
 
       <Field label="Аудитория">
-        <select
+        <Select
           className={selectClass}
           value={roomId}
           onChange={(event) => setRoomId(event.target.value)}
@@ -412,7 +412,7 @@ function EntryEditor({
               {room.name}
             </option>
           ))}
-        </select>
+        </Select>
         {selectedRoom !== undefined && selectedRoom.note !== null && (
           <span className="mt-1 block text-xs text-muted-foreground">{selectedRoom.note}</span>
         )}

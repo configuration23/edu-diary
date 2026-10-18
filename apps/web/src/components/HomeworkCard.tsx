@@ -9,7 +9,7 @@ import {
   useUpdateHomework,
   useUploadHomeworkFile,
 } from '../lib/queries';
-import { Alert, Badge, Button, Card, EmptyState, Field, TextInput } from './ui';
+import { Alert, Badge, Button, Card, EmptyState, Field, Select, Textarea, TextInput } from './ui';
 import type { HomeworkAssignmentSummaryDto } from '@edu-diary/contracts';
 
 /**
@@ -167,11 +167,11 @@ export function HomeworkCard({
           >
             <Field label="Что задано">
               {/*
-                `w-full` обязателен: без него `<textarea>` берёт ширину по умолчанию и выглядит
+                `w-full` обязателен: без него `<Textarea>` берёт ширину по умолчанию и выглядит
                 узкой колонкой внутри широкого блока — владелец это заметил. Задание пишут
                 несколько строк, поэтому поле должно занимать всю ширину.
               */}
-              <textarea
+              <Textarea
                 className="min-h-20 w-full rounded-md border border-border px-2 py-1.5 text-sm"
                 value={text}
                 onChange={(event) => setText(event.target.value)}
@@ -180,7 +180,7 @@ export function HomeworkCard({
             </Field>
 
             <Field label="К какому уроку">
-              <select
+              <Select
                 className="w-full max-w-md rounded-md border border-border px-2 py-1.5 text-sm"
                 value={dueLessonId}
                 onChange={(event) => setDueLessonId(event.target.value)}
@@ -192,7 +192,7 @@ export function HomeworkCard({
                     {option.lessonDate} · {option.pairNumber}-я пара
                   </option>
                 ))}
-              </select>
+              </Select>
               <span className="text-xs text-muted-foreground">
                 Ученик увидит задание в этом уроке и во всех промежуточных: можно принести раньше.
                 Если следующего урока нет — задание останется на текущем.
@@ -355,7 +355,7 @@ function AssignmentBlock({
       >
         <Field label="Что задано">
           {/* Та же правка, что в форме создания: поле задания — на всю ширину блока. */}
-          <textarea
+          <Textarea
             className="min-h-20 w-full rounded-md border border-border px-2 py-1.5 text-sm"
             value={text}
             onChange={(event) => setText(event.target.value)}
@@ -363,7 +363,7 @@ function AssignmentBlock({
         </Field>
 
         <Field label="К какому уроку">
-          <select
+          <Select
             className="w-full max-w-md rounded-md border border-border px-2 py-1.5 text-sm"
             value={dueLessonId}
             onChange={(event) => setDueLessonId(event.target.value)}
@@ -376,7 +376,7 @@ function AssignmentBlock({
                 {option.lessonDate} · {option.pairNumber}-я пара
               </option>
             ))}
-          </select>
+          </Select>
           <span className="text-xs text-muted-foreground">
             Ученик увидит задание в новом уроке-сроке и во всех промежуточных.
           </span>

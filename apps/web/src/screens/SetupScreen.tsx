@@ -7,7 +7,16 @@ import { z } from 'zod';
 
 import { errorMessage } from '../lib/api-client';
 import { useCompleteSetup } from '../lib/queries';
-import { Alert, Button, Card, Field, FilePicker, TextInput, formatDate } from '../components/ui';
+import {
+  Alert,
+  Button,
+  Card,
+  Field,
+  FilePicker,
+  formatDate,
+  Select,
+  TextInput,
+} from '../components/ui';
 import type { SetupStatusResponseDto } from '@edu-diary/contracts';
 
 /** Шаги мастера: заведение → учебный год и период → администратор. */
@@ -295,14 +304,14 @@ export function SetupScreen({ status }: { status: SetupStatusResponseDto }) {
               </Field>
               <div className="grid gap-4 sm:grid-cols-3">
                 <Field label="Тип периода">
-                  <select
+                  <Select
                     className="w-full rounded-md border border-border px-3 py-2 text-sm"
                     {...form.register('periodKind')}
                   >
                     <option value="semester">Семестр</option>
                     <option value="term">Четверть</option>
                     <option value="quarter">Триместр</option>
-                  </select>
+                  </Select>
                 </Field>
                 <Field label="Начало периода" error={form.formState.errors.periodStartsOn?.message}>
                   <TextInput type="date" {...form.register('periodStartsOn')} />
