@@ -11,6 +11,19 @@
 
 /* Шрифты только системные: обращение к внешним шрифтовым сервисам запрещено
    (SECURITY.md §3.8). */
+/*
+  Содержимое спойлера: вложенные блоки не рисуют свою рамку.
+  Одна схема во всех разделах — шапка, черта, плоское содержимое. Второй уровень рамок
+  (спойлер → карточка) делал «Настройки» непохожими на «Справочники».
+*/
+.spoiler-content section {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+}
+
 @theme {
   --font-sans:
     ui-sans-serif, system-ui, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;

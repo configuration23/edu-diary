@@ -112,7 +112,7 @@ export function Spoiler({
           </span>
         </summary>
 
-        <div className="border-t border-border p-4">
+        <div className="spoiler-content border-t border-border p-4">
           {/*
             Действия блока — здесь, а не в сводке: пока блок свёрнут, кнопки «Добавить …» быть не
             должно. Так же устроены «Настройки» и «Настройки обучения»: блок вложен, и его шапка с
