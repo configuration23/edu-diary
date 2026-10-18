@@ -37,13 +37,25 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  /**
+   * Серверы **не переиспользуются** — ни локально, ни в CI.
+   *
+   * `tools/dev/run-e2e-isolated.mjs` по умолчанию **удаляет и создаёт заново** базу
+   * `edu_diary_e2e`. Если Playwright подхватит сервер от прошлого прогона, тот будет смотреть в уже
+   * удалённую базу: приложение не получит статус настройки и навсегда останется на заставке.
+   * Внешне это выглядит как «сценарий упал на ожидании поля входа» — и уводит в сторону. Дважды так
+   * и случилось при работах по оформлению, пока причина не нашлась.
+   *
+   * Честный отказ «порт занят» лучше, чем прогон на чужой базе: он сразу говорит, что делать —
+   * остановить `npm run dev` или прошлый прогон.
+   */
   webServer: [
     {
       command: 'node apps/api/dist/main.js',
       url: 'http://127.0.0.1:3000/api/health',
       // API в e2e работает как в проде: без чтения .env и с JSON-логами.
       env: { NODE_ENV: 'production' },
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: false,
       timeout: 60_000,
       stdout: 'ignore',
       stderr: 'ignore',
@@ -51,7 +63,7 @@ export default defineConfig({
     {
       command: 'npm run preview -w apps/web',
       url: 'http://127.0.0.1:4173',
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: false,
       timeout: 60_000,
       stdout: 'ignore',
       stderr: 'ignore',
