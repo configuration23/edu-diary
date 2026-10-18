@@ -279,6 +279,18 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
             </span>
           }
         >
+          {/*
+            Пояснение о том, где заводят учеников и представителей, — сразу под описанием карточки:
+            оно относится ко всей вкладке, а не к списку ролей.
+          */}
+          {tab === 'user' && (
+            <p className="mb-3 text-sm text-muted-foreground">
+              Учеников заводят в разделе «Группы и ученики» (блок «Новый ученик»), законных
+              представителей — вкладкой «Законный представитель»: у них учётная запись всегда
+              связана с человеком.
+            </p>
+          )}
+
           {tab === 'user' ? (
             <form className="flex flex-col gap-3" onSubmit={onCreate} noValidate>
               <div className="grid gap-4 sm:grid-cols-2">
@@ -317,30 +329,33 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
                 <legend className="mb-2 text-sm font-medium text-foreground">
                   Роли сотрудника
                 </legend>
-                <div className="flex flex-wrap gap-3">
-                  {staffRoles.map((role) => (
-                    <Checkbox
-                      value={role.code}
-                      {...form.register('roles')}
-                      onChange={(event) => {
-                        // Роли дают права все вместе: показываем предупреждение,
-                        // чтобы случайно не выдать лишнее.
-                        void form.register('roles').onChange(event);
-                        setNotice(null);
-                      }}
-                      label={roleTitle(role.code, role.title)}
-                    />
-                  ))}
+                <div className="flex flex-wrap items-end justify-between gap-3">
+                  <div className="flex flex-wrap gap-3">
+                    {staffRoles.map((role) => (
+                      <Checkbox
+                        value={role.code}
+                        {...form.register('roles')}
+                        onChange={(event) => {
+                          // Роли дают права все вместе: показываем предупреждение,
+                          // чтобы случайно не выдать лишнее.
+                          void form.register('roles').onChange(event);
+                          setNotice(null);
+                        }}
+                        label={roleTitle(role.code, role.title)}
+                      />
+                    ))}
+                  </div>
+
+                  {/* Действие — в строке с ролями: между ними нет других полей. */}
+                  <Button type="submit" disabled={createUser.isPending}>
+                    {createUser.isPending ? 'Создаём…' : 'Создать учётную запись'}
+                  </Button>
                 </div>
                 {form.formState.errors.roles !== undefined && (
                   <span className="mt-1 block text-xs text-danger-foreground">
                     {form.formState.errors.roles.message}
                   </span>
                 )}
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Учеников заводят в разделе «Группы и ученики» (блок «Новый ученик»), законных
-                  представителей — блоком ниже: у них учётная запись всегда связана с человеком.
-                </p>
               </fieldset>
 
               {selectedCount > 1 && (
@@ -350,13 +365,6 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
               )}
 
               {createUser.isError && <Alert tone="error">{errorMessage(createUser.error)}</Alert>}
-
-              {/* Главное действие формы — справа: там его ищут, и оно не спорит с полями за левый край. */}
-              <div className="flex justify-end">
-                <Button type="submit" disabled={createUser.isPending}>
-                  {createUser.isPending ? 'Создаём…' : 'Создать учётную запись'}
-                </Button>
-              </div>
             </form>
           ) : (
             <div className="flex flex-col gap-3">

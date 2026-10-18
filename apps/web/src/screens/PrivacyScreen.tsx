@@ -105,18 +105,21 @@ export function PrivacyScreen() {
             />
           </Field>
           {publishPolicy.isError && <Alert tone="error">{errorMessage(publishPolicy.error)}</Alert>}
-          <div>
+
+          {/* Версия и действие — в одной строке: кнопка справа, сведения о редакции слева. */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            {policy.data?.current != null ? (
+              <p className="text-sm text-muted-foreground">
+                Действующая редакция: <Badge tone="success">{policy.data.current.version}</Badge>
+              </p>
+            ) : (
+              <span />
+            )}
             <Button type="submit" disabled={publishPolicy.isPending}>
               Опубликовать редакцию
             </Button>
           </div>
         </form>
-
-        {policy.data?.current != null && (
-          <p className="mt-3 text-sm text-muted-foreground">
-            Действующая редакция: <Badge tone="success">{policy.data.current.version}</Badge>
-          </p>
-        )}
       </Card>
 
       {/* Редакции политики: текст и история. Раньше на экране была только
@@ -254,12 +257,19 @@ export function PrivacyScreen() {
               <option value="electronic">Электронно</option>
             </Select>
           </Field>
-          <Field label="Документ" hint="Номер и дата заявления">
+          {/* Кнопка — в ряду поля «Документ» и справа: так она на одном уровне с полями. */}
+          <Field
+            label="Документ"
+            hint="Номер и дата заявления"
+            className="ml-auto"
+            actions={
+              <Button type="submit" disabled={createConsent.isPending}>
+                Зарегистрировать
+              </Button>
+            }
+          >
             <TextInput {...consentForm.register('documentRef')} />
           </Field>
-          <Button type="submit" disabled={createConsent.isPending}>
-            Зарегистрировать
-          </Button>
         </form>
 
         {createConsent.isError && <Alert tone="error">{errorMessage(createConsent.error)}</Alert>}
