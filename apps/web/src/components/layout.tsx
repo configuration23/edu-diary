@@ -58,9 +58,9 @@ export function PageHeader({
   return (
     <header className="flex flex-wrap items-start justify-between gap-4">
       <div className="flex flex-col gap-1">
-        <h1 className="text-xl font-semibold text-slate-900">{title}</h1>
+        <h1 className="text-xl font-semibold text-foreground">{title}</h1>
         {description !== undefined && (
-          <p className="max-w-3xl text-sm text-slate-500">{description}</p>
+          <p className="max-w-3xl text-sm text-muted-foreground">{description}</p>
         )}
       </div>
       {actions !== undefined && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
@@ -87,8 +87,7 @@ export function Section({
   children: ReactNode;
   tone?: 'surface' | 'plain';
 }) {
-  const frame =
-    tone === 'surface' ? 'rounded-lg border border-slate-200 bg-card p-4 shadow-sm' : '';
+  const frame = tone === 'surface' ? 'rounded-lg border border-border bg-card p-4 shadow-sm' : '';
 
   return (
     <section className={`flex flex-col gap-4 ${frame}`}>
@@ -96,10 +95,10 @@ export function Section({
         <header className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex flex-col gap-0.5">
             {title !== undefined && (
-              <h2 className="text-base font-semibold text-slate-900">{title}</h2>
+              <h2 className="text-base font-semibold text-foreground">{title}</h2>
             )}
             {description !== undefined && (
-              <p className="max-w-3xl text-sm text-slate-500">{description}</p>
+              <p className="max-w-3xl text-sm text-muted-foreground">{description}</p>
             )}
           </div>
           {actions !== undefined && (
@@ -120,7 +119,7 @@ export function Section({
  */
 export function Toolbar({ children, actions }: { children: ReactNode; actions?: ReactNode }) {
   return (
-    <div className="flex flex-wrap items-end gap-4 rounded-lg border border-slate-200 bg-card p-4 shadow-sm">
+    <div className="flex flex-wrap items-end gap-4 rounded-lg border border-border bg-card p-4 shadow-sm">
       {children}
       {actions !== undefined && (
         <div className="ml-auto flex flex-wrap items-center gap-2">{actions}</div>
@@ -157,11 +156,11 @@ export function PersonRow({
 
   return (
     <li
-      className={`flex flex-wrap items-center gap-3 border-b border-slate-100 py-2 last:border-0 ${minHeight}`}
+      className={`flex flex-wrap items-center gap-3 border-b border-border py-2 last:border-0 ${minHeight}`}
     >
       <div className="flex min-w-40 flex-col">
-        <span className="text-sm font-medium text-slate-900">{name}</span>
-        {meta !== undefined && <span className="text-xs text-slate-500">{meta}</span>}
+        <span className="text-sm font-medium text-foreground">{name}</span>
+        {meta !== undefined && <span className="text-xs text-muted-foreground">{meta}</span>}
       </div>
       {children !== undefined && (
         <div className="flex flex-wrap items-center gap-2 text-sm">{children}</div>
@@ -199,7 +198,7 @@ export function QueryState({
 }) {
   if (isLoading) {
     return (
-      <p className="py-6 text-center text-sm text-slate-500" role="status">
+      <p className="py-6 text-center text-sm text-muted-foreground" role="status">
         Загружаем…
       </p>
     );
@@ -221,7 +220,7 @@ export function QueryState({
   }
 
   if (isEmpty) {
-    return <p className="py-6 text-center text-sm text-slate-500">{emptyText}</p>;
+    return <p className="py-6 text-center text-sm text-muted-foreground">{emptyText}</p>;
   }
 
   return <>{children}</>;
