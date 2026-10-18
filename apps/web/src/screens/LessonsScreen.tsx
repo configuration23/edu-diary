@@ -312,6 +312,11 @@ function LessonDetails({
         )}
       </form>
 
+      {/*
+        Действия урока — одной строкой (просьба владельца): журнал, замена, отмена или
+        восстановление. Раньше это были две строки, и «Отменить занятие» стояла отдельно от
+        действий с тем же уроком.
+      */}
       <div className="flex flex-wrap gap-2">
         {/* Журнал доступен и преподавателю: он ведёт урок, а не только смотрит. */}
         <Button
@@ -335,61 +340,61 @@ function LessonDetails({
               })
             }
           >
-            Заменить
+            Заменить преподавателя
           </Button>
         )}
+
+        {canManage && (
+          <>
+            {lesson.status !== 'cancelled' && (
+              <Button
+                tone="ghost"
+                type="button"
+                disabled={remove.isPending}
+                onClick={() =>
+                  void remove
+                    .mutateAsync(lesson.id)
+                    .then(() => onClose())
+                    .catch(() => undefined)
+                }
+              >
+                Отменить занятие
+              </Button>
+            )}
+
+            {lesson.status === 'cancelled' && (
+              <Button
+                tone="ghost"
+                type="button"
+                disabled={restore.isPending}
+                onClick={() =>
+                  void restore
+                    .mutateAsync(lesson)
+                    .then(() => onClose())
+                    .catch(() => undefined)
+                }
+              >
+                Восстановить
+              </Button>
+            )}
+
+            {reasons.length > 0 && (
+              <Button
+                tone="ghost"
+                type="button"
+                onClick={() =>
+                  void navigate({
+                    to: '/academic-process',
+                    search: { substitutionLessonId: undefined },
+                  })
+                }
+              >
+                Открыть журнал замен
+              </Button>
+            )}
+          </>
+        )}
       </div>
-
-      {canManage && (
-        <div className="flex flex-wrap gap-2">
-          {lesson.status !== 'cancelled' && (
-            <Button
-              tone="ghost"
-              type="button"
-              disabled={remove.isPending}
-              onClick={() =>
-                void remove
-                  .mutateAsync(lesson.id)
-                  .then(() => onClose())
-                  .catch(() => undefined)
-              }
-            >
-              Отменить занятие
-            </Button>
-          )}
-
-          {lesson.status === 'cancelled' && (
-            <Button
-              tone="ghost"
-              type="button"
-              disabled={restore.isPending}
-              onClick={() =>
-                void restore
-                  .mutateAsync(lesson)
-                  .then(() => onClose())
-                  .catch(() => undefined)
-              }
-            >
-              Восстановить
-            </Button>
-          )}
-
-          {reasons.length > 0 && (
-            <Button
-              tone="ghost"
-              type="button"
-              onClick={() =>
-                void navigate({
-                  to: '/academic-process',
-                  search: { substitutionLessonId: undefined },
-                })
-              }
-            >
-              Открыть журнал замен
-            </Button>
-          )}
-        </div>
-      )}
 
       {update.isError && <Alert tone="error">{errorMessage(update.error)}</Alert>}
       {remove.isError && <Alert tone="error">{errorMessage(remove.error)}</Alert>}
@@ -719,7 +724,11 @@ export function LessonsScreen({ session }: { session: SessionResponseDto }) {
           canGenerate={canGenerate}
         />
 
-        <div className="mt-4 flex flex-wrap items-end gap-3">
+        {/*
+        Выравнивание по верхнему краю: у блока «Правка расписания» подсказка снизу, и по нижнему
+        краю кнопка вставала выше соседних элементов. Правило — UI-KIT, «Ряд фильтров».
+      */}
+        <div className="mt-4 flex flex-wrap items-start gap-3">
           <Field label="Период">
             <span className="flex gap-2">
               <Button
