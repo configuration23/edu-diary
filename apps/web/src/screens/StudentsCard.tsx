@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 
 import type { UserSummaryDto } from '@edu-diary/contracts';
 import { errorMessage } from '../lib/api-client';
@@ -6,6 +6,7 @@ import {
   useCreateStudent,
   useCreateStudentAccount,
   useDeleteStudent,
+  useUpdateStudent,
   useGuardianLinks,
   useLinkGuardian,
   useStudents,
@@ -21,6 +22,7 @@ import {
   Checkbox,
   EmptyState,
   Field,
+  FormActions,
   formatDate,
   Select,
   Table,
@@ -411,6 +413,67 @@ function AccountForm({
  * Живёт в разделе «Группы и ученики»: группа собирается из учеников, поэтому
  * список людей идёт первым, а группа — следом.
  */
+/**
+ * Правка ученика — строкой под ним самим.
+ *
+ * Владелец: открывать по клику на ФИО, а не отдельной кнопкой; поля — только дата рождения и
+ * примечание (ФИО меняется редко и через отдельный путь). Кнопки справа: «Сохранить» и «Отменить».
+ */
+function StudentEditForm({
+  student,
+  onDone,
+}: {
+  student: { id: string; birthDate: string | null; note: string | null };
+  onDone: () => void;
+}) {
+  const update = useUpdateStudent();
+
+  const [birthDate, setBirthDate] = useState(student.birthDate ?? '');
+  const [note, setNote] = useState(student.note ?? '');
+
+  return (
+    <form
+      className="rounded-md border border-border bg-card p-3"
+      onSubmit={async (event) => {
+        event.preventDefault();
+        try {
+          await update.mutateAsync({
+            studentId: student.id,
+            birthDate: birthDate === '' ? null : birthDate,
+            note: note === '' ? null : note,
+          });
+          onDone();
+        } catch {
+          // Ошибка показывается ниже из состояния запроса.
+        }
+      }}
+    >
+      <div className="grid gap-3 sm:grid-cols-4">
+        <Field label="Дата рождения">
+          <TextInput
+            type="date"
+            value={birthDate}
+            onChange={(event) => setBirthDate(event.target.value)}
+          />
+        </Field>
+        <Field label="Примечание">
+          <TextInput value={note} onChange={(event) => setNote(event.target.value)} />
+        </Field>
+      </div>
+
+      <FormActions
+        submitLabel="Сохранить"
+        pending={update.isPending}
+        onCancel={onDone}
+        cancelLabel="Отменить"
+        align="end"
+        className="mt-3"
+      />
+      {update.isError && <Alert tone="error">{errorMessage(update.error)}</Alert>}
+    </form>
+  );
+}
+
 export function StudentsCard({ onNotice }: { onNotice: (message: string) => void }) {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -420,6 +483,12 @@ export function StudentsCard({ onNotice }: { onNotice: (message: string) => void
   /** Причина отказа при удалении: сервер объясняет, что мешает. */
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const deleteStudent = useDeleteStudent();
+  /** Ученик, чью карточку правим: форма открывается кликом по ФИО. */
+  const [editing, setEditing] = useState<{
+    id: string;
+    birthDate: string | null;
+    note: string | null;
+  } | null>(null);
   /** Форма ученика скрыта, пока её не позовут кнопкой: список важнее формы. */
   const [creating, setCreating] = useState(false);
   const [accountNotice, setAccountNotice] = useState<string | null>(null);
@@ -472,47 +541,79 @@ export function StudentsCard({ onNotice }: { onNotice: (message: string) => void
         {students.data !== undefined && students.data.items.length > 0 && (
           <Table head={['ФИО', 'Дата рождения', 'Учётная запись', 'Примечание', '']}>
             {students.data.items.map((student) => (
-              <tr key={student.id} className="border-b border-border">
-                <td className="px-3 py-2 font-medium">{student.fullName}</td>
-                <td className="px-3 py-2">{formatDate(student.birthDate)}</td>
-                <td className="px-3 py-2">
-                  {student.username === null ? (
-                    <Badge tone="warning">учётной записи нет</Badge>
-                  ) : (
-                    <Badge tone="success">{student.username}</Badge>
-                  )}
-                </td>
-                <td className="px-3 py-2 text-muted-foreground">{student.note ?? '—'}</td>
-                <td className="px-3 py-2">
-                  {student.username === null && (
-                    <span className="flex flex-wrap gap-2">
-                      <Button
-                        tone="ghost"
-                        onClick={() => setAccountFor({ id: student.id, name: student.fullName })}
-                      >
-                        Создать учётную запись
-                      </Button>
-                      {/*
+              <Fragment key={student.id}>
+                <tr className="border-b border-border">
+                  <td className="px-3 py-2 font-medium">
+                    {/*
+                    Правка открывается кликом по ФИО, а не отдельной кнопкой (просьба владельца):
+                    карточка и есть объект правки, искать кнопку в конце строки не нужно.
+                  */}
+                    <Button
+                      tone="ghost"
+                      className="px-0"
+                      onClick={() =>
+                        setEditing(
+                          editing?.id === student.id
+                            ? null
+                            : {
+                                id: student.id,
+                                birthDate: student.birthDate,
+                                note: student.note,
+                              },
+                        )
+                      }
+                    >
+                      {student.fullName}
+                    </Button>
+                  </td>
+                  <td className="px-3 py-2">{formatDate(student.birthDate)}</td>
+                  <td className="px-3 py-2">
+                    {student.username === null ? (
+                      <Badge tone="warning">учётной записи нет</Badge>
+                    ) : (
+                      <Badge tone="success">{student.username}</Badge>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-muted-foreground">{student.note ?? '—'}</td>
+                  <td className="px-3 py-2">
+                    {student.username === null && (
+                      <span className="flex flex-wrap gap-2">
+                        <Button
+                          tone="ghost"
+                          onClick={() => setAccountFor({ id: student.id, name: student.fullName })}
+                        >
+                          Создать УЗ
+                        </Button>
+                        {/*
                         Удаление показываем только у ученика без учётной записи. Согласие и
                         зачисления проверяет сервер и объясняет причину отказа: экран не должен
                         повторять правила сервера, иначе они разойдутся.
                       */}
-                      <Button
-                        tone="ghost"
-                        disabled={deleteStudent.isPending}
-                        onClick={() => {
-                          setDeleteError(null);
-                          void deleteStudent.mutateAsync(student.id).catch((caught) => {
-                            setDeleteError(errorMessage(caught));
-                          });
-                        }}
-                      >
-                        Удалить
-                      </Button>
-                    </span>
-                  )}
-                </td>
-              </tr>
+                        <Button
+                          tone="ghost"
+                          disabled={deleteStudent.isPending}
+                          onClick={() => {
+                            setDeleteError(null);
+                            void deleteStudent.mutateAsync(student.id).catch((caught) => {
+                              setDeleteError(errorMessage(caught));
+                            });
+                          }}
+                        >
+                          Удалить
+                        </Button>
+                      </span>
+                    )}
+                  </td>
+                </tr>
+
+                {editing?.id === student.id && (
+                  <tr data-static className="border-b border-border">
+                    <td colSpan={5} className="px-3 py-3">
+                      <StudentEditForm student={editing} onDone={() => setEditing(null)} />
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
             ))}
           </Table>
         )}

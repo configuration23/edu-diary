@@ -464,6 +464,23 @@ export function useCreateStudent() {
   });
 }
 
+/** Правка карточки ученика: дата рождения и примечание — остальное меняется редко. */
+export function useUpdateStudent() {
+  const client = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: { studentId: string; birthDate?: string | null; note?: string | null }) =>
+      apiRequest(`/api/students/${input.studentId}`, studentSummarySchema, {
+        method: 'PATCH',
+        body: {
+          ...(input.birthDate === undefined ? {} : { birthDate: input.birthDate }),
+          ...(input.note === undefined ? {} : { note: input.note }),
+        },
+      }),
+    onSuccess: () => invalidateStudents(client),
+  });
+}
+
 /** Учётная запись ученику, заведённому ранее (карточкой без учётки). */
 export function useCreateStudentAccount() {
   const client = useQueryClient();
