@@ -105,22 +105,6 @@ export function Spoiler({
             )}
           </span>
 
-          {/*
-          Действия блока видны и в свёрнутом виде: иначе вместе с раскрытием пропадает кнопка
-          «Добавить предмет», и функция становится недоступной. Клик по кнопке не должен
-          раскрывать спойлер — `stopPropagation` на обёртке.
-        */}
-          {actions !== undefined && (
-            <span
-              className="shrink-0"
-              onClick={(event) => {
-                event.stopPropagation();
-              }}
-            >
-              {actions}
-            </span>
-          )}
-
           {/* Подсказка меняется по состоянию: браузер сам знает, раскрыт блок или нет. */}
           <span className="shrink-0 pt-0.5 text-sm text-primary">
             <span className="group-open:hidden">Развернуть</span>
@@ -128,7 +112,15 @@ export function Spoiler({
           </span>
         </summary>
 
-        <div className="border-t border-border p-4">{children}</div>
+        <div className="border-t border-border p-4">
+          {/*
+            Действия блока — здесь, а не в сводке: пока блок свёрнут, кнопки «Добавить …» быть не
+            должно. Так же устроены «Настройки» и «Настройки обучения»: блок вложен, и его шапка с
+            кнопками появляется вместе с содержимым.
+          */}
+          {actions !== undefined && <div className="mb-3 flex justify-end">{actions}</div>}
+          {children}
+        </div>
       </details>
     </section>
   );
