@@ -354,18 +354,16 @@ test.describe('Этап 3: звонки, расписание, уроки', () =
     await page.getByRole('button', { name: 'Выйти' }).click();
     await login(page, STUDENT.username, STUDENT.password);
 
-    // Свою группу ученик выбирает в самом расписании: справочник групп ему
-    // недоступен, поэтому список строит маршрут «мои группы», а шапка остаётся
-    // только контекстом приложения.
-    //
-    // Раздел открываем адресом: группа должна попасть в первый же запрос
-    // расписания. Если сначала открыть раздел, а затем перезагрузить страницу,
-    // исходный запрос отменяется, и таблица остаётся пустой.
+    /**
+     * Ученику **выбор группы не показывается** (решение владельца): у него только своя группа, а
+     * список «Все доступные» выглядел как возможность смотреть чужие занятия.
+     *
+     * Раздел открываем адресом: занятия должны попасть в первый же запрос расписания.
+     */
     await page.goto('/schedule');
 
-    const studentGroupSelect = page.locator('select[name="studyGroupId"]');
-    await expect(studentGroupSelect.locator('option', { hasText: GROUP })).toHaveCount(1);
-    await studentGroupSelect.selectOption({ label: GROUP });
+    await expect(page.locator('select[name="studyGroupId"]')).toHaveCount(0);
+    await expect(page.getByText('Все доступные группы')).toHaveCount(0);
 
     // Дневной и недельный виды работают на одних данных: дневной показывает
     // выбранный день, недельный — матрицу пар и дней.

@@ -295,6 +295,16 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
    * Используем уже загруженный `ownGroups`: второй такой же запрос дал бы два одинаковых ответа и
    * лишний `403` у тех, кому группы недоступны.
    */
+  /**
+   * Может ли человек выбирать группу.
+   *
+   * Ученику и представителю выбор не нужен: им показывается **только своя группа**, и выпадающий
+   * список с «Все доступные» сбивал с толку — выглядел как возможность посмотреть чужие занятия.
+   * Признак — отсутствие `academics:read`: справочник групп закрыт этим правом, а у преподавателя и
+   * администратора оно есть.
+   */
+  const canChooseGroup = session.permissions.some((grant) => grant.permission === 'academics:read');
+
   const yearLabel = activeYearTitle ?? ownGroups.data?.academicYearTitle ?? null;
 
   const items = lessons.data?.items ?? [];
@@ -351,23 +361,29 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
         description={`Занятия на дату${yearLabel === null ? '' : ` · ${yearLabel}`}`}
       >
         <div className="flex flex-wrap items-end gap-3">
-          <Field label="Группа" hint="«Все доступные» — занятия по всем группам">
-            <Select
-              name="studyGroupId"
-              className={selectClass}
-              value={selectedGroupId ?? ''}
-              onChange={(event) =>
-                selectGroup(event.target.value === '' ? null : event.target.value)
-              }
-            >
-              <option value="">Все доступные группы</option>
-              {groups.map((group) => (
-                <option key={group.id} value={group.id}>
-                  {group.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
+          {/*
+            Ученику и представителю список групп не показываем: у них есть только своя, а вариант
+            «Все доступные» выглядел как возможность смотреть чужие занятия.
+          */}
+          {canChooseGroup && (
+            <Field label="Группа" hint="«Все доступные» — занятия по всем группам">
+              <Select
+                name="studyGroupId"
+                className={selectClass}
+                value={selectedGroupId ?? ''}
+                onChange={(event) =>
+                  selectGroup(event.target.value === '' ? null : event.target.value)
+                }
+              >
+                <option value="">Все доступные группы</option>
+                {groups.map((group) => (
+                  <option key={group.id} value={group.id}>
+                    {group.name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          )}
 
           <Field label="Вид">
             <span className="flex gap-2">
@@ -469,7 +485,7 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
 
             {dayLessons.length === 0 && (
               <EmptyState>
-                {selectedGroupId === null
+                {selectedGroupId === null && canChooseGroup
                   ? 'Выберите группу, чтобы увидеть её занятия на день.'
                   : 'На эту дату занятий нет.'}
               </EmptyState>
