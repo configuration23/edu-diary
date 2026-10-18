@@ -36,6 +36,8 @@ export const appUser = pgTable('app_user', {
   isActive: boolean('is_active').notNull().default(true),
   /** Учётка создана администратором: пароль нужно сменить при первом входе. */
   mustChangePassword: boolean('must_change_password').notNull().default(false),
+  /** Тема оформления: личный выбор человека, `system` — следовать настройке ОС. */
+  theme: text('theme').notNull().default('system'),
   failedLoginCount: integer('failed_login_count').notNull().default(0),
   lockedUntil: timestamp('locked_until', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

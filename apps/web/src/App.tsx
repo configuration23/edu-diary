@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { useEffect } from 'react';
 import {
   RouterProvider,
   createRootRoute,
@@ -15,6 +16,7 @@ import { AppearanceProvider } from './components/AppearanceContext';
 import { Alert } from './components/ui';
 import { errorMessage } from './lib/api-client';
 import { useSession, useSetupStatus } from './lib/queries';
+import { applyTheme, cacheTheme } from './lib/theme';
 import { AcademicProcessScreen } from './screens/AcademicProcessScreen';
 import { CatalogsScreen } from './screens/CatalogsScreen';
 import { DashboardScreen } from './screens/DashboardScreen';
@@ -324,6 +326,28 @@ function AuthenticatedApp({ branding }: { branding: BrandingDto }) {
   return <RouterProvider router={router} />;
 }
 
+/**
+ * Применяет тему из сессии и держит подписку на системную настройку.
+ *
+ * Пока сессии нет, действует кэш последнего выбора — поэтому первый кадр не мигает светлым у того,
+ * кто выбрал тёмную тему. Истина при этом на сервере: как только сессия пришла, её значение
+ * перекрывает кэш.
+ */
+function ThemeBinding() {
+  const session = useSession();
+  const theme = session.data?.user.theme;
+
+  useEffect(() => {
+    if (theme === undefined) return;
+
+    cacheTheme(theme);
+
+    return applyTheme(theme);
+  }, [theme]);
+
+  return null;
+}
+
 function AppGate() {
   const setup = useSetupStatus();
 
@@ -344,7 +368,12 @@ function AppGate() {
 
   if (!setup.data.initialized) return <SetupScreen status={setup.data} />;
 
-  return <AuthenticatedApp branding={setup.data.branding} />;
+  return (
+    <>
+      <ThemeBinding />
+      <AuthenticatedApp branding={setup.data.branding} />
+    </>
+  );
 }
 
 export function App() {

@@ -65,6 +65,7 @@ import {
   type SessionResponseDto,
   type SetupStatusResponseDto,
   type UpdateStorageSettingsRequest,
+  type ThemePreference,
 } from '@edu-diary/contracts';
 import {
   useMutation,
@@ -189,6 +190,27 @@ export function useLogout(): UseMutationResult<void, Error, void> {
       // Записываем «сессии нет» как свежий ответ: иначе запрос тотчас уйдёт на сервер
       // и получит ожидаемый, но лишний 401.
       client.setQueryData(['session'], null, { updatedAt: Date.now() });
+    },
+  });
+}
+
+/**
+ * Смена темы оформления.
+ *
+ * Сессия — источник истины для темы, поэтому после успеха обновляем её кэш: иначе переключатель
+ * показывал бы прежнее значение до перезагрузки страницы.
+ */
+export function useUpdateTheme(): UseMutationResult<void, Error, { theme: ThemePreference }> {
+  const client = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input) => apiSend('/api/auth/theme', { method: 'PUT', body: input }),
+    onSuccess: (_data, variables) => {
+      client.setQueryData<SessionResponseDto>(['session'], (current) =>
+        current === undefined
+          ? current
+          : { ...current, user: { ...current.user, theme: variables.theme } },
+      );
     },
   });
 }

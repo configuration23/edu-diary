@@ -24,6 +24,7 @@ function sessionOf(
       phone: null,
       isActive: true,
       mustChangePassword: false,
+      theme: 'system',
       roles,
     },
     permissions,

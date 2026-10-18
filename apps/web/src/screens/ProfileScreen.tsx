@@ -1,12 +1,15 @@
-import { useHealth } from '../lib/queries';
+import { useState } from 'react';
+
+import { useHealth, useUpdateTheme } from '../lib/queries';
 import { CLIENT_VERSION } from '../lib/version';
 import { isSystemAdmin } from '../lib/access';
-import { Badge, formatDateTime } from '../components/ui';
+import { Alert, Badge, Segmented, formatDateTime } from '../components/ui';
 import { ChangePasswordCard } from '../components/ChangePasswordCard';
 import { SystemStatus, type HealthState } from '../components/SystemStatus';
 import { Page, PageHeader, Section } from '../components/layout';
 import { Spoiler } from '../components/Spoiler';
-import type { SessionResponseDto } from '@edu-diary/contracts';
+import { errorMessage } from '../lib/api-client';
+import type { SessionResponseDto, ThemePreference } from '@edu-diary/contracts';
 
 /**
  * Профиль пользователя.
@@ -54,6 +57,43 @@ function healthState(query: ReturnType<typeof useHealth>): HealthState {
   return { kind: 'ready', health: query.data };
 }
 
+/**
+ * Выбор темы: светлая, тёмная, как в системе.
+ *
+ * Три состояния, а не два: «как в системе» — отдельное намерение, а не «светлая». Выбор уходит на
+ * сервер (личная настройка учётной записи) и сразу применяется к документу — без перезагрузки.
+ */
+function ThemeChoice({ current }: { current: ThemePreference }) {
+  const update = useUpdateTheme();
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <div className="flex flex-col gap-3">
+      <Segmented
+        label="Тема оформления"
+        value={current}
+        onChange={(next) => {
+          setError(null);
+          void update
+            .mutateAsync({ theme: next })
+            .catch((caught) => setError(errorMessage(caught)));
+        }}
+        options={[
+          { value: 'system', label: 'Как в системе' },
+          { value: 'light', label: 'Светлая' },
+          { value: 'dark', label: 'Тёмная' },
+        ]}
+      />
+
+      <p className="text-sm text-muted-foreground">
+        «Как в системе» следует настройке вашей операционной системы и переключается вместе с ней.
+      </p>
+
+      {error !== null && <Alert tone="error">{error}</Alert>}
+    </div>
+  );
+}
+
 export function ProfileScreen({ session }: { session: SessionResponseDto }) {
   const health = useHealth();
   const api = health.data;
@@ -94,6 +134,10 @@ export function ProfileScreen({ session }: { session: SessionResponseDto }) {
             Требуется сменить пароль: он выдан администратором. Смените его ниже.
           </p>
         )}
+      </Section>
+
+      <Section title="Оформление">
+        <ThemeChoice current={session.user.theme} />
       </Section>
 
       <ChangePasswordCard />

@@ -22,6 +22,8 @@ export interface AuthContext {
   isActive: boolean;
   /** Пароль выдан администратором и требует смены при первом входе. */
   mustChangePassword: boolean;
+  /** Тема оформления пользователя: фронт применяет её при загрузке. */
+  theme: 'light' | 'dark' | 'system';
   /** Роли пользователя. */
   roles: readonly AuthRole[];
   /** Свод прав: `право → максимальная область действия`. */

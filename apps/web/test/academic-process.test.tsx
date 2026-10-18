@@ -33,6 +33,7 @@ const admin: SessionResponseDto = {
     phone: null,
     isActive: true,
     mustChangePassword: false,
+    theme: 'system',
     roles: [{ code: 'admin', title: 'Администратор' }],
   },
   permissions: [
