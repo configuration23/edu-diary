@@ -12,6 +12,9 @@ coverage/
 
 # Playwright
 playwright-report/
+# Снимки экранов для визуального контроля (npm run e2e:isolated с CAPTURE_SCREENS=1):
+# это изображения для просмотра, а не эталоны — в репозитории им не место.
+.local-screens/
 test-results/
 blob-report/
 .playwright/
