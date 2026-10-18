@@ -11,12 +11,17 @@ import { useRef, useState } from 'react';
  * а поле ввода скрыто; выбранный файл показываем рядом.
  */
 export function FilePicker({
+  /**
+   * Допустимые типы. Необязательно: часть экранов намеренно не ограничивает выбор, а проверяет тип
+   * на сервере (там же решается, что запрещено). Требовать ccept значило бы заставлять экран
+   * описывать правило, которого у него нет.
+   */
   accept,
   name,
   buttonLabel = 'Выбрать файл',
   onSelect,
 }: {
-  accept: string;
+  accept?: string;
   name?: string;
   buttonLabel?: string;
   onSelect: (file: File | undefined) => void;
@@ -36,6 +41,12 @@ export function FilePicker({
           const file = event.target.files?.[0];
           setFileName(file?.name ?? null);
           onSelect(file);
+
+          /**
+           * Сбрасываем поле: иначе повторный выбор **того же** файла не вызовет `change`.
+           * Человек исправил файл, выбрал его снова — и ничего не произошло, без сообщения.
+           */
+          event.target.value = '';
         }}
       />
       <Button tone="secondary" type="button" onClick={() => input.current?.click()}>

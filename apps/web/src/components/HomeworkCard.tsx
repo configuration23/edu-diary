@@ -9,7 +9,18 @@ import {
   useUpdateHomework,
   useUploadHomeworkFile,
 } from '../lib/queries';
-import { Alert, Badge, Button, Card, EmptyState, Field, Select, Textarea, TextInput } from './ui';
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  Field,
+  FilePicker,
+  Select,
+  Textarea,
+  TextInput,
+} from './ui';
 import type { HomeworkAssignmentSummaryDto } from '@edu-diary/contracts';
 
 /**
@@ -401,15 +412,11 @@ function AssignmentBlock({
         )}
 
         <Field label="Добавить файл">
-          <input
-            type="file"
-            className="text-sm"
-            onChange={async (event) => {
-              const file = event.target.files?.[0];
+          <FilePicker
+            onSelect={async (file) => {
               if (file === undefined) return;
               const uploaded = await onUpload(file);
               setNewFiles((current) => [...current, uploaded]);
-              event.target.value = '';
             }}
           />
           <span className="text-xs text-muted-foreground">
