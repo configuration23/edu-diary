@@ -38,6 +38,10 @@ jobs:
       - name: Границы модулей
         run: npm run check:architecture
 
+      # Замок оформления: палитра, сырые контролы и отступы в экранах.
+      - name: Оформление
+        run: npm run check:ui
+
       - name: Утечка секретов
         run: npm run check:secrets
 
