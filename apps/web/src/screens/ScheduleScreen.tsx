@@ -392,27 +392,6 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
             </Field>
           )}
 
-          <Field label="Вид">
-            <span className="flex gap-2">
-              <Button
-                tone={view === 'day' ? 'primary' : 'secondary'}
-                type="button"
-                id="view-day"
-                onClick={() => setView('day')}
-              >
-                День
-              </Button>
-              <Button
-                tone={view === 'week' ? 'primary' : 'secondary'}
-                type="button"
-                id="view-week"
-                onClick={() => setView('week')}
-              >
-                Неделя
-              </Button>
-            </span>
-          </Field>
-
           <Field label="Дата" hint="Стрелки листают неделю">
             <span className="flex items-center gap-2">
               <Button tone="ghost" type="button" onClick={() => shiftWeek(-1)}>
@@ -446,24 +425,44 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
           </Field>
         </div>
 
-        {/* Дата-стрип: неделя (понедельник — воскресенье) с бейджем замен. */}
-        <div className="mt-3 flex flex-wrap gap-2">
-          {weekDays.map((iso) => (
-            <button
-              key={iso}
+        {/*
+          Дата-стрип: неделя (понедельник — воскресенье) с бейджем замен.
+          Справа — переключатель вида: он относится к той же дате, поэтому стоит в её ряду, а не в
+          верхнем ряду фильтров, где читался как ещё один фильтр.
+        */}
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap gap-2">
+            {weekDays.map((iso) => (
+              <Button
+                key={iso}
+                tone={iso === date ? 'primary' : 'secondary'}
+                onClick={() => setDate(iso)}
+              >
+                {formatDay(iso)}
+                {iso === todayIso() && <span className="ml-1 text-xs">сегодня</span>}
+                {hasSubstitutions(iso) && <span className="ml-1 text-xs text-warning">•</span>}
+              </Button>
+            ))}
+          </div>
+
+          <span className="flex gap-2">
+            <Button
+              tone={view === 'day' ? 'primary' : 'secondary'}
               type="button"
-              onClick={() => setDate(iso)}
-              className={`rounded-md border px-3 py-2 text-sm ${
-                iso === date
-                  ? 'border-primary bg-primary text-primary-foreground'
-                  : 'border-border bg-card text-foreground'
-              }`}
+              id="view-day"
+              onClick={() => setView('day')}
             >
-              {formatDay(iso)}
-              {iso === todayIso() && <span className="ml-1 text-xs">сегодня</span>}
-              {hasSubstitutions(iso) && <span className="ml-1 text-xs text-warning">•</span>}
-            </button>
-          ))}
+              День
+            </Button>
+            <Button
+              tone={view === 'week' ? 'primary' : 'secondary'}
+              type="button"
+              id="view-week"
+              onClick={() => setView('week')}
+            >
+              Неделя
+            </Button>
+          </span>
         </div>
 
         {!hasBells(bells.data?.items) && (
