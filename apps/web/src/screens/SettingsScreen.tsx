@@ -1,7 +1,16 @@
 import { MARKER_SYMBOLS, type MarkerEvent } from '@edu-diary/contracts';
 import { useEffect, useState } from 'react';
 
-import { Alert, Button, Card, Field, FilePicker, Select, TextInput } from '../components/ui';
+import {
+  Alert,
+  Button,
+  Card,
+  Checkbox,
+  Field,
+  FilePicker,
+  Select,
+  TextInput,
+} from '../components/ui';
 import { errorMessage } from '../lib/api-client';
 import { useAppearance, useBranding, useUpdateAppearance, useUpdateBranding } from '../lib/queries';
 import { NewsSettingsCard } from '../components/NewsSettingsCard';
@@ -108,30 +117,26 @@ function AppearanceForm({
           }
         }}
       >
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            name="markersEnabled"
-            checked={markersEnabled}
-            onChange={(event) => setMarkersEnabled(event.target.checked)}
-          />
-          Показывать значки событий
-        </label>
+        <Checkbox
+          className="flex items-center gap-2 text-sm"
+          name="markersEnabled"
+          checked={markersEnabled}
+          onChange={(event) => setMarkersEnabled(event.target.checked)}
+          label="Показывать значки событий"
+        />
 
         <div className="grid gap-4 sm:grid-cols-2">
           {markerField('replaced', 'Значок замены', 'По умолчанию 🔄')}
           {markerField('cancelled', 'Значок отмены', 'По умолчанию ❎')}
         </div>
 
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            name="colorsEnabled"
-            checked={colorsEnabled}
-            onChange={(event) => setColorsEnabled(event.target.checked)}
-          />
-          Использовать цвета предметов
-        </label>
+        <Checkbox
+          className="flex items-center gap-2 text-sm"
+          name="colorsEnabled"
+          checked={colorsEnabled}
+          onChange={(event) => setColorsEnabled(event.target.checked)}
+          label="Использовать цвета предметов"
+        />
 
         <div className="rounded-md bg-muted p-3 text-sm text-muted-foreground">
           Пример: занятие по предмету с закреплённым цветом

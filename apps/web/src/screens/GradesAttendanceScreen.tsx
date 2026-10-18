@@ -9,7 +9,7 @@ import {
   type SessionResponseDto,
 } from '@edu-diary/contracts';
 
-import { Card, EmptyState, Field, Select, Table } from '../components/ui';
+import { Card, Checkbox, EmptyState, Field, Select, Table } from '../components/ui';
 import {
   useAttendanceBySubject,
   useGradesBySubject,
@@ -344,26 +344,22 @@ export function GradesAttendanceScreen({ session }: { session: SessionResponseDt
 
         {tab === 'attendance' && (
           <div className="mt-4 flex flex-wrap gap-4 border-t border-border pt-3 text-sm">
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={options.countExcused}
-                onChange={(event) =>
-                  setOptions((current) => ({ ...current, countExcused: event.target.checked }))
-                }
-              />
-              Считать уважительные как пропуски
-            </label>
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={options.countSick}
-                onChange={(event) =>
-                  setOptions((current) => ({ ...current, countSick: event.target.checked }))
-                }
-              />
-              Считать больничные как пропуски
-            </label>
+            <Checkbox
+              className="flex items-center gap-2"
+              checked={options.countExcused}
+              onChange={(event) =>
+                setOptions((current) => ({ ...current, countExcused: event.target.checked }))
+              }
+              label="Считать уважительные как пропуски"
+            />
+            <Checkbox
+              className="flex items-center gap-2"
+              checked={options.countSick}
+              onChange={(event) =>
+                setOptions((current) => ({ ...current, countSick: event.target.checked }))
+              }
+              label="Считать больничные как пропуски"
+            />
           </div>
         )}
       </Card>

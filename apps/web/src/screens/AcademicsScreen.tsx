@@ -10,6 +10,7 @@ import {
   Badge,
   Button,
   Card,
+  Checkbox,
   EmptyState,
   Field,
   formatDate,
@@ -104,10 +105,11 @@ function CreateYearCard({ onDone }: { onDone: () => void }) {
           <Field label="Окончание" error={form.formState.errors.endsOn?.message}>
             <TextInput type="date" {...form.register('endsOn')} />
           </Field>
-          <label className="flex items-end gap-2 pb-2 text-sm text-foreground">
-            <input type="checkbox" {...form.register('isActive')} />
-            Сделать активным
-          </label>
+          <Checkbox
+            className="flex items-end gap-2 pb-2 text-sm text-foreground"
+            {...form.register('isActive')}
+            label="Сделать активным"
+          />
         </div>
 
         {create.isError && <Alert tone="error">{errorMessage(create.error)}</Alert>}

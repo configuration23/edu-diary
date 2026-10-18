@@ -187,15 +187,16 @@ export function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement
  */
 export function Checkbox({
   label,
+  className,
   ...props
-}: Omit<React.InputHTMLAttributes<HTMLInputElement>, 'type'> & { label: ReactNode }) {
+}: Omit<React.InputHTMLAttributes<HTMLInputElement>, 'type'> & {
+  label: ReactNode;
+  /** Классы обёртки: внешние отступы и выравнивание в строке формы. */
+  className?: string;
+}) {
   return (
-    <label className="flex items-center gap-2 text-sm text-foreground">
-      <input
-        type="checkbox"
-        {...props}
-        className={`size-4 accent-primary ${props.className ?? ''}`}
-      />
+    <label className={`flex items-center gap-2 text-sm text-foreground ${className ?? ''}`}>
+      <input type="checkbox" {...props} className="size-4 shrink-0 accent-primary" />
       {label}
     </label>
   );

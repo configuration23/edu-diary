@@ -5,7 +5,17 @@ import { useState } from 'react';
 
 import { useAcademicContext } from '../components/AcademicContext';
 import { useAppearanceSettings } from '../components/AppearanceContext';
-import { Alert, Badge, Button, Card, EmptyState, Field, Select, TextInput } from '../components/ui';
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  Checkbox,
+  EmptyState,
+  Field,
+  Select,
+  TextInput,
+} from '../components/ui';
 import { SubjectDot, lessonMarker, subjectColor } from '../lib/appearance';
 import { errorMessage } from '../lib/api-client';
 import { hasBells, pairsFromBells } from '../lib/schedule-pairs';
@@ -509,20 +519,18 @@ function PeriodForm({
             </Button>
           </div>
 
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              name="recreate"
-              checked={recreate}
-              onChange={(event) => {
-                setRecreate(event.target.checked);
-                setConfirmed(false);
-                setCounts(null);
-                setResult(null);
-              }}
-            />
-            Пересоздать уроки за период
-          </label>
+          <Checkbox
+            className="flex items-center gap-2 text-sm"
+            name="recreate"
+            checked={recreate}
+            onChange={(event) => {
+              setRecreate(event.target.checked);
+              setConfirmed(false);
+              setCounts(null);
+              setResult(null);
+            }}
+            label="Пересоздать уроки за период"
+          />
 
           {recreate && (
             <Alert tone="warning">

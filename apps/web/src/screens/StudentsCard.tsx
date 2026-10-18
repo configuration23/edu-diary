@@ -17,6 +17,7 @@ import {
   Badge,
   Button,
   Card,
+  Checkbox,
   EmptyState,
   Field,
   formatDate,
@@ -145,14 +146,12 @@ function CreateStudentForm({
           </Field>
         </div>
 
-        <label className="flex items-center gap-2 text-sm text-foreground">
-          <input
-            type="checkbox"
-            checked={withAccount}
-            onChange={(event) => setWithAccount(event.target.checked)}
-          />
-          Сразу создать учётную запись (роль «Ученик»)
-        </label>
+        <Checkbox
+          className="flex items-center gap-2 text-sm text-foreground"
+          checked={withAccount}
+          onChange={(event) => setWithAccount(event.target.checked)}
+          label="Сразу создать учётную запись (роль «Ученик»)"
+        />
 
         {withAccount && (
           <div className="grid gap-4 rounded-md border border-border p-4 sm:grid-cols-2">

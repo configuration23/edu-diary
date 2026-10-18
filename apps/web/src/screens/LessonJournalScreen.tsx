@@ -12,7 +12,17 @@ import { Fragment, useState } from 'react';
 
 import { useAppearanceSettings } from '../components/AppearanceContext';
 import { HomeworkCard } from '../components/HomeworkCard';
-import { Alert, Badge, Button, Card, EmptyState, Field, Select, TextInput } from '../components/ui';
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  Checkbox,
+  EmptyState,
+  Field,
+  Select,
+  TextInput,
+} from '../components/ui';
 import { SubjectDot } from '../lib/appearance';
 import { errorMessage } from '../lib/api-client';
 import {
@@ -858,15 +868,13 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
                             <div className="text-sm text-foreground">
                               «Н» — не был. Отметьте уважительную причину, если она есть.
                             </div>
-                            <label className="flex items-center gap-2 text-sm">
-                              <input
-                                type="checkbox"
-                                name="isExcused"
-                                checked={absenceExcused}
-                                onChange={(event) => setAbsenceExcused(event.target.checked)}
-                              />
-                              У — уважительная
-                            </label>
+                            <Checkbox
+                              className="flex items-center gap-2 text-sm"
+                              name="isExcused"
+                              checked={absenceExcused}
+                              onChange={(event) => setAbsenceExcused(event.target.checked)}
+                              label="У — уважительная"
+                            />
                             {absenceExcused && (
                               <Field label="Причина">
                                 <TextInput

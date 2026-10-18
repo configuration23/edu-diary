@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 
 import type { NewsItemDto } from '@edu-diary/contracts';
 
-import { Alert, Badge, Button, Field, Select, Textarea, TextInput } from './ui';
+import { Alert, Badge, Button, Checkbox, Field, Select, Textarea, TextInput } from './ui';
 import { Section } from './layout';
 import { errorMessage } from '../lib/api-client';
 import {
@@ -140,14 +140,12 @@ function AboutSettings() {
         />
       </Field>
 
-      <label className="flex items-center gap-2 text-sm text-foreground">
-        <input
-          type="checkbox"
-          checked={visible}
-          onChange={(event) => setVisible(event.target.checked)}
-        />
-        Показывать блок на странице «Обзор»
-      </label>
+      <Checkbox
+        className="flex items-center gap-2 text-sm text-foreground"
+        checked={visible}
+        onChange={(event) => setVisible(event.target.checked)}
+        label="Показывать блок на странице «Обзор»"
+      />
 
       {error !== null && <Alert tone="error">{error}</Alert>}
       {saved && <Alert tone="success">Сохранено: блок покажется на «Обзоре».</Alert>}
