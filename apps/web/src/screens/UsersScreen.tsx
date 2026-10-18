@@ -132,31 +132,31 @@ function UserEditForm({
           />
         </Field>
 
-        <div className="ml-auto flex flex-wrap items-end gap-2">
-          <Field
-            label="Новый временный пароль"
-            hint="Все сессии учётной записи будут отозваны"
-            className="w-full sm:w-64"
-          >
-            <TextInput
-              type="password"
-              autoComplete="new-password"
-              value={newPassword}
-              onChange={(event) => setNewPassword(event.target.value)}
-            />
-          </Field>
-          <Button
-            tone="secondary"
-            disabled={resetPassword.isPending || newPassword.length < 10}
-            onClick={async () => {
-              await resetPassword.mutateAsync({ userId: user.id, password: newPassword });
-              setNewPassword('');
-              setNotice('Пароль сброшен, сессии учётной записи отозваны.');
-            }}
-          >
-            Сбросить пароль
-          </Button>
-        </div>
+        <Field
+          label="Новый временный пароль"
+          hint="Все сессии учётной записи будут отозваны"
+          className="ml-auto w-full sm:w-auto"
+          actions={
+            <Button
+              tone="secondary"
+              disabled={resetPassword.isPending || newPassword.length < 10}
+              onClick={async () => {
+                await resetPassword.mutateAsync({ userId: user.id, password: newPassword });
+                setNewPassword('');
+                setNotice('Пароль сброшен, сессии учётной записи отозваны.');
+              }}
+            >
+              Сбросить пароль
+            </Button>
+          }
+        >
+          <TextInput
+            type="password"
+            autoComplete="new-password"
+            value={newPassword}
+            onChange={(event) => setNewPassword(event.target.value)}
+          />
+        </Field>
       </div>
 
       {/*

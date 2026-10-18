@@ -132,6 +132,7 @@ export function Field({
   hint,
   hintAlign = 'start',
   error,
+  actions,
   className,
   children,
 }: {
@@ -147,16 +148,26 @@ export function Field({
    * подсказка слева от такой группы выглядит оторванной от того, что поясняет.
    */
   hintAlign?: 'start' | 'center';
+  /**
+   * Действие рядом с полем — например «Сбросить пароль».
+   *
+   * Выравнивается по **полю**, а не по всему блоку: подсказка снизу иначе сдвигает кнопку вниз и
+   * она съезжает относительно соседних полей.
+   */
+  actions?: ReactNode;
   children: ReactNode;
 }) {
   // Подсказка и ошибка вынесены за пределы <label>: иначе они попадают в
   // доступное имя поля, и обращение к нему по названию становится неточным.
   return (
     <div className={className === undefined ? 'block' : `block ${className}`}>
-      <label className="block">
-        <span className="mb-1 block text-sm font-medium text-foreground">{label}</span>
-        {children}
-      </label>
+      <div className="flex items-end gap-2">
+        <label className="block flex-1">
+          <span className="mb-1 block text-sm font-medium text-foreground">{label}</span>
+          {children}
+        </label>
+        {actions}
+      </div>
       {hint !== undefined && error === undefined && (
         <span
           className={`mt-1 block text-xs text-muted-foreground ${
