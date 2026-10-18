@@ -452,7 +452,7 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <Card
         title="Журнал урока"
         description={`${lesson.lessonDate} · ${lesson.pairNumber}-я пара ${lesson.timeStart}–${lesson.timeEnd} · ${lesson.groupName}`}
@@ -864,7 +864,7 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
                         )}
 
                         {absenceFor !== null && absenceFor === student.studentId && (
-                          <div className="mt-2 flex flex-col gap-2 rounded-md border border-border bg-muted p-3">
+                          <div className="mt-2 flex flex-col gap-1 rounded-md border border-border bg-muted p-3">
                             <div className="text-sm text-foreground">
                               «Н» — не был. Отметьте уважительную причину, если она есть.
                             </div>
@@ -991,7 +991,7 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
           {deleted.data.grades.length === 0 && deleted.data.attendance.length === 0 ? (
             <EmptyState>Удалённых отметок нет.</EmptyState>
           ) : (
-            <ul className="flex flex-col gap-2 text-sm">
+            <ul className="flex flex-col gap-1 text-sm">
               {deleted.data.grades.map((grade) => (
                 <li key={grade.id} className="flex flex-wrap items-center gap-2">
                   <span className="font-semibold">{grade.mark}</span>

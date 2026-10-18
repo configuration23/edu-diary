@@ -32,7 +32,7 @@ export function LoginScreen({ branding }: { branding: BrandingDto }) {
       </header>
 
       <Card title="Вход">
-        <form className="flex flex-col gap-4" onSubmit={onSubmit} noValidate>
+        <form className="flex flex-col gap-3" onSubmit={onSubmit} noValidate>
           <Field label="Логин" error={form.formState.errors.username?.message}>
             <TextInput autoComplete="username" autoFocus {...form.register('username')} />
           </Field>

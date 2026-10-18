@@ -77,7 +77,7 @@ function CreateStudentForm({
       description="Учётную запись можно создать сразу или позже — по необходимости."
     >
       <form
-        className="flex flex-col gap-4"
+        className="flex flex-col gap-3"
         onSubmit={async (event) => {
           event.preventDefault();
 
@@ -235,7 +235,7 @@ export function LinkGuardianForm({ onLinked }: { onLinked: (message: string) => 
       description="Один представитель привязывается к ученику один раз; к ученику можно привязать несколько представителей."
     >
       <form
-        className="flex flex-col gap-4"
+        className="flex flex-col gap-3"
         onSubmit={async (event) => {
           event.preventDefault();
 

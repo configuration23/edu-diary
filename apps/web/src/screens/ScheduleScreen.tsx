@@ -476,7 +476,7 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
             )}
 
             {visibleDayLessons.length > 0 && (
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-1">
                 {visibleDayLessons.map((lesson) => (
                   <LessonCard
                     key={lesson.id}

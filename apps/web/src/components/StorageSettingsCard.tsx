@@ -83,7 +83,7 @@ export function StorageSettingsCard({ heading = true }: { heading?: boolean } = 
           : undefined
       }
     >
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-3">
         <Field label="Где хранить файлы">
           <Select
             className="rounded-md border border-border px-2 py-1.5 text-sm"

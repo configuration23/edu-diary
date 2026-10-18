@@ -37,7 +37,7 @@ function Value({ children }: { children: string | null }) {
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-0.5">
+    <div className="flex flex-col gap-1.5">
       <span className="text-xs text-muted-foreground">{label}</span>
       <span className="text-sm">{children}</span>
     </div>

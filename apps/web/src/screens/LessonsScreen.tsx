@@ -114,7 +114,7 @@ function ManualLessonForm({
 
   return (
     <form
-      className="flex flex-col gap-2"
+      className="flex flex-col gap-1"
       onSubmit={async (event) => {
         event.preventDefault();
         try {
@@ -285,7 +285,7 @@ function LessonDetails({
       )}
 
       <form
-        className="flex flex-col gap-2 sm:flex-row sm:items-end"
+        className="flex flex-col gap-1 sm:flex-row sm:items-end"
         onSubmit={async (event) => {
           event.preventDefault();
           try {
@@ -489,7 +489,7 @@ function PeriodForm({
             }
           }}
         >
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-end">
             <Field label="С даты">
               <TextInput
                 required
@@ -898,7 +898,7 @@ export function LessonsScreen({ session }: { session: SessionResponseDto }) {
         )}
 
         {view === 'grid' && items.length > 0 && (
-          <div className="mt-4 flex flex-col gap-4">
+          <div className="mt-4 flex flex-col gap-3">
             {weeks.map((week) => (
               <div key={week[0]} className="overflow-x-auto">
                 <table className="w-full border-collapse text-sm">
@@ -957,7 +957,7 @@ export function LessonsScreen({ session }: { session: SessionResponseDto }) {
                                   <span className="text-[11px] text-subtle-foreground">·</span>
                                 )
                               ) : (
-                                <span className="flex flex-col gap-0.5">
+                                <span className="flex flex-col gap-1.5">
                                   {cell.slice(0, 2).map((lesson) => tile(lesson))}
                                   {cell.length > 2 && (
                                     <span className="text-[11px] text-muted-foreground">

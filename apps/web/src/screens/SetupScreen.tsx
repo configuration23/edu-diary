@@ -199,7 +199,7 @@ export function SetupScreen({ status }: { status: SetupStatusResponseDto }) {
         title="Проверка окружения"
         description="Мастер убеждается, что база доступна и миграции применены."
       >
-        <ul className="flex flex-col gap-2 text-sm">
+        <ul className="flex flex-col gap-1 text-sm">
           <li className="flex justify-between gap-4">
             <span className="text-muted-foreground">Подключение к базе данных</span>
             <span
@@ -245,7 +245,7 @@ export function SetupScreen({ status }: { status: SetupStatusResponseDto }) {
       </Card>
 
       <Card>
-        <form className="flex flex-col gap-5" onSubmit={onSubmit} noValidate>
+        <form className="flex flex-col gap-3" onSubmit={onSubmit} noValidate>
           {step === 0 && (
             <>
               <Field

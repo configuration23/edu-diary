@@ -101,7 +101,7 @@ function AppearanceForm({
       }
     >
       <form
-        className="flex flex-col gap-4"
+        className="flex flex-col gap-3"
         onSubmit={async (event) => {
           event.preventDefault();
           setSaved(false);
@@ -222,7 +222,7 @@ export function SettingsScreen() {
       >
         <Card>
           <form
-            className="flex flex-col gap-4"
+            className="flex flex-col gap-3"
             onSubmit={async (event) => {
               event.preventDefault();
               setSaved(false);

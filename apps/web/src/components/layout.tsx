@@ -90,10 +90,10 @@ export function Section({
   const frame = tone === 'surface' ? 'rounded-lg border border-border bg-card p-4 shadow-sm' : '';
 
   return (
-    <section className={`flex flex-col gap-4 ${frame}`}>
+    <section className={`flex flex-col gap-3 ${frame}`}>
       {(title !== undefined || actions !== undefined) && (
         <header className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex flex-col gap-0.5">
+          <div className="flex flex-col gap-1.5">
             {title !== undefined && (
               <h2 className="text-base font-semibold text-foreground">{title}</h2>
             )}

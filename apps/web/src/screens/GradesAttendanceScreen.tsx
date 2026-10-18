@@ -228,7 +228,7 @@ export function GradesAttendanceScreen({ session }: { session: SessionResponseDt
     );
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <Card>
         <h2 className="text-lg font-medium text-foreground">Оценки и посещение</h2>
         <p className="mt-1 text-sm text-muted-foreground">

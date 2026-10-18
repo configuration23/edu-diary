@@ -40,13 +40,9 @@
 
 | Отступ между блоками | Раз |
 | --- | --- |
-| flex flex-col gap-4 | 24 |
-| flex flex-col gap-3 | 22 |
-| flex flex-col gap-1 | 15 |
+| flex flex-col gap-3 | 47 |
+| flex flex-col gap-1 | 29 |
 | flex flex-col gap-6 | 13 |
-| flex flex-col gap-2 | 11 |
-| flex flex-col gap-0 | 3 |
-| flex flex-col gap-5 | 1 |
 
 | Внутренний отступ | Раз |
 | --- | --- |

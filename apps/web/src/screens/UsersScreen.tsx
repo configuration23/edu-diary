@@ -152,7 +152,7 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
           }
         >
           {tab === 'user' ? (
-            <form className="flex flex-col gap-4" onSubmit={onCreate} noValidate>
+            <form className="flex flex-col gap-3" onSubmit={onCreate} noValidate>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="ФИО" error={form.formState.errors.fullName?.message}>
                   <TextInput {...form.register('fullName')} />

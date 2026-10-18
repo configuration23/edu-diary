@@ -91,7 +91,7 @@ function CreateAssignmentCard({ onDone }: { onDone: () => void }) {
       description="Преподаватель может вести предмет в нескольких группах и несколько предметов в группе; ограничение одно — предмет в группе ведёт один преподаватель."
     >
       <form
-        className="flex flex-col gap-4"
+        className="flex flex-col gap-3"
         onSubmit={async (event) => {
           event.preventDefault();
           setDateError(null);
@@ -259,7 +259,7 @@ function CreateAssignmentCard({ onDone }: { onDone: () => void }) {
         {create.isError && <Alert tone="error">{errorMessage(create.error)}</Alert>}
 
         {bulkResult !== null && (
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-1">
             {bulkResult.created > 0 && (
               <Alert tone="success">
                 Создано назначений: {bulkResult.created}.

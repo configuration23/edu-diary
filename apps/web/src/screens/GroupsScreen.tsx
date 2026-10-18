@@ -74,7 +74,7 @@ function CreateGroupCard({ onDone }: { onDone: () => void }) {
       }
     >
       <form
-        className="flex flex-col gap-4"
+        className="flex flex-col gap-3"
         noValidate
         onSubmit={form.handleSubmit(async (values) => {
           if (activeYear === null) return;
@@ -345,7 +345,7 @@ function EditGroupForm({
 
   return (
     <form
-      className="mt-4 flex flex-col gap-4 rounded-md border border-border p-4"
+      className="mt-4 flex flex-col gap-3 rounded-md border border-border p-4"
       noValidate
       onSubmit={form.handleSubmit(async (values) => {
         try {

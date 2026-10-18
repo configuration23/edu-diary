@@ -87,13 +87,13 @@ export function HomeworkCard({
       title="Домашнее задание"
       description="Задание увидят ученики группы. Оценку за работу вы ставите сами — сдача оценку не проставляет."
     >
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-3">
         {/*
           Домашка из прошлого урока: плашка, а не полная форма. Учитель должен понимать, что
           на этом занятии её пора проверять, и не путать со своим заданием.
         */}
         {fromEarlierLessons.length > 0 && (
-          <div className="flex flex-col gap-2 rounded-md border border-warning-border bg-warning-soft p-3">
+          <div className="flex flex-col gap-1 rounded-md border border-warning-border bg-warning-soft p-3">
             <p className="text-sm font-medium text-warning-foreground">
               К этому уроку задано раньше — проверьте:
             </p>
@@ -345,7 +345,7 @@ function AssignmentBlock({
   if (isEditing) {
     return (
       <form
-        className="flex flex-col gap-2 rounded-md border border-border bg-muted p-3"
+        className="flex flex-col gap-1 rounded-md border border-border bg-muted p-3"
         onSubmit={async (event) => {
           event.preventDefault();
           await onSave({
@@ -494,7 +494,7 @@ function AssignmentBlock({
   }
 
   return (
-    <div className="flex flex-col gap-2 rounded-md border border-border p-3">
+    <div className="flex flex-col gap-1 rounded-md border border-border p-3">
       <p className="whitespace-pre-wrap text-sm">{assignment.text}</p>
 
       <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">

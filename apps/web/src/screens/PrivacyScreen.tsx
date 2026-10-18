@@ -83,7 +83,7 @@ export function PrivacyScreen() {
         description="Каждая публикация — новая редакция с версией: согласие ссылается на неё."
       >
         <form
-          className="flex flex-col gap-4"
+          className="flex flex-col gap-3"
           onSubmit={policyForm.handleSubmit(async (values) => {
             setNotice(null);
             await publishPolicy.mutateAsync({ version: values.version.trim(), text: values.text });

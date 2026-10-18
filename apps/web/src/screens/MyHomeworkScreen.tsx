@@ -46,7 +46,7 @@ export function MyHomeworkScreen() {
   const items = homework.data?.items ?? [];
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <Card
         title="Мои задания"
         description="Задания по вашим группам. Отправка одна: черновика нет, поэтому проверяйте решение перед отправкой."

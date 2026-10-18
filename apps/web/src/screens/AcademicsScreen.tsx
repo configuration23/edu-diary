@@ -82,7 +82,7 @@ function CreateYearCard({ onDone }: { onDone: () => void }) {
   return (
     <Card title="Новый учебный год" description="Даты периода задают границы для групп.">
       <form
-        className="flex flex-col gap-4"
+        className="flex flex-col gap-3"
         noValidate
         onSubmit={form.handleSubmit(async (values) => {
           try {

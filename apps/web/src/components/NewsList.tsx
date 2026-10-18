@@ -62,7 +62,7 @@ export function NewsArticle({ item }: { item: NewsItemDto }) {
        * Картинка сверху или снизу — выбор автора новости (решение владельца). Фото с линейки
        * уместнее сверху, а схему или таблицу — под текстом, поэтому вариантов два, а не один.
        */}
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-3">
         {item.imagePosition === 'top' && <NewsImage item={item} />}
         <p className="whitespace-pre-wrap text-foreground">{item.body}</p>
         {item.imagePosition === 'bottom' && <NewsImage item={item} />}
