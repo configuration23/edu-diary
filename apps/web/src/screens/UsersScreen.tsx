@@ -119,63 +119,78 @@ function UserEditForm({
         }
       }}
     >
-      <div className="grid gap-3 sm:grid-cols-4">
-        <Field label="Почта" hint="Логин не меняется: это ключ входа">
+      {/*
+        Первый ряд: почта слева, пароль — справа. Пароль отделён намеренно: сброс отзывает сессии,
+        это действие, а не ещё одно поле карточки.
+      */}
+      <div className="flex flex-wrap items-end gap-3">
+        <Field label="Почта" hint="Логин не меняется: это ключ входа" className="w-full sm:w-72">
           <TextInput
             type="email"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
           />
         </Field>
+
+        <div className="ml-auto flex flex-wrap items-end gap-2">
+          <Field
+            label="Новый временный пароль"
+            hint="Все сессии учётной записи будут отозваны"
+            className="w-full sm:w-64"
+          >
+            <TextInput
+              type="password"
+              autoComplete="new-password"
+              value={newPassword}
+              onChange={(event) => setNewPassword(event.target.value)}
+            />
+          </Field>
+          <Button
+            tone="secondary"
+            disabled={resetPassword.isPending || newPassword.length < 10}
+            onClick={async () => {
+              await resetPassword.mutateAsync({ userId: user.id, password: newPassword });
+              setNewPassword('');
+              setNotice('Пароль сброшен, сессии учётной записи отозваны.');
+            }}
+          >
+            Сбросить пароль
+          </Button>
+        </div>
       </div>
 
-      <p className="mt-3 mb-2 text-sm font-medium">Роли учётной записи</p>
-      <div className="flex flex-wrap gap-3">
-        {roles.map((role) => (
-          <Checkbox
-            key={role.code}
-            checked={selectedRoles.includes(role.code)}
-            onChange={(event) =>
-              setSelectedRoles((current) =>
-                event.target.checked
-                  ? [...current, role.code]
-                  : current.filter((code) => code !== role.code),
-              )
-            }
-            label={role.title}
-          />
-        ))}
-      </div>
+      {/*
+        Второй ряд: роли слева, действия справа. Роли и «Сохранить» относятся к одному и тому же
+        сохранению, поэтому стоят в одной строке, а не в разных концах формы.
+      */}
+      <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="mb-2 text-sm font-medium">Роли учётной записи</p>
+          <div className="flex flex-wrap gap-3">
+            {roles.map((role) => (
+              <Checkbox
+                key={role.code}
+                checked={selectedRoles.includes(role.code)}
+                onChange={(event) =>
+                  setSelectedRoles((current) =>
+                    event.target.checked
+                      ? [...current, role.code]
+                      : current.filter((code) => code !== role.code),
+                  )
+                }
+                label={role.title}
+              />
+            ))}
+          </div>
+        </div>
 
-      <div className="mt-3 flex flex-wrap items-end gap-2">
-        <Field label="Новый временный пароль" hint="Все сессии учётной записи будут отозваны">
-          <TextInput
-            type="password"
-            autoComplete="new-password"
-            value={newPassword}
-            onChange={(event) => setNewPassword(event.target.value)}
-          />
-        </Field>
-        <Button
-          tone="secondary"
-          disabled={resetPassword.isPending || newPassword.length < 10}
-          onClick={async () => {
-            await resetPassword.mutateAsync({ userId: user.id, password: newPassword });
-            setNewPassword('');
-            setNotice('Пароль сброшен, сессии учётной записи отозваны.');
-          }}
-        >
-          Сбросить пароль
-        </Button>
+        <FormActions
+          submitLabel="Сохранить"
+          pending={update.isPending || setRoles.isPending}
+          onCancel={onDone}
+          align="end"
+        />
       </div>
-
-      <FormActions
-        submitLabel="Сохранить"
-        pending={update.isPending || setRoles.isPending}
-        onCancel={onDone}
-        align="end"
-        className="mt-3"
-      />
       {notice !== null && <Alert tone="success">{notice}</Alert>}
       {update.isError && <Alert tone="error">{errorMessage(update.error)}</Alert>}
       {setRoles.isError && <Alert tone="error">{errorMessage(setRoles.error)}</Alert>}
