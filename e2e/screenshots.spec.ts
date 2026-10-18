@@ -32,7 +32,7 @@ const SCREENS = [
   { path: '/schedule', name: '02-schedule' },
   { path: '/analytics', name: '03-grades' },
   { path: '/submitted', name: '04-submitted' },
-  { path: '/catalogs', name: '05-catalogs', expand: true },
+  { path: '/catalogs', name: '05-catalogs', expand: true, firstEdit: true },
   { path: '/academic-process', name: '06-academic-process', expand: true },
   { path: '/lessons', name: '07-lessons' },
   { path: '/users', name: '08-users' },
@@ -79,6 +79,11 @@ test.describe('снимки экранов', () => {
          * ради двух строк не стоит. Значение берётся из `THEMES`, то есть из литерала.
          */
         await page.evaluate(`document.documentElement.dataset.theme = '${theme}'`);
+
+        if (screen.firstEdit === true) {
+          /** Первая кнопка «Править» — форма правки открывается строкой в таблице. */
+          await page.getByRole('button', { name: 'Править' }).first().click();
+        }
 
         if (screen.expand === true) {
           for (const summary of await page.locator('summary').all()) {

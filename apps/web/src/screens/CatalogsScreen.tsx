@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 
-import type { GradeCategoryDto, RoomDto, SubjectDto } from '@edu-diary/contracts';
+import type { BellScheduleDto, GradeCategoryDto, RoomDto, SubjectDto } from '@edu-diary/contracts';
 import {
   Alert,
   Badge,
@@ -9,6 +9,7 @@ import {
   Checkbox,
   EmptyState,
   Field,
+  FormActions,
   Select,
   Table,
   TextInput,
@@ -53,12 +54,85 @@ function subjectKindLabel(kind: string): string {
   return SUBJECT_KINDS.find((item) => item.value === kind)?.label ?? kind;
 }
 
+/**
+ * Правка предмета — в строке таблицы под самим предметом.
+ *
+ * Состояние полей живёт здесь: компонент монтируется для конкретного предмета и получает его
+ * значения как начальные. Так не нужно ни синхронизировать пять состояний карточки, ни сбрасывать
+ * их при переходе на другую строку.
+ */
+function SubjectEditForm({ subject, onDone }: { subject: SubjectDto; onDone: () => void }) {
+  const update = useUpdateSubject();
+
+  const [name, setName] = useState(subject.name);
+  const [shortName, setShortName] = useState(subject.shortName ?? '');
+  const [kind, setKind] = useState<'mandatory' | 'optional' | 'practice'>(
+    subject.kind as 'mandatory' | 'optional' | 'practice',
+  );
+  const [color, setColor] = useState(subject.color ?? '');
+
+  return (
+    <form
+      className="flex flex-wrap items-end gap-3 rounded-md border border-border bg-card p-3"
+      onSubmit={async (event) => {
+        event.preventDefault();
+        try {
+          await update.mutateAsync({
+            id: subject.id,
+            name,
+            shortName: shortName === '' ? null : shortName,
+            kind,
+            color: color === '' ? null : color,
+          });
+          onDone();
+        } catch {
+          // Ошибка показывается ниже из состояния запроса.
+        }
+      }}
+    >
+      <Field label="Название">
+        <TextInput required value={name} onChange={(event) => setName(event.target.value)} />
+      </Field>
+      <Field label="Короткое имя" hint="Код для плиток расписания, 2–4 символа">
+        <TextInput value={shortName} onChange={(event) => setShortName(event.target.value)} />
+      </Field>
+      <Field label="Вид">
+        <Select
+          value={kind}
+          onChange={(event) => setKind(event.target.value as 'mandatory' | 'optional' | 'practice')}
+        >
+          {SUBJECT_KINDS.map((item) => (
+            <option key={item.value} value={item.value}>
+              {item.label}
+            </option>
+          ))}
+        </Select>
+      </Field>
+      <Field label="Цвет" hint="Заливка плиток и маркер в строках">
+        <span className="flex items-center gap-2">
+          <input
+            type="color"
+            name="editColor"
+            className="h-9 w-12 rounded border border-border"
+            value={color === '' ? subjectColor(subject.id) : color}
+            onChange={(event) => setColor(event.target.value)}
+          />
+          <Button tone="ghost" type="button" onClick={() => setColor('')}>
+            Автоматически
+          </Button>
+        </span>
+      </Field>
+      <FormActions submitLabel="Сохранить" pending={update.isPending} onCancel={onDone} />
+      {update.isError && <Alert tone="error">{errorMessage(update.error)}</Alert>}
+    </form>
+  );
+}
+
 function SubjectsCard() {
   /** Форма создания скрыта, пока её не позовут кнопкой: список важнее формы. */
   const [creating, setCreating] = useState(false);
   const subjects = useSubjects();
   const create = useCreateSubject();
-  const update = useUpdateSubject();
   const remove = useDeleteSubject();
 
   /**
@@ -82,10 +156,6 @@ function SubjectsCard() {
   const [kind, setKind] = useState<'mandatory' | 'optional' | 'practice'>('mandatory');
   const [color, setColor] = useState('');
   const [editing, setEditing] = useState<SubjectDto | null>(null);
-  const [editName, setEditName] = useState('');
-  const [editShortName, setEditShortName] = useState('');
-  const [editKind, setEditKind] = useState<'mandatory' | 'optional' | 'practice'>('mandatory');
-  const [editColor, setEditColor] = useState('');
 
   return (
     <Card
@@ -193,115 +263,90 @@ function SubjectsCard() {
         {subjects.data !== undefined && subjects.data.items.length > 0 && (
           <Table head={['Предмет', 'Коротко', 'Вид', '']}>
             {subjects.data.items.map((subject) => (
-              <tr key={subject.id} className="border-b border-border">
-                <td className="px-3 py-2 font-medium">
-                  <SubjectDot subjectId={subject.id} color={subject.color} />
-                  {subject.name}
-                </td>
-                <td className="px-3 py-2 text-muted-foreground">{subject.shortName ?? '—'}</td>
-                <td className="px-3 py-2">
-                  <Badge>{subjectKindLabel(subject.kind)}</Badge>
-                </td>
-                <td className="px-3 py-2">
-                  <span className="flex flex-wrap gap-2">
-                    <Button
-                      tone="ghost"
-                      onClick={() => {
-                        setEditing(subject);
-                        setEditName(subject.name);
-                        setEditShortName(subject.shortName ?? '');
-                        setEditColor(subject.color ?? '');
-                        setEditKind(subject.kind as 'mandatory' | 'optional' | 'practice');
-                      }}
-                    >
-                      Править
-                    </Button>
-                    <Button
-                      tone="ghost"
-                      disabled={remove.isPending}
-                      onClick={() => void remove.mutateAsync(subject.id).catch(() => undefined)}
-                    >
-                      Удалить
-                    </Button>
-                  </span>
-                </td>
-              </tr>
+              <Fragment key={subject.id}>
+                <tr className="border-b border-border">
+                  <td className="px-3 py-2 font-medium">
+                    <SubjectDot subjectId={subject.id} color={subject.color} />
+                    {subject.name}
+                  </td>
+                  <td className="px-3 py-2 text-muted-foreground">{subject.shortName ?? '—'}</td>
+                  <td className="px-3 py-2">
+                    <Badge>{subjectKindLabel(subject.kind)}</Badge>
+                  </td>
+                  <td className="px-3 py-2">
+                    <span className="flex flex-wrap gap-2">
+                      <Button tone="ghost" onClick={() => setEditing(subject)}>
+                        Править
+                      </Button>
+                      <Button
+                        tone="ghost"
+                        disabled={remove.isPending}
+                        onClick={() => void remove.mutateAsync(subject.id).catch(() => undefined)}
+                      >
+                        Удалить
+                      </Button>
+                    </span>
+                  </td>
+                </tr>
+
+                {editing?.id === subject.id && (
+                  <tr data-static className="border-b border-border">
+                    <td colSpan={4} className="px-3 py-3">
+                      <SubjectEditForm subject={editing} onDone={() => setEditing(null)} />
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
             ))}
           </Table>
         )}
-
-        {editing !== null && (
-          <form
-            className="mt-4 flex flex-wrap items-end gap-3 rounded-md border border-border p-4"
-            onSubmit={async (event) => {
-              event.preventDefault();
-              try {
-                await update.mutateAsync({
-                  id: editing.id,
-                  name: editName,
-                  shortName: editShortName === '' ? null : editShortName,
-                  kind: editKind,
-                  color: editColor === '' ? null : editColor,
-                });
-                setEditing(null);
-              } catch {
-                // Ошибка показывается ниже.
-              }
-            }}
-          >
-            <Field label="Название">
-              <TextInput
-                required
-                value={editName}
-                onChange={(event) => setEditName(event.target.value)}
-              />
-            </Field>
-            <Field label="Короткое имя" hint="Код для плиток расписания, 2–4 символа">
-              <TextInput
-                value={editShortName}
-                onChange={(event) => setEditShortName(event.target.value)}
-              />
-            </Field>
-            <Field label="Вид">
-              <Select
-                className="rounded-md border border-border px-3 py-2 text-sm"
-                value={editKind}
-                onChange={(event) =>
-                  setEditKind(event.target.value as 'mandatory' | 'optional' | 'practice')
-                }
-              >
-                {SUBJECT_KINDS.map((item) => (
-                  <option key={item.value} value={item.value}>
-                    {item.label}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field label="Цвет" hint="Заливка плиток и маркер в строках">
-              <span className="flex items-center gap-2">
-                <input
-                  type="color"
-                  name="editColor"
-                  className="h-9 w-12 rounded border border-border"
-                  value={editColor === '' ? subjectColor(editing.id) : editColor}
-                  onChange={(event) => setEditColor(event.target.value)}
-                />
-                <Button tone="ghost" type="button" onClick={() => setEditColor('')}>
-                  Автоматически
-                </Button>
-              </span>
-            </Field>
-            <Button type="submit" disabled={update.isPending}>
-              Сохранить
-            </Button>
-            <Button tone="secondary" onClick={() => setEditing(null)}>
-              Отмена
-            </Button>
-            {update.isError && <Alert tone="error">{errorMessage(update.error)}</Alert>}
-          </form>
-        )}
       </div>
     </Card>
+  );
+}
+
+/** Правка аудитории — в строке таблицы под самой аудиторией. */
+function RoomEditForm({ room, onDone }: { room: RoomDto; onDone: () => void }) {
+  const update = useUpdateRoom();
+
+  const [name, setName] = useState(room.name);
+  const [capacity, setCapacity] = useState(room.capacity === null ? '' : String(room.capacity));
+  const [note, setNote] = useState(room.note ?? '');
+
+  return (
+    <form
+      className="flex flex-wrap items-end gap-3 rounded-md border border-border bg-card p-3"
+      onSubmit={async (event) => {
+        event.preventDefault();
+        try {
+          await update.mutateAsync({
+            id: room.id,
+            name,
+            capacity: capacity === '' ? null : Number(capacity),
+            note: note === '' ? null : note,
+          });
+          onDone();
+        } catch {
+          // Ошибка показывается ниже из состояния запроса.
+        }
+      }}
+    >
+      <Field label="Название">
+        <TextInput required value={name} onChange={(event) => setName(event.target.value)} />
+      </Field>
+      <Field label="Вместимость">
+        <TextInput
+          inputMode="numeric"
+          value={capacity}
+          onChange={(event) => setCapacity(event.target.value)}
+        />
+      </Field>
+      <Field label="Примечание">
+        <TextInput value={note} onChange={(event) => setNote(event.target.value)} />
+      </Field>
+      <FormActions submitLabel="Сохранить" pending={update.isPending} onCancel={onDone} />
+      {update.isError && <Alert tone="error">{errorMessage(update.error)}</Alert>}
+    </form>
   );
 }
 
@@ -310,23 +355,12 @@ function RoomsCard() {
   const [creating, setCreating] = useState(false);
   const rooms = useRooms();
   const create = useCreateRoom();
-  const update = useUpdateRoom();
   const remove = useDeleteRoom();
 
   const [name, setName] = useState('');
   const [capacity, setCapacity] = useState('');
   const [note, setNote] = useState('');
   const [editing, setEditing] = useState<RoomDto | null>(null);
-  const [editName, setEditName] = useState('');
-  const [editCapacity, setEditCapacity] = useState('');
-  const [editNote, setEditNote] = useState('');
-
-  const startEditing = (room: RoomDto): void => {
-    setEditing(room);
-    setEditName(room.name);
-    setEditCapacity(room.capacity === null ? '' : String(room.capacity));
-    setEditNote(room.note ?? '');
-  };
 
   return (
     <Card
@@ -400,77 +434,85 @@ function RoomsCard() {
         {rooms.data !== undefined && rooms.data.items.length > 0 && (
           <Table head={['Аудитория', 'Вместимость', 'Примечание', '']}>
             {rooms.data.items.map((room) => (
-              <tr key={room.id} className="border-b border-border">
-                <td className="px-3 py-2 font-medium">{room.name}</td>
-                <td className="px-3 py-2">{room.capacity ?? '—'}</td>
-                <td className="px-3 py-2 text-muted-foreground">{room.note ?? '—'}</td>
-                <td className="px-3 py-2">
-                  <span className="flex flex-wrap gap-2">
-                    <Button tone="ghost" onClick={() => startEditing(room)}>
-                      Править
-                    </Button>
-                    <Button
-                      tone="ghost"
-                      disabled={remove.isPending}
-                      onClick={() => void remove.mutateAsync(room.id).catch(() => undefined)}
-                    >
-                      Удалить
-                    </Button>
-                  </span>
-                </td>
-              </tr>
+              <Fragment key={room.id}>
+                <tr className="border-b border-border">
+                  <td className="px-3 py-2 font-medium">{room.name}</td>
+                  <td className="px-3 py-2">{room.capacity ?? '—'}</td>
+                  <td className="px-3 py-2 text-muted-foreground">{room.note ?? '—'}</td>
+                  <td className="px-3 py-2">
+                    <span className="flex flex-wrap gap-2">
+                      <Button tone="ghost" onClick={() => setEditing(room)}>
+                        Править
+                      </Button>
+                      <Button
+                        tone="ghost"
+                        disabled={remove.isPending}
+                        onClick={() => void remove.mutateAsync(room.id).catch(() => undefined)}
+                      >
+                        Удалить
+                      </Button>
+                    </span>
+                  </td>
+                </tr>
+
+                {editing?.id === room.id && (
+                  <tr data-static className="border-b border-border">
+                    <td colSpan={4} className="px-3 py-3">
+                      <RoomEditForm room={editing} onDone={() => setEditing(null)} />
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
             ))}
           </Table>
         )}
 
         {remove.isError && <Alert tone="error">{errorMessage(remove.error)}</Alert>}
-
-        {editing !== null && (
-          <form
-            className="mt-4 flex flex-wrap items-end gap-3 rounded-md border border-border p-4"
-            onSubmit={async (event) => {
-              event.preventDefault();
-              try {
-                await update.mutateAsync({
-                  id: editing.id,
-                  name: editName,
-                  capacity: editCapacity === '' ? null : Number(editCapacity),
-                  note: editNote === '' ? null : editNote,
-                });
-                setEditing(null);
-              } catch {
-                // Ошибка показывается ниже.
-              }
-            }}
-          >
-            <Field label="Название">
-              <TextInput
-                required
-                value={editName}
-                onChange={(event) => setEditName(event.target.value)}
-              />
-            </Field>
-            <Field label="Вместимость">
-              <TextInput
-                inputMode="numeric"
-                value={editCapacity}
-                onChange={(event) => setEditCapacity(event.target.value)}
-              />
-            </Field>
-            <Field label="Примечание">
-              <TextInput value={editNote} onChange={(event) => setEditNote(event.target.value)} />
-            </Field>
-            <Button type="submit" disabled={update.isPending}>
-              Сохранить
-            </Button>
-            <Button tone="secondary" onClick={() => setEditing(null)}>
-              Отмена
-            </Button>
-            {update.isError && <Alert tone="error">{errorMessage(update.error)}</Alert>}
-          </form>
-        )}
       </div>
     </Card>
+  );
+}
+
+/** Правка причины оценки — в строке таблицы под самой причиной. */
+function CategoryEditForm({
+  category,
+  onDone,
+}: {
+  category: GradeCategoryDto;
+  onDone: () => void;
+}) {
+  const update = useUpdateGradeCategory();
+
+  const [title, setTitle] = useState(category.title);
+  const [weight, setWeight] = useState(String(category.weight));
+
+  return (
+    <form
+      className="flex flex-wrap items-end gap-3 rounded-md border border-border bg-card p-3"
+      onSubmit={async (event) => {
+        event.preventDefault();
+        try {
+          await update.mutateAsync({ id: category.id, title, weight: Number(weight) });
+          onDone();
+        } catch {
+          // Ошибка показывается ниже из состояния запроса.
+        }
+      }}
+    >
+      <Field label="Название">
+        <TextInput required value={title} onChange={(event) => setTitle(event.target.value)} />
+      </Field>
+      <Field label="Вес" hint="1–5">
+        <TextInput
+          required
+          inputMode="numeric"
+          value={weight}
+          onChange={(event) => setWeight(event.target.value)}
+        />
+      </Field>
+      <FormActions submitLabel="Сохранить" pending={update.isPending} onCancel={onDone} />
+      {update.isError && <Alert tone="error">{errorMessage(update.error)}</Alert>}
+    </form>
   );
 }
 
@@ -479,14 +521,11 @@ function CategoriesCard() {
   const [creating, setCreating] = useState(false);
   const categories = useGradeCategories();
   const create = useCreateGradeCategory();
-  const update = useUpdateGradeCategory();
   const remove = useDeleteGradeCategory();
   const [code, setCode] = useState('');
   const [title, setTitle] = useState('');
   const [weight, setWeight] = useState('1');
   const [editing, setEditing] = useState<GradeCategoryDto | null>(null);
-  const [editTitle, setEditTitle] = useState('');
-  const [editWeight, setEditWeight] = useState('1');
 
   return (
     <Card
@@ -562,84 +601,45 @@ function CategoriesCard() {
         {categories.data !== undefined && categories.data.items.length > 0 && (
           <Table head={['Код', 'Название', 'Вес', '', '']}>
             {categories.data.items.map((category) => (
-              <tr key={category.id} className="border-b border-border">
-                <td className="px-3 py-2 font-mono text-xs">{category.code}</td>
-                <td className="px-3 py-2">{category.title}</td>
-                <td className="px-3 py-2">{category.weight}</td>
-                <td className="px-3 py-2">
-                  {category.isDefault && <Badge tone="success">по умолчанию</Badge>}
-                </td>
-                <td className="px-3 py-2">
-                  <span className="flex flex-wrap gap-2">
-                    <Button
-                      tone="ghost"
-                      onClick={() => {
-                        setEditing(category);
-                        setEditTitle(category.title);
-                        setEditWeight(String(category.weight));
-                      }}
-                    >
-                      Править
-                    </Button>
-                    {/* Причину по умолчанию удалять нельзя: сервер объяснит,
+              <Fragment key={category.id}>
+                <tr className="border-b border-border">
+                  <td className="px-3 py-2 font-mono text-xs">{category.code}</td>
+                  <td className="px-3 py-2">{category.title}</td>
+                  <td className="px-3 py-2">{category.weight}</td>
+                  <td className="px-3 py-2">
+                    {category.isDefault && <Badge tone="success">по умолчанию</Badge>}
+                  </td>
+                  <td className="px-3 py-2">
+                    <span className="flex flex-wrap gap-2">
+                      <Button tone="ghost" onClick={() => setEditing(category)}>
+                        Править
+                      </Button>
+                      {/* Причину по умолчанию удалять нельзя: сервер объяснит,
                         что она нужна как запасной вариант. */}
-                    <Button
-                      tone="ghost"
-                      disabled={remove.isPending || category.isDefault}
-                      onClick={() => void remove.mutateAsync(category.id).catch(() => undefined)}
-                    >
-                      Удалить
-                    </Button>
-                  </span>
-                </td>
-              </tr>
+                      <Button
+                        tone="ghost"
+                        disabled={remove.isPending || category.isDefault}
+                        onClick={() => void remove.mutateAsync(category.id).catch(() => undefined)}
+                      >
+                        Удалить
+                      </Button>
+                    </span>
+                  </td>
+                </tr>
+
+                {editing?.id === category.id && (
+                  <tr data-static className="border-b border-border">
+                    <td colSpan={5} className="px-3 py-3">
+                      <CategoryEditForm category={editing} onDone={() => setEditing(null)} />
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
             ))}
           </Table>
         )}
 
         {remove.isError && <Alert tone="error">{errorMessage(remove.error)}</Alert>}
-
-        {editing !== null && (
-          <form
-            className="mt-4 flex flex-wrap items-end gap-3 rounded-md border border-border p-4"
-            onSubmit={async (event) => {
-              event.preventDefault();
-              try {
-                await update.mutateAsync({
-                  id: editing.id,
-                  title: editTitle,
-                  weight: Number(editWeight),
-                });
-                setEditing(null);
-              } catch {
-                // Ошибка показывается ниже.
-              }
-            }}
-          >
-            <Field label="Название">
-              <TextInput
-                required
-                value={editTitle}
-                onChange={(event) => setEditTitle(event.target.value)}
-              />
-            </Field>
-            <Field label="Вес" hint="1–5">
-              <TextInput
-                required
-                inputMode="numeric"
-                value={editWeight}
-                onChange={(event) => setEditWeight(event.target.value)}
-              />
-            </Field>
-            <Button type="submit" disabled={update.isPending}>
-              Сохранить
-            </Button>
-            <Button tone="secondary" onClick={() => setEditing(null)}>
-              Отмена
-            </Button>
-            {update.isError && <Alert tone="error">{errorMessage(update.error)}</Alert>}
-          </form>
-        )}
       </div>
     </Card>
   );
@@ -725,9 +725,70 @@ function SignRulesCard() {
   );
 }
 
+/** Правка звонка — в строке таблицы под самой парой. */
+function BellEditForm({ bell, onDone }: { bell: BellScheduleDto; onDone: () => void }) {
+  const save = useSaveBell();
+
+  const [timeStart, setTimeStart] = useState(bell.timeStart);
+  const [timeEnd, setTimeEnd] = useState(bell.timeEnd);
+  const [breakMinutes, setBreakMinutes] = useState(
+    bell.breakMinutes === null ? '' : String(bell.breakMinutes),
+  );
+
+  return (
+    <form
+      className="flex flex-wrap items-end gap-3 rounded-md border border-border bg-card p-3"
+      onSubmit={async (event) => {
+        event.preventDefault();
+        try {
+          await save.mutateAsync({
+            pairNumber: bell.pairNumber,
+            timeStart,
+            timeEnd,
+            breakMinutes: breakMinutes === '' ? null : Number(breakMinutes),
+          });
+          onDone();
+        } catch {
+          // Ошибка показывается ниже из состояния запроса.
+        }
+      }}
+    >
+      <Field label="Начало">
+        <TextInput
+          required
+          inputMode="numeric"
+          placeholder="08:30"
+          value={timeStart}
+          onChange={(event) => setTimeStart(event.target.value)}
+        />
+      </Field>
+      <Field label="Окончание">
+        <TextInput
+          required
+          inputMode="numeric"
+          placeholder="10:00"
+          value={timeEnd}
+          onChange={(event) => setTimeEnd(event.target.value)}
+        />
+      </Field>
+      <Field label="Перемена" hint="Минуты, необязательно">
+        <TextInput
+          inputMode="numeric"
+          value={breakMinutes}
+          onChange={(event) => setBreakMinutes(event.target.value)}
+        />
+      </Field>
+      <FormActions submitLabel="Сохранить" pending={save.isPending} onCancel={onDone} />
+      {save.isError && <Alert tone="error">{errorMessage(save.error)}</Alert>}
+    </form>
+  );
+}
+
 function BellsCard() {
   /** Форма создания скрыта, пока её не позовут кнопкой: список важнее формы. */
   const [creating, setCreating] = useState(false);
+  /** Пара, которую правим: её форма показывается строкой в таблице. */
+  const [editing, setEditing] = useState<BellScheduleDto | null>(null);
   const bells = useBells();
   const save = useSaveBell();
   const remove = useDeleteBell();
@@ -832,38 +893,38 @@ function BellsCard() {
         {bells.data !== undefined && bells.data.items.length > 0 && (
           <Table head={['Пара', 'Начало', 'Окончание', 'Перемена', '']}>
             {bells.data.items.map((bell) => (
-              <tr key={bell.id} className="border-b border-border">
-                <td className="px-3 py-2 font-medium">{bell.pairNumber}-я</td>
-                <td className="px-3 py-2">{bell.timeStart}</td>
-                <td className="px-3 py-2">{bell.timeEnd}</td>
-                <td className="px-3 py-2 text-muted-foreground">{bell.breakMinutes ?? '—'}</td>
-                <td className="px-3 py-2">
-                  <span className="flex flex-wrap gap-2">
-                    <Button
-                      tone="ghost"
-                      onClick={() => {
-                        setPairNumber(String(bell.pairNumber));
-                        setTimeStart(bell.timeStart);
-                        setTimeEnd(bell.timeEnd);
-                        setBreakMinutes(
-                          bell.breakMinutes === null ? '' : String(bell.breakMinutes),
-                        );
-                      }}
-                    >
-                      Править
-                    </Button>
-                    <Button
-                      tone="ghost"
-                      disabled={remove.isPending}
-                      onClick={() =>
-                        void remove.mutateAsync(bell.pairNumber).catch(() => undefined)
-                      }
-                    >
-                      Удалить
-                    </Button>
-                  </span>
-                </td>
-              </tr>
+              <Fragment key={bell.id}>
+                <tr className="border-b border-border">
+                  <td className="px-3 py-2 font-medium">{bell.pairNumber}-я</td>
+                  <td className="px-3 py-2">{bell.timeStart}</td>
+                  <td className="px-3 py-2">{bell.timeEnd}</td>
+                  <td className="px-3 py-2 text-muted-foreground">{bell.breakMinutes ?? '—'}</td>
+                  <td className="px-3 py-2">
+                    <span className="flex flex-wrap gap-2">
+                      <Button tone="ghost" onClick={() => setEditing(bell)}>
+                        Править
+                      </Button>
+                      <Button
+                        tone="ghost"
+                        disabled={remove.isPending}
+                        onClick={() =>
+                          void remove.mutateAsync(bell.pairNumber).catch(() => undefined)
+                        }
+                      >
+                        Удалить
+                      </Button>
+                    </span>
+                  </td>
+                </tr>
+
+                {editing?.pairNumber === bell.pairNumber && (
+                  <tr data-static className="border-b border-border">
+                    <td colSpan={5} className="px-3 py-3">
+                      <BellEditForm bell={editing} onDone={() => setEditing(null)} />
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
             ))}
           </Table>
         )}
