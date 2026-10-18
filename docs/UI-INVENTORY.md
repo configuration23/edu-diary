@@ -3,7 +3,7 @@
 Отчёт **генерируется**: `npm run ui:inventory`. Руками не правится — правки затрутся при
 следующем запуске, а числа разойдутся с кодом.
 
-Файлов `.tsx`: **42** (экранов: 24), строк: 13348.
+Файлов `.tsx`: **42** (экранов: 24), строк: 13347.
 
 ## Примитивы: что уже есть
 
@@ -29,10 +29,10 @@
 | <select> | 0 | 0 |
 | <textarea> | 0 | 0 |
 | input[type=checkbox] | 5 | 4 |
-| input[type=file] | 3 | 3 |
+| input[type=file] | 0 | 0 |
 | <input> без type | 1 | 1 |
 
-Сырых контролов всего: **9**. Рамка поля ввода `rounded-md border border-slate-300` скопирована руками
+Сырых контролов всего: **6**. Рамка поля ввода `rounded-md border border-slate-300` скопирована руками
 **0** раз в 0 файлах — это один и тот же класс, повторённый
 по месту.
 
@@ -195,7 +195,6 @@
 | `UsersScreen.tsx` | 2 | 0 | 2 | 0 | 0 |
 | `CatalogsScreen.tsx` | 1 | 0 | 5 | 0 | 0 |
 | `LessonsScreen.tsx` | 1 | 0 | 1 | 0 | 0 |
-| `MyHomeworkScreen.tsx` | 1 | 0 | 4 | 0 | 0 |
 | `AcademicProcessScreen.tsx` | 0 | 0 | 0 | 0 | 0 |
 | `AcademicsScreen.tsx` | 0 | 0 | 3 | 0 | 0 |
 | `AssignmentsScreen.tsx` | 0 | 0 | 2 | 0 | 0 |
@@ -205,6 +204,7 @@
 | `GroupsScreen.tsx` | 0 | 0 | 3 | 0 | 0 |
 | `LessonJournalScreen.tsx` | 0 | 0 | 5 | 0 | 0 |
 | `LoginScreen.tsx` | 0 | 0 | 1 | 0 | 1 |
+| `MyHomeworkScreen.tsx` | 0 | 0 | 4 | 0 | 0 |
 | `NewGuardianCard.tsx` | 0 | 0 | 0 | 0 | 0 |
 | `PrivacyScreen.tsx` | 0 | 0 | 4 | 0 | 0 |
 | `ProfileScreen.tsx` | 0 | 0 | 0 | 3 | 0 |

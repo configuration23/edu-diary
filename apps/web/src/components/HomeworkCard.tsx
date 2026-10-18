@@ -219,11 +219,8 @@ export function HomeworkCard({
             </Field>
 
             <Field label="Файлы">
-              <input
-                type="file"
-                className="text-sm"
-                onChange={async (event) => {
-                  const file = event.target.files?.[0];
+              <FilePicker
+                onSelect={async (file) => {
                   if (file === undefined) return;
                   setError(null);
 
@@ -233,7 +230,6 @@ export function HomeworkCard({
                   } catch (caught) {
                     setError(errorMessage(caught));
                   }
-                  event.target.value = '';
                 }}
               />
               <span className="text-xs text-muted-foreground">

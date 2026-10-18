@@ -16,6 +16,7 @@ import {
   Card,
   EmptyState,
   Field,
+  FilePicker,
   Textarea,
   TextInput,
 } from '../components/ui';
@@ -208,11 +209,8 @@ function HomeworkItem({ assignment }: { assignment: HomeworkAssignmentSummaryDto
             </Field>
 
             <Field label="Файл">
-              <input
-                type="file"
-                className="text-sm"
-                onChange={async (event) => {
-                  const file = event.target.files?.[0];
+              <FilePicker
+                onSelect={async (file) => {
                   if (file === undefined) return;
                   setError(null);
 
@@ -222,7 +220,6 @@ function HomeworkItem({ assignment }: { assignment: HomeworkAssignmentSummaryDto
                   } catch (caught) {
                     setError(errorMessage(caught));
                   }
-                  event.target.value = '';
                 }}
               />
               <span className="text-xs text-muted-foreground">

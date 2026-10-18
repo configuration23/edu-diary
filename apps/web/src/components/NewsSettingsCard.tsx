@@ -2,7 +2,17 @@ import { useEffect, useState } from 'react';
 
 import type { NewsItemDto } from '@edu-diary/contracts';
 
-import { Alert, Badge, Button, Checkbox, Field, Select, Textarea, TextInput } from './ui';
+import {
+  Alert,
+  Badge,
+  Button,
+  Checkbox,
+  Field,
+  FilePicker,
+  Select,
+  Textarea,
+  TextInput,
+} from './ui';
 import { Section } from './layout';
 import { errorMessage } from '../lib/api-client';
 import {
@@ -278,12 +288,9 @@ export function NewsSettingsCard({
             </div>
 
             <Field label="Картинка (необязательно)">
-              <input
-                type="file"
+              <FilePicker
                 accept="image/*"
-                className="text-sm"
-                onChange={async (event) => {
-                  const file = event.target.files?.[0];
+                onSelect={async (file) => {
                   if (file === undefined) return;
                   setError(null);
 
@@ -297,7 +304,6 @@ export function NewsSettingsCard({
                   } catch (caught) {
                     setError(errorMessage(caught));
                   }
-                  event.target.value = '';
                 }}
               />
               <span className="text-xs text-muted-foreground">
