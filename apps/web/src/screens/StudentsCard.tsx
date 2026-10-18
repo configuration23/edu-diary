@@ -319,7 +319,8 @@ export function LinkGuardianForm({ onLinked }: { onLinked: (message: string) => 
 
         {link.isError && <Alert tone="error">{errorMessage(link.error)}</Alert>}
 
-        <div>
+        {/* Действие справа: форма заканчивается кнопкой, а не обрывается на левом краю. */}
+        <div className="flex justify-end">
           <Button type="submit" disabled={link.isPending}>
             Привязать
           </Button>

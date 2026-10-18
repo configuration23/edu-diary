@@ -351,7 +351,8 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
 
               {createUser.isError && <Alert tone="error">{errorMessage(createUser.error)}</Alert>}
 
-              <div>
+              {/* Главное действие формы — справа: там его ищут, и оно не спорит с полями за левый край. */}
+              <div className="flex justify-end">
                 <Button type="submit" disabled={createUser.isPending}>
                   {createUser.isPending ? 'Создаём…' : 'Создать учётную запись'}
                 </Button>
