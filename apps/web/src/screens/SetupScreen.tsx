@@ -7,7 +7,16 @@ import { z } from 'zod';
 
 import { errorMessage } from '../lib/api-client';
 import { useCompleteSetup } from '../lib/queries';
-import { Alert, Button, Card, Field, FilePicker, TextInput, formatDate } from '../components/ui';
+import {
+  Alert,
+  Button,
+  Card,
+  Field,
+  FilePicker,
+  formatDate,
+  Select,
+  TextInput,
+} from '../components/ui';
 import type { SetupStatusResponseDto } from '@edu-diary/contracts';
 
 /** Шаги мастера: заведение → учебный год и период → администратор. */
@@ -181,7 +190,7 @@ export function SetupScreen({ status }: { status: SetupStatusResponseDto }) {
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6">
       <header>
         <h1 className="text-2xl font-semibold">Первичная настройка дневника</h1>
-        <p className="mt-1 text-sm text-slate-500">
+        <p className="mt-1 text-sm text-muted-foreground">
           Шаг {step + 1} из {STEPS.length}: {STEPS[step]}
         </p>
       </header>
@@ -190,19 +199,29 @@ export function SetupScreen({ status }: { status: SetupStatusResponseDto }) {
         title="Проверка окружения"
         description="Мастер убеждается, что база доступна и миграции применены."
       >
-        <ul className="flex flex-col gap-2 text-sm">
+        <ul className="flex flex-col gap-1 text-sm">
           <li className="flex justify-between gap-4">
-            <span className="text-slate-500">Подключение к базе данных</span>
-            <span className={checks.database.status === 'ok' ? 'text-green-700' : 'text-red-700'}>
+            <span className="text-muted-foreground">Подключение к базе данных</span>
+            <span
+              className={
+                checks.database.status === 'ok'
+                  ? 'text-success-foreground'
+                  : 'text-danger-foreground'
+              }
+            >
               {checks.database.status === 'ok'
                 ? `есть, ${checks.database.latencyMs ?? 0} мс`
                 : (checks.database.message ?? 'нет подключения')}
             </span>
           </li>
           <li className="flex justify-between gap-4">
-            <span className="text-slate-500">Миграции</span>
+            <span className="text-muted-foreground">Миграции</span>
             <span
-              className={checks.migrations.status === 'ok' ? 'text-green-700' : 'text-amber-700'}
+              className={
+                checks.migrations.status === 'ok'
+                  ? 'text-success-foreground'
+                  : 'text-warning-foreground'
+              }
             >
               применено {checks.migrations.applied}, ожидает {checks.migrations.pending}
             </span>
@@ -226,7 +245,7 @@ export function SetupScreen({ status }: { status: SetupStatusResponseDto }) {
       </Card>
 
       <Card>
-        <form className="flex flex-col gap-5" onSubmit={onSubmit} noValidate>
+        <form className="flex flex-col gap-3" onSubmit={onSubmit} noValidate>
           {step === 0 && (
             <>
               <Field
@@ -285,14 +304,14 @@ export function SetupScreen({ status }: { status: SetupStatusResponseDto }) {
               </Field>
               <div className="grid gap-4 sm:grid-cols-3">
                 <Field label="Тип периода">
-                  <select
-                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                  <Select
+                    className="w-full rounded-md border border-border px-3 py-2 text-sm"
                     {...form.register('periodKind')}
                   >
                     <option value="semester">Семестр</option>
                     <option value="term">Четверть</option>
                     <option value="quarter">Триместр</option>
-                  </select>
+                  </Select>
                 </Field>
                 <Field label="Начало периода" error={form.formState.errors.periodStartsOn?.message}>
                   <TextInput type="date" {...form.register('periodStartsOn')} />

@@ -6,7 +6,7 @@ import { subjectCode } from '@edu-diary/domain';
 import { useAcademicContext } from '../components/AcademicContext';
 import { useAppearanceSettings } from '../components/AppearanceContext';
 import { LessonAttendance, LessonGrades, LessonGradesCount } from '../components/LessonMarks';
-import { Alert, Badge, Button, Card, EmptyState, Field, Table } from '../components/ui';
+import { Alert, Badge, Button, Card, EmptyState, Field, Select, Table } from '../components/ui';
 import { SubjectDot, lessonMarker, subjectColor } from '../lib/appearance';
 import { errorMessage } from '../lib/api-client';
 import { hasBells, pairsFromBells } from '../lib/schedule-pairs';
@@ -37,7 +37,7 @@ const DAYS_FULL = [
   'Воскресенье',
 ];
 
-const selectClass = 'w-full rounded-md border border-slate-300 px-3 py-2 text-sm';
+const selectClass = 'w-full rounded-md border border-border px-3 py-2 text-sm';
 
 /** Локальная дата в формате `ГГГГ-ММ-ДД` (без сдвига часового пояса). */
 function toIso(date: Date): string {
@@ -125,8 +125,8 @@ function LessonCard({
     <div
       className={`relative rounded-md border p-3 ${
         lesson.status === 'cancelled'
-          ? 'border-slate-200 bg-slate-50 text-slate-400'
-          : 'border-slate-200 bg-white'
+          ? 'border-border bg-muted text-subtle-foreground'
+          : 'border-border bg-card'
       }`}
     >
       {/* Значок события в углу: не мешает основной информации о занятии. */}
@@ -152,7 +152,7 @@ function LessonCard({
       */}
       {homework !== undefined && !learnerView && showAssigned && homework.assignedHere > 0 && (
         <span
-          className="absolute top-2 left-2 rounded bg-amber-100 px-1 text-[11px] font-medium text-amber-900"
+          className="absolute top-2 left-2 rounded bg-warning-soft px-1 text-[11px] font-medium text-warning-foreground"
           title={`На этом уроке задано: ${String(homework.assignedHere)}`}
         >
           ДЗ
@@ -163,8 +163,8 @@ function LessonCard({
         <span
           className={`absolute top-2 left-2 rounded px-1 text-[11px] font-medium ${
             homework.submittedHere >= homework.dueHere
-              ? 'bg-emerald-100 text-emerald-900'
-              : 'bg-amber-100 text-amber-900'
+              ? 'bg-success-soft text-success-foreground'
+              : 'bg-warning-soft text-warning-foreground'
           }`}
           title={
             homework.submittedHere >= homework.dueHere
@@ -178,8 +178,8 @@ function LessonCard({
       )}
 
       <div className="flex flex-wrap items-center gap-2">
-        <span className="font-medium text-slate-900">{lesson.pairNumber}-я пара</span>
-        <span className="text-sm text-slate-500">
+        <span className="font-medium text-foreground">{lesson.pairNumber}-я пара</span>
+        <span className="text-sm text-muted-foreground">
           {lesson.timeStart}–{lesson.timeEnd}
         </span>
         {!learnerView && <Badge tone={status.tone}>{status.label}</Badge>}
@@ -193,17 +193,17 @@ function LessonCard({
         {lesson.subjectName}
       </div>
 
-      <div className="mt-1 text-sm text-slate-600">
+      <div className="mt-1 text-sm text-muted-foreground">
         {lesson.teacherName}
         {lesson.plannedTeacherName !== null && (
-          <span className="text-amber-800">
+          <span className="text-warning-foreground">
             {' '}
             · вместо: <span className="line-through">{lesson.plannedTeacherName}</span>
           </span>
         )}
       </div>
 
-      <div className="mt-1 text-xs text-slate-500">
+      <div className="mt-1 text-xs text-muted-foreground">
         {showGroup ? `${lesson.groupName} · ` : ''}
         {lesson.roomName ?? 'аудитория не указана'}
         {lesson.topic === null ? '' : ` · тема: ${lesson.topic}`}
@@ -352,7 +352,7 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
       >
         <div className="flex flex-wrap items-end gap-3">
           <Field label="Группа" hint="«Все доступные» — занятия по всем группам">
-            <select
+            <Select
               name="studyGroupId"
               className={selectClass}
               value={selectedGroupId ?? ''}
@@ -366,7 +366,7 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
                   {group.name}
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
 
           <Field label="Вид">
@@ -432,13 +432,13 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
               onClick={() => setDate(iso)}
               className={`rounded-md border px-3 py-2 text-sm ${
                 iso === date
-                  ? 'border-slate-900 bg-slate-900 text-white'
-                  : 'border-slate-300 bg-white text-slate-700'
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-border bg-card text-foreground'
               }`}
             >
               {formatDay(iso)}
               {iso === todayIso() && <span className="ml-1 text-xs">сегодня</span>}
-              {hasSubstitutions(iso) && <span className="ml-1 text-xs text-amber-600">•</span>}
+              {hasSubstitutions(iso) && <span className="ml-1 text-xs text-warning">•</span>}
             </button>
           ))}
         </div>
@@ -456,12 +456,12 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
 
         {view === 'day' && (
           <div className="mt-4 flex flex-col gap-3">
-            <div className="text-sm text-slate-600">
+            <div className="text-sm text-muted-foreground">
               {DAYS_FULL[dayIndex(date)]}, {date}
               {runningPair === undefined ? (
                 ''
               ) : (
-                <span className="ml-2 rounded bg-sky-100 px-2 py-0.5 text-xs text-sky-800">
+                <span className="ml-2 rounded bg-selected-soft px-2 py-0.5 text-xs text-selected-foreground">
                   идёт сейчас: {runningPair.pairNumber}-я пара
                 </span>
               )}
@@ -476,7 +476,7 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
             )}
 
             {visibleDayLessons.length > 0 && (
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-1">
                 {visibleDayLessons.map((lesson) => (
                   <LessonCard
                     key={lesson.id}
@@ -499,7 +499,7 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
             )}
 
             {dayLessons.length > 0 && (
-              <div className="text-xs text-slate-500">
+              <div className="text-xs text-muted-foreground">
                 Свободные пары: {emptyPairs.join(', ') || 'нет'}
               </div>
             )}
@@ -510,7 +510,7 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
           <div className="mt-4">
             <Table head={['Пара', ...weekDays.map((iso) => formatDay(iso))]}>
               {pairs.map((pair) => (
-                <tr key={pair} className="border-b border-slate-100 align-top">
+                <tr key={pair} className="border-b border-border align-top">
                   <td className="px-3 py-2 font-medium">{pair}-я</td>
                   {weekDays.map((iso) => {
                     const cell = items.filter(
@@ -523,7 +523,7 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
                     return (
                       <td key={iso} className="px-0.5 py-1">
                         {cell.length === 0 ? (
-                          <span className="text-xs text-slate-400">окно</span>
+                          <span className="text-xs text-subtle-foreground">окно</span>
                         ) : (
                           <button
                             type="button"
@@ -553,8 +553,8 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
                                 */
                                 className={`block h-12 w-24 overflow-hidden rounded px-1 text-[13px] leading-4 ${
                                   lesson.status === 'cancelled'
-                                    ? 'text-slate-400'
-                                    : 'text-slate-700'
+                                    ? 'text-subtle-foreground'
+                                    : 'text-foreground'
                                 }`}
                                 style={
                                   appearance.colorsEnabled && lesson.status !== 'cancelled'
@@ -581,12 +581,12 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
                                       </span>
                                     )}
                                   </span>
-                                  <span className="shrink-0 text-slate-500">
+                                  <span className="shrink-0 text-muted-foreground">
                                     {lesson.roomName ?? '—'}
                                   </span>
                                 </span>
 
-                                <span className="block h-4 truncate text-slate-500">
+                                <span className="block h-4 truncate text-muted-foreground">
                                   {lesson.groupName}
                                 </span>
 
@@ -605,7 +605,7 @@ export function ScheduleScreen({ session }: { session: SessionResponseDto }) {
                                     (showMarks
                                       ? homeworkOf(lesson.id)!.dueHere > 0
                                       : homeworkOf(lesson.id)!.assignedHere > 0) && (
-                                      <span className="rounded bg-amber-100 px-1 text-[11px] font-medium text-amber-900">
+                                      <span className="rounded bg-warning-soft px-1 text-[11px] font-medium text-warning-foreground">
                                         ДЗ
                                       </span>
                                     )}

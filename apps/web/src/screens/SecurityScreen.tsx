@@ -8,6 +8,8 @@ import {
   Button,
   Card,
   EmptyState,
+  Field,
+  Segmented,
   Table,
   TextInput,
   formatDateTime,
@@ -38,27 +40,31 @@ export function SecurityScreen({ heading = true }: { heading?: boolean } = {}) {
           : undefined
       }
     >
+      {/*
+        Выбор из трёх состояний — переключатель, а не выпадающий список: варианты короткие и
+        постоянные, и человеку полезно видеть их все сразу. `Segmented` заодно перестал быть
+        «чёрной кнопкой», которая спорила с главным действием.
+      */}
       <div className="mb-4 flex flex-wrap items-end gap-3">
-        <label className="text-sm">
-          <span className="mb-1 block text-slate-700">Показать</span>
-          <select
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+        <div className="pb-2">
+          <Segmented
+            label="Показать события"
             value={acknowledged}
-            onChange={(event) => setAcknowledged(event.target.value as typeof acknowledged)}
-          >
-            <option value="pending">Неразобранные</option>
-            <option value="done">Разобранные</option>
-            <option value="all">Все</option>
-          </select>
-        </label>
-        <label className="flex-1 text-sm">
-          <span className="mb-1 block text-slate-700">Комментарий к разбору</span>
+            onChange={(next) => setAcknowledged(next)}
+            options={[
+              { value: 'pending', label: 'Неразобранные' },
+              { value: 'done', label: 'Разобранные' },
+              { value: 'all', label: 'Все' },
+            ]}
+          />
+        </div>
+        <Field label="Комментарий к разбору" className="flex-1">
           <TextInput
             value={resolution}
             placeholder="Что сделано по событию"
             onChange={(event) => setResolution(event.target.value)}
           />
-        </label>
+        </Field>
       </div>
 
       {events.isLoading && <EmptyState>Загружаем…</EmptyState>}
@@ -70,8 +76,8 @@ export function SecurityScreen({ heading = true }: { heading?: boolean } = {}) {
       {events.data !== undefined && events.data.items.length > 0 && (
         <Table head={['Когда', 'Тип', 'Важность', 'Кто', 'Подробности', '']}>
           {events.data.items.map((event) => (
-            <tr key={event.id} className="border-b border-slate-100 align-top">
-              <td className="px-3 py-2 whitespace-nowrap text-slate-500">
+            <tr key={event.id} className="border-b border-border align-top">
+              <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">
                 {formatDateTime(event.detectedAt)}
               </td>
               <td className="px-3 py-2 font-medium">{event.kind}</td>
@@ -85,19 +91,19 @@ export function SecurityScreen({ heading = true }: { heading?: boolean } = {}) {
               <td className="px-3 py-2">
                 {event.actorName ?? 'система'}
                 {event.ip !== null && (
-                  <span className="block text-xs text-slate-400">{event.ip}</span>
+                  <span className="block text-xs text-subtle-foreground">{event.ip}</span>
                 )}
               </td>
               <td className="px-3 py-2">
                 {event.details === null ? (
-                  <span className="text-slate-400">—</span>
+                  <span className="text-subtle-foreground">—</span>
                 ) : (
-                  <pre className="max-w-md overflow-x-auto rounded bg-slate-50 p-2 text-xs">
+                  <pre className="max-w-md overflow-x-auto rounded bg-muted p-2 text-xs">
                     {JSON.stringify(event.details, null, 2)}
                   </pre>
                 )}
                 {event.resolution !== null && (
-                  <p className="mt-1 text-xs text-slate-500">Разбор: {event.resolution}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Разбор: {event.resolution}</p>
                 )}
               </td>
               <td className="px-3 py-2 text-right">

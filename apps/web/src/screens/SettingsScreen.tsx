@@ -1,7 +1,16 @@
 import { MARKER_SYMBOLS, type MarkerEvent } from '@edu-diary/contracts';
 import { useEffect, useState } from 'react';
 
-import { Alert, Button, Card, Field, FilePicker, TextInput } from '../components/ui';
+import {
+  Alert,
+  Button,
+  Card,
+  Checkbox,
+  Field,
+  FilePicker,
+  Select,
+  TextInput,
+} from '../components/ui';
 import { errorMessage } from '../lib/api-client';
 import { useAppearance, useBranding, useUpdateAppearance, useUpdateBranding } from '../lib/queries';
 import { NewsSettingsCard } from '../components/NewsSettingsCard';
@@ -22,7 +31,7 @@ import { SecurityScreen } from './SecurityScreen';
 
 const MAX_LOGO_BYTES = 256 * 1024;
 
-const selectClass = 'w-full rounded-md border border-slate-300 px-3 py-2 text-sm';
+const selectClass = 'w-full rounded-md border border-border px-3 py-2 text-sm';
 
 /**
  * Оформление уроков: чем обозначать события и использовать ли цвета предметов.
@@ -64,7 +73,7 @@ function AppearanceForm({
 
   const markerField = (event: MarkerEvent, label: string, hint: string) => (
     <Field label={label} hint={hint}>
-      <select
+      <Select
         name={`marker-${event}`}
         className={selectClass}
         value={markers[event]}
@@ -78,7 +87,7 @@ function AppearanceForm({
             {symbol}
           </option>
         ))}
-      </select>
+      </Select>
     </Field>
   );
 
@@ -92,7 +101,7 @@ function AppearanceForm({
       }
     >
       <form
-        className="flex flex-col gap-4"
+        className="flex flex-col gap-3"
         onSubmit={async (event) => {
           event.preventDefault();
           setSaved(false);
@@ -108,32 +117,28 @@ function AppearanceForm({
           }
         }}
       >
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            name="markersEnabled"
-            checked={markersEnabled}
-            onChange={(event) => setMarkersEnabled(event.target.checked)}
-          />
-          Показывать значки событий
-        </label>
+        <Checkbox
+          className="flex items-center gap-2 text-sm"
+          name="markersEnabled"
+          checked={markersEnabled}
+          onChange={(event) => setMarkersEnabled(event.target.checked)}
+          label="Показывать значки событий"
+        />
 
         <div className="grid gap-4 sm:grid-cols-2">
           {markerField('replaced', 'Значок замены', 'По умолчанию 🔄')}
           {markerField('cancelled', 'Значок отмены', 'По умолчанию ❎')}
         </div>
 
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            name="colorsEnabled"
-            checked={colorsEnabled}
-            onChange={(event) => setColorsEnabled(event.target.checked)}
-          />
-          Использовать цвета предметов
-        </label>
+        <Checkbox
+          className="flex items-center gap-2 text-sm"
+          name="colorsEnabled"
+          checked={colorsEnabled}
+          onChange={(event) => setColorsEnabled(event.target.checked)}
+          label="Использовать цвета предметов"
+        />
 
-        <div className="rounded-md bg-slate-50 p-3 text-sm text-slate-600">
+        <div className="rounded-md bg-muted p-3 text-sm text-muted-foreground">
           Пример: занятие по предмету с закреплённым цветом
           {markersEnabled && <span className="ml-1 text-base">{markers.replaced}</span>} — значок
           стоит в углу плитки, а цвет плитки показывает предмет.
@@ -217,7 +222,7 @@ export function SettingsScreen() {
       >
         <Card>
           <form
-            className="flex flex-col gap-4"
+            className="flex flex-col gap-3"
             onSubmit={async (event) => {
               event.preventDefault();
               setSaved(false);

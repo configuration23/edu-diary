@@ -12,7 +12,17 @@ import { Fragment, useState } from 'react';
 
 import { useAppearanceSettings } from '../components/AppearanceContext';
 import { HomeworkCard } from '../components/HomeworkCard';
-import { Alert, Badge, Button, Card, EmptyState, Field, TextInput } from '../components/ui';
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  Checkbox,
+  EmptyState,
+  Field,
+  Select,
+  TextInput,
+} from '../components/ui';
 import { SubjectDot } from '../lib/appearance';
 import { errorMessage } from '../lib/api-client';
 import {
@@ -64,7 +74,7 @@ const ATTENDANCE_CHOICES: AttendanceStatusDto[] = ['present', 'not_present', 'si
  */
 const ATTENDANCE_DELETE_ENABLED = false;
 
-const selectClass = 'w-full rounded-md border border-slate-300 px-3 py-2 text-sm';
+const selectClass = 'w-full rounded-md border border-border px-3 py-2 text-sm';
 
 /** Что стоит ученику: «5», «+» или «·». */
 function describeGradeValue(grade: GradeEntryDto): string {
@@ -123,8 +133,8 @@ function ReasonPicker({
   const [categoryId, setCategoryId] = useState(reasons[0]?.id ?? '');
 
   return (
-    <div className="mt-2 flex flex-wrap items-end gap-2 rounded-md border border-sky-200 bg-sky-50 p-3">
-      <div className="text-sm text-slate-700">
+    <div className="mt-2 flex flex-wrap items-end gap-2 rounded-md border border-selected bg-selected-soft p-3">
+      <div className="text-sm text-foreground">
         Отметка:{' '}
         <span className="font-semibold">
           {pending.kind === 'value' ? pending.value : pending.sign === 'plus' ? '+' : '·'}
@@ -133,7 +143,7 @@ function ReasonPicker({
 
       <div className="min-w-56 flex-1">
         <Field label="Причина">
-          <select
+          <Select
             name="categoryId"
             className={selectClass}
             value={categoryId}
@@ -144,7 +154,7 @@ function ReasonPicker({
                 {reason.code} — {reason.title}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
       </div>
 
@@ -161,11 +171,11 @@ function ReasonPicker({
 /** История правок: одна вёрстка и для оценки, и для посещаемости. */
 function RevisionList({ revisions }: { revisions: GradeRevisionDto[] | undefined }) {
   if (revisions === undefined || revisions.length === 0) {
-    return <p className="text-sm text-slate-500">Правок не было.</p>;
+    return <p className="text-sm text-muted-foreground">Правок не было.</p>;
   }
 
   return (
-    <ul className="flex flex-col gap-1 text-sm text-slate-600">
+    <ul className="flex flex-col gap-1 text-sm text-muted-foreground">
       {revisions.map((item) => (
         <li key={item.id}>
           {item.actorName ?? 'система'}: {item.before ?? '—'} → {item.after ?? '—'}
@@ -199,10 +209,10 @@ function EditPanel({
   const [deleteReason, setDeleteReason] = useState('');
 
   return (
-    <div className="mt-2 flex flex-col gap-3 rounded-md border border-slate-200 bg-slate-50 p-3">
+    <div className="mt-2 flex flex-col gap-3 rounded-md border border-border bg-muted p-3">
       <div className="flex flex-wrap items-end gap-2">
         <Field label="Новая оценка">
-          <select
+          <Select
             name="gradeValue"
             className={selectClass}
             value={value}
@@ -214,10 +224,10 @@ function EditPanel({
                 {item}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
         <Field label="Причина отметки">
-          <select
+          <Select
             name="gradeReason"
             className={selectClass}
             value={categoryId}
@@ -229,7 +239,7 @@ function EditPanel({
                 {item.code} — {item.title}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
         <div className="flex-1">
           <Field label="Причина правки" hint="Без причины история правок бесполезна">
@@ -295,7 +305,7 @@ function EditPanel({
       {remove.isError && <Alert tone="error">{errorMessage(remove.error)}</Alert>}
 
       <div>
-        <p className="mb-1 text-sm font-medium text-slate-700">История правок</p>
+        <p className="mb-1 text-sm font-medium text-foreground">История правок</p>
         <RevisionList revisions={revisions} />
       </div>
     </div>
@@ -442,7 +452,7 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <Card
         title="Журнал урока"
         description={`${lesson.lessonDate} · ${lesson.pairNumber}-я пара ${lesson.timeStart}–${lesson.timeEnd} · ${lesson.groupName}`}
@@ -452,18 +462,20 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
           </Button>
         }
       >
-        <div className="flex flex-wrap items-center gap-2 text-sm text-slate-700">
+        <div className="flex flex-wrap items-center gap-2 text-sm text-foreground">
           <SubjectDot subjectId={lesson.subjectId} enabled={appearance.colorsEnabled} />
           <span className="font-medium">{lesson.subjectName}</span>
           <Badge tone={cancelled ? 'danger' : 'neutral'}>
             {cancelled ? 'Урок отменён' : 'Занятие по плану'}
           </Badge>
-          <span className="text-slate-500">{lesson.teacherName}</span>
-          {lesson.topic !== null && <span className="text-slate-500">· тема: {lesson.topic}</span>}
+          <span className="text-muted-foreground">{lesson.teacherName}</span>
+          {lesson.topic !== null && (
+            <span className="text-muted-foreground">· тема: {lesson.topic}</span>
+          )}
         </div>
 
         {signRules.length > 0 && (
-          <p className="mt-2 text-sm text-slate-500">
+          <p className="mt-2 text-sm text-muted-foreground">
             Оценка за знаки:{' '}
             {signRules
               .map(
@@ -492,7 +504,7 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
               Пересчитать + / ·
             </Button>
             {applySignRules.isSuccess && (
-              <span className="text-sm text-slate-600">
+              <span className="text-sm text-muted-foreground">
                 {applySignRules.data.awarded === 0
                   ? 'Знаков на оценку не набралось'
                   : `Выдано оценок: ${String(applySignRules.data.awarded)}`}
@@ -528,7 +540,7 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
           <div className="overflow-x-auto">
             <table className="w-full border-collapse text-sm">
               <thead>
-                <tr className="border-b border-slate-200 text-left text-slate-500">
+                <tr className="border-b border-border text-left text-muted-foreground">
                   <th className="px-3 py-2 font-medium">Ученик</th>
                   <th className="px-3 py-2 font-medium">Отметки за урок</th>
                   <th className="px-3 py-2 font-medium">Посещаемость</th>
@@ -538,12 +550,12 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
               <tbody>
                 {students.map((student) => (
                   <Fragment key={student.studentId}>
-                    <tr className="border-b border-slate-100 align-top">
+                    <tr className="border-b border-border align-top">
                       <td className="px-3 py-2 font-medium">{student.fullName}</td>
 
                       <td className="px-3 py-2">
                         {student.grades.length === 0 ? (
-                          <span className="text-slate-400">—</span>
+                          <span className="text-subtle-foreground">—</span>
                         ) : (
                           /*
                             Отметки идут в строку, а не столбцом: они компактные, и так
@@ -571,20 +583,20 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
                                   }
                                   className={`rounded-md border px-2 py-1 transition ${
                                     canWrite && !cancelled
-                                      ? 'border-transparent hover:border-sky-400 hover:bg-sky-50'
+                                      ? 'border-transparent hover:border-selected hover:bg-selected-soft'
                                       : 'border-transparent'
-                                  } ${editingGradeId === grade.id ? 'border-sky-400 bg-sky-50' : ''}`}
+                                  } ${editingGradeId === grade.id ? 'border-selected bg-selected-soft' : ''}`}
                                 >
                                   <span className="text-lg font-semibold">
                                     {describeGradeValue(grade)}
                                   </span>
                                   {grade.categoryWeight !== null && grade.categoryWeight > 1 && (
-                                    <sub className="text-xs font-medium text-slate-500">
+                                    <sub className="text-xs font-medium text-muted-foreground">
                                       {grade.categoryWeight}
                                     </sub>
                                   )}
                                   {grade.categoryCode !== null && (
-                                    <sup className="text-xs font-medium text-sky-700">
+                                    <sup className="text-xs font-medium text-selected-foreground">
                                       {grade.categoryCode}
                                     </sup>
                                   )}
@@ -647,7 +659,7 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
                         )}
 
                         {duplicate !== null && duplicate.studentId === student.studentId && (
-                          <div className="mt-2 flex flex-wrap items-center gap-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm">
+                          <div className="mt-2 flex flex-wrap items-center gap-3 rounded-md border border-warning-border bg-warning-soft p-3 text-sm">
                             <span>
                               Уже есть отметка с этой причиной за урок — заменить её новой?
                             </span>
@@ -701,7 +713,7 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
                               ))}
                             </span>
                           ) : (
-                            <span className="text-slate-400">не отмечено</span>
+                            <span className="text-subtle-foreground">не отмечено</span>
                           )
                         ) : (
                           <span className="flex flex-wrap items-center gap-2">
@@ -795,8 +807,8 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
 
                             {historyAttendanceId !== null &&
                               historyAttendanceId === student.attendance?.id && (
-                                <div className="mt-2 rounded-md border border-slate-200 bg-slate-50 p-3">
-                                  <p className="mb-1 text-sm font-medium text-slate-700">
+                                <div className="mt-2 rounded-md border border-border bg-muted p-3">
+                                  <p className="mb-1 text-sm font-medium text-foreground">
                                     История отметки
                                   </p>
                                   <RevisionList revisions={attendanceRevisions.data?.items} />
@@ -805,7 +817,7 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
 
                             {deletingAttendance !== null &&
                               deletingAttendance === student.attendance?.id && (
-                                <div className="mt-2 flex flex-wrap items-end gap-2 rounded-md border border-slate-200 bg-slate-50 p-3">
+                                <div className="mt-2 flex flex-wrap items-end gap-2 rounded-md border border-border bg-muted p-3">
                                   <div className="flex-1">
                                     <Field
                                       label="Причина удаления"
@@ -852,19 +864,17 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
                         )}
 
                         {absenceFor !== null && absenceFor === student.studentId && (
-                          <div className="mt-2 flex flex-col gap-2 rounded-md border border-slate-200 bg-slate-50 p-3">
-                            <div className="text-sm text-slate-700">
+                          <div className="mt-2 flex flex-col gap-1 rounded-md border border-border bg-muted p-3">
+                            <div className="text-sm text-foreground">
                               «Н» — не был. Отметьте уважительную причину, если она есть.
                             </div>
-                            <label className="flex items-center gap-2 text-sm">
-                              <input
-                                type="checkbox"
-                                name="isExcused"
-                                checked={absenceExcused}
-                                onChange={(event) => setAbsenceExcused(event.target.checked)}
-                              />
-                              У — уважительная
-                            </label>
+                            <Checkbox
+                              className="flex items-center gap-2 text-sm"
+                              name="isExcused"
+                              checked={absenceExcused}
+                              onChange={(event) => setAbsenceExcused(event.target.checked)}
+                              label="У — уважительная"
+                            />
                             {absenceExcused && (
                               <Field label="Причина">
                                 <TextInput
@@ -907,7 +917,7 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
                         )}
                       </td>
 
-                      <td className="px-3 py-2 text-xs text-slate-500">
+                      <td className="px-3 py-2 text-xs text-muted-foreground">
                         {student.signs.plus} плюсов · {student.signs.dot} точек
                         {student.signs.plusRemaining > 0 && (
                           <span className="block">
@@ -937,7 +947,7 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
                     {editingGradeId !== null &&
                       student.grades.some((grade) => grade.id === editingGradeId) &&
                       lessonId !== null && (
-                        <tr className="border-b border-slate-100">
+                        <tr className="border-b border-border">
                           <td colSpan={4} className="px-3 pt-0 pb-3">
                             <EditPanel
                               gradeId={editingGradeId}
@@ -981,15 +991,15 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
           {deleted.data.grades.length === 0 && deleted.data.attendance.length === 0 ? (
             <EmptyState>Удалённых отметок нет.</EmptyState>
           ) : (
-            <ul className="flex flex-col gap-2 text-sm">
+            <ul className="flex flex-col gap-1 text-sm">
               {deleted.data.grades.map((grade) => (
                 <li key={grade.id} className="flex flex-wrap items-center gap-2">
                   <span className="font-semibold">{grade.mark}</span>
-                  <span className="text-slate-500">{grade.studentName}</span>
+                  <span className="text-muted-foreground">{grade.studentName}</span>
                   {grade.categoryTitle !== null && (
-                    <span className="text-xs text-slate-500">{grade.categoryTitle}</span>
+                    <span className="text-xs text-muted-foreground">{grade.categoryTitle}</span>
                   )}
-                  <span className="text-xs text-slate-400">
+                  <span className="text-xs text-subtle-foreground">
                     {grade.deletedByName ?? 'система'} · {grade.deletedReason ?? 'без причины'}
                   </span>
                   <Button
@@ -1012,8 +1022,8 @@ export function LessonJournalScreen({ session }: { session: SessionResponseDto }
                   <span className="font-semibold">
                     {attendanceLetter(mark.status as AttendanceStatusDto, mark.isExcused)}
                   </span>
-                  <span className="text-slate-500">{mark.studentName}</span>
-                  <span className="text-xs text-slate-400">
+                  <span className="text-muted-foreground">{mark.studentName}</span>
+                  <span className="text-xs text-subtle-foreground">
                     {mark.deletedByName ?? 'система'} · {mark.deletedReason ?? 'без причины'}
                   </span>
                   <Button

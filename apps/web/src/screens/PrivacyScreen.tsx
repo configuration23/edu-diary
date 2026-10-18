@@ -21,9 +21,11 @@ import {
   Card,
   EmptyState,
   Field,
-  Table,
-  TextInput,
   formatDateTime,
+  Select,
+  Table,
+  Textarea,
+  TextInput,
 } from '../components/ui';
 
 /**
@@ -81,7 +83,7 @@ export function PrivacyScreen() {
         description="Каждая публикация — новая редакция с версией: согласие ссылается на неё."
       >
         <form
-          className="flex flex-col gap-4"
+          className="flex flex-col gap-3"
           onSubmit={policyForm.handleSubmit(async (values) => {
             setNotice(null);
             await publishPolicy.mutateAsync({ version: values.version.trim(), text: values.text });
@@ -96,9 +98,9 @@ export function PrivacyScreen() {
             </Field>
           </div>
           <Field label="Текст политики" error={policyForm.formState.errors.text?.message}>
-            <textarea
+            <Textarea
               rows={6}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              className="w-full rounded-md border border-border px-3 py-2 text-sm"
               {...policyForm.register('text')}
             />
           </Field>
@@ -111,7 +113,7 @@ export function PrivacyScreen() {
         </form>
 
         {policy.data?.current != null && (
-          <p className="mt-3 text-sm text-slate-600">
+          <p className="mt-3 text-sm text-muted-foreground">
             Действующая редакция: <Badge tone="success">{policy.data.current.version}</Badge>
           </p>
         )}
@@ -123,7 +125,7 @@ export function PrivacyScreen() {
         title="Редакции политики"
         description="Версия редакции уникальна: задним числом текст не переписать, изменения выходят новой редакцией."
       >
-        {policy.isLoading && <p className="text-sm text-slate-500">Загружаем…</p>}
+        {policy.isLoading && <p className="text-sm text-muted-foreground">Загружаем…</p>}
         {policy.isError && <Alert tone="error">{errorMessage(policy.error)}</Alert>}
 
         {policy.data !== undefined && policy.data.editions.length === 0 && (
@@ -135,27 +137,27 @@ export function PrivacyScreen() {
         {policy.data !== undefined && policy.data.editions.length > 0 && (
           <ul className="flex flex-col gap-3">
             {policy.data.editions.map((edition) => (
-              <li key={edition.version} className="rounded-md border border-slate-200 p-3">
+              <li key={edition.version} className="rounded-md border border-border p-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge
                     tone={edition.version === policy.data?.current?.version ? 'success' : 'neutral'}
                   >
                     редакция {edition.version}
                   </Badge>
-                  <span className="text-xs text-slate-500">
+                  <span className="text-xs text-muted-foreground">
                     {formatDateTime(edition.publishedAt)}
                     {edition.publishedByName === null ? '' : ` · ${edition.publishedByName}`}
                   </span>
                   {edition.version === policy.data?.current?.version && (
-                    <span className="text-xs text-slate-500">действующая</span>
+                    <span className="text-xs text-muted-foreground">действующая</span>
                   )}
                 </div>
 
                 <details className="mt-2">
-                  <summary className="cursor-pointer text-sm text-slate-700">
+                  <summary className="cursor-pointer text-sm text-foreground">
                     Показать текст
                   </summary>
-                  <pre className="mt-2 whitespace-pre-wrap break-words font-sans text-sm text-slate-800">
+                  <pre className="mt-2 whitespace-pre-wrap break-words font-sans text-sm text-foreground">
                     {edition.text}
                   </pre>
                 </details>
@@ -177,7 +179,7 @@ export function PrivacyScreen() {
         {missing.data !== undefined && missing.data.items.length > 0 && (
           <Table head={['Ученик', 'Состояние']}>
             {missing.data.items.map((student) => (
-              <tr key={student.studentId} className="border-b border-slate-100">
+              <tr key={student.studentId} className="border-b border-border">
                 <td className="px-3 py-2">{student.fullName}</td>
                 <td className="px-3 py-2">
                   {student.hasRevokedConsent ? (
@@ -218,8 +220,8 @@ export function PrivacyScreen() {
           noValidate
         >
           <Field label="Ученик" error={consentForm.formState.errors.studentId?.message}>
-            <select
-              className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+            <Select
+              className="rounded-md border border-border px-3 py-2 text-sm"
               {...consentForm.register('studentId')}
             >
               <option value="">— выберите —</option>
@@ -228,11 +230,11 @@ export function PrivacyScreen() {
                   {student.fullName}
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
           <Field label="Представитель" error={consentForm.formState.errors.guardianUserId?.message}>
-            <select
-              className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+            <Select
+              className="rounded-md border border-border px-3 py-2 text-sm"
               {...consentForm.register('guardianUserId')}
             >
               <option value="">— выберите —</option>
@@ -241,16 +243,16 @@ export function PrivacyScreen() {
                   {user.fullName} ({user.username})
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
           <Field label="Способ">
-            <select
-              className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+            <Select
+              className="rounded-md border border-border px-3 py-2 text-sm"
               {...consentForm.register('grantedVia')}
             >
               <option value="paper">Бумажное заявление</option>
               <option value="electronic">Электронно</option>
-            </select>
+            </Select>
           </Field>
           <Field label="Документ" hint="Номер и дата заявления">
             <TextInput {...consentForm.register('documentRef')} />
@@ -270,12 +272,14 @@ export function PrivacyScreen() {
         {consents.data !== undefined && consents.data.items.length > 0 && (
           <Table head={['Ученик', 'Представитель', 'Редакция', 'Получено', 'Отозвано', '']}>
             {consents.data.items.map((consent) => (
-              <tr key={consent.id} className="border-b border-slate-100">
+              <tr key={consent.id} className="border-b border-border">
                 <td className="px-3 py-2">{consent.studentName}</td>
                 <td className="px-3 py-2">{consent.guardianName ?? '—'}</td>
                 <td className="px-3 py-2">{consent.policyVersion}</td>
-                <td className="px-3 py-2 text-slate-500">{formatDateTime(consent.grantedAt)}</td>
-                <td className="px-3 py-2 text-slate-500">
+                <td className="px-3 py-2 text-muted-foreground">
+                  {formatDateTime(consent.grantedAt)}
+                </td>
+                <td className="px-3 py-2 text-muted-foreground">
                   {consent.revokedAt === null ? (
                     <Badge tone="success">действует</Badge>
                   ) : (
@@ -295,7 +299,7 @@ export function PrivacyScreen() {
         )}
 
         {revokeFor !== null && (
-          <div className="mt-4 rounded-md border border-slate-200 p-4">
+          <div className="mt-4 rounded-md border border-border p-4">
             <Field label="Причина отзыва" hint="Сохраняется в журнале">
               <TextInput
                 value={revokeReason}

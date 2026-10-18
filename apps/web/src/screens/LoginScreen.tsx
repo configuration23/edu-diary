@@ -27,12 +27,12 @@ export function LoginScreen({ branding }: { branding: BrandingDto }) {
       <header className="text-center">
         <h1 className="text-2xl font-semibold">{branding.title ?? 'Электронный дневник'}</h1>
         {branding.signature !== null && (
-          <p className="mt-1 text-sm text-slate-500">{branding.signature}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{branding.signature}</p>
         )}
       </header>
 
       <Card title="Вход">
-        <form className="flex flex-col gap-4" onSubmit={onSubmit} noValidate>
+        <form className="flex flex-col gap-3" onSubmit={onSubmit} noValidate>
           <Field label="Логин" error={form.formState.errors.username?.message}>
             <TextInput autoComplete="username" autoFocus {...form.register('username')} />
           </Field>
@@ -57,7 +57,7 @@ export function LoginScreen({ branding }: { branding: BrandingDto }) {
         Подсказка — **что делать**, а не как устроено. Владелец: прежняя формулировка объясняла
         отсутствие учётных записей, но человеку на экране входа нужно действие, а не объяснение.
       */}
-      <p className="text-center text-xs text-slate-500">
+      <p className="text-center text-xs text-muted-foreground">
         Для получения доступа обратитесь к администратору
       </p>
     </main>

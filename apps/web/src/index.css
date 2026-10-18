@@ -1,5 +1,14 @@
 @import 'tailwindcss';
 
+/**
+ * Тёмная тема переключается атрибутом, а не настройкой сборки.
+ *
+ * `data-theme="dark"` на `<html>` — единственный переключатель. Вариант `dark:` нужен редко (там, где
+ * токена не хватает, например тени), но пусть будет: без него такие места пришлось бы писать
+ * отдельными классами.
+ */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
 /* Шрифты только системные: обращение к внешним шрифтовым сервисам запрещено
    (SECURITY.md §3.8). */
 @theme {
@@ -7,12 +16,18 @@
     ui-sans-serif, system-ui, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
 
   /**
-   * Токены компоновки (Этап 6, шаг 0).
+   * Токены компоновки и цвета (Этап 6, шаг 0; цвета — «причёсывание»).
    *
    * До этого размеры, отступы и оттенки брались «по месту»: один экран ставил `p-5`, другой
    * `p-4`, третий `p-3`. Отсюда разнобой, на который указал владелец: «очень сильно всё
-   * разбросано». Теперь у нас **одна шкала скруглений**, **семантические имена поверхностей**
-   * и **две высоты строки списка** — экран не выбирает числа сам.
+   * разбросано».
+   *
+   * Имена — **по роли, а не по оттенку**: `card`, `foreground`, `primary`. Экран не должен знать,
+   * что акцент синий: иначе смена фирменного цвета заведения станет правкой в 24 файлах, а тёмная
+   * тема — вторым комплектом классов.
+   *
+   * Значения светлой темы подобраны так, чтобы **совпадать с прежним видом**: страница была
+   * `slate-50`, карточка — белой, текст — `slate-900`. Переход на токены не меняет картинку.
    */
 
   /* Скругления: `sm` — внутри списков, `md` — поля и кнопки, `lg` — блоки. */
@@ -20,9 +35,61 @@
   --radius-md: 0.375rem;
   --radius-lg: 0.5rem;
 
-  /* Поверхности и границы: по имени, а не по оттенку палитры. */
-  --color-surface: oklch(100% 0 0);
-  --color-surface-muted: oklch(98.4% 0.003 247.858);
+  /* Поверхности: страница, карточка, вложенная панель. */
+  --color-background: #f8fafc;
+  --color-card: #ffffff;
+  --color-muted: #f1f5f9;
+
+  /* Границы: разделитель и рамка поля. Рамка поля темнее — иначе контрол не видно. */
+  --color-border: #e2e8f0;
+  --color-input: #94a3b8;
+
+  /* Текст: основной, приглушённый (подписи), второстепенный (даты, «необязательно»). */
+  --color-foreground: #0f172a;
+  --color-muted-foreground: #475569;
+  --color-subtle-foreground: #64748b;
+
+  /* Акцент: единственный «главный» цвет — действия и ссылки. */
+  --color-primary: #1d4ed8;
+  --color-primary-hover: #1e40af;
+  --color-primary-foreground: #ffffff;
+  --color-primary-soft: #eff6ff;
+
+  /* Смысловые цвета: не украшение, а состояние. */
+  --color-success: #047857;
+  --color-warning: #b45309;
+  --color-danger: #b91c1c;
+
+  /**
+   * Выделение: выбранный день, выбранная ячейка журнала.
+   *
+   * Отдельные токены, а не второй акцент. Раньше это был `sky` прямо в разметке уроков — он
+   * конкурировал с синим акцентом и в тёмной теме не читался. Значение смысла («это выбрано») от
+   * этого не изменилось, изменился только способ задать цвет.
+   */
+  --color-selected: #0284c7;
+  --color-selected-soft: #f0f9ff;
+  --color-selected-foreground: #075985;
+
+  /**
+   * Заливки статусов: фон, рамка и текст для `Alert` и `Badge`.
+   *
+   * Отдельными токенами, а не «светлый оттенок того же цвета»: в тёмной теме заливка обязана
+   * темнеть, иначе предупреждение станет ярким пятном на тёмной странице и перетянет внимание с
+   * содержимого.
+   */
+  --color-info-soft: #f8fafc;
+  --color-info-border: #e2e8f0;
+  --color-info-foreground: #0f172a;
+  --color-success-soft: #ecfdf5;
+  --color-success-border: #a7f3d0;
+  --color-success-foreground: #065f46;
+  --color-warning-soft: #fffbeb;
+  --color-warning-border: #fde68a;
+  --color-warning-foreground: #92400e;
+  --color-danger-soft: #fef2f2;
+  --color-danger-border: #fecaca;
+  --color-danger-foreground: #991b1b;
 
   /**
    * Плотность. Длинные списки (журнал, «кто × значение») идут плотным шагом: на экран должно
@@ -30,6 +97,62 @@
    */
   --row-height-comfortable: 2.75rem;
   --row-height-compact: 2rem;
+
+  /* Высоты контролов: обычная и мелкая (в строке таблицы). */
+  --control-height: 2.25rem;
+  --control-height-sm: 2rem;
+}
+
+/**
+ * Тёмная тема: те же имена, другие значения.
+ *
+ * Ни один экран не переписывается — меняются только значения токенов. Это и есть проверка того,
+ * что имена выбраны по роли, а не по оттенку.
+ *
+ * Кнопка в тёмной теме **светлеет**, а текст на ней **тёмный**: белый на `blue-500` даёт 3.7:1 и
+ * не проходит порог читаемости, тёмный на `blue-400` — 7.02:1.
+ */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --color-background: #0f172a;
+  --color-card: #1e293b;
+  --color-muted: #020617;
+
+  --color-border: #334155;
+  --color-input: #64748b;
+
+  --color-foreground: #f1f5f9;
+  --color-muted-foreground: #cbd5e1;
+  --color-subtle-foreground: #94a3b8;
+
+  --color-primary: #60a5fa;
+  --color-primary-hover: #93c5fd;
+  --color-primary-foreground: #0f172a;
+  --color-primary-soft: #172554;
+
+  --color-success: #6ee7b7;
+  --color-warning: #fcd34d;
+  --color-danger: #fca5a5;
+
+  /* Выделение в тёмной теме — светлее и тише, чтобы не спорить с акцентом. */
+  --color-selected: #38bdf8;
+  --color-selected-soft: #082f49;
+  --color-selected-foreground: #bae6fd;
+
+  /* Заливки статусов темнеют: иначе предупреждение станет ярким пятном на тёмной странице. */
+  --color-info-soft: #1e293b;
+  --color-info-border: #334155;
+  --color-info-foreground: #e2e8f0;
+  --color-success-soft: #052e21;
+  --color-success-border: #0f5132;
+  --color-success-foreground: #6ee7b7;
+  --color-warning-soft: #38260a;
+  --color-warning-border: #92400e;
+  --color-warning-foreground: #fcd34d;
+  --color-danger-soft: #3a1212;
+  --color-danger-border: #991b1b;
+  --color-danger-foreground: #fca5a5;
 }
 
 html,
@@ -38,8 +161,14 @@ body,
   min-height: 100%;
 }
 
+/**
+ * Фон и текст страницы — через роли, а не через оттенки палитры.
+ *
+ * Значения совпадают с прежними (`slate-50` и `slate-900`), поэтому вид не меняется; но теперь это
+ * единственное место, где задан фон приложения, и тёмная тема подхватывается сама.
+ */
 body {
-  @apply bg-slate-50 text-slate-900 antialiased;
+  @apply bg-background text-foreground antialiased;
 }
 
 /**

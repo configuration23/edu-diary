@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { useAssignments, useGroups, useSubmittedWorks } from '../lib/queries';
-import { Badge, Field } from '../components/ui';
+import { Badge, Field, Select } from '../components/ui';
 import {
   Page,
   PageHeader,
@@ -87,8 +87,8 @@ export function SubmittedWorksScreen({ session }: { session: SessionResponseDto 
 
       <Toolbar>
         <Field label="Группа">
-          <select
-            className="w-full min-w-56 rounded-md border border-slate-300 px-3 py-2 text-sm"
+          <Select
+            className="w-full min-w-56 rounded-md border border-border px-3 py-2 text-sm"
             value={groupId}
             onChange={(event) => setGroupId(event.target.value)}
           >
@@ -97,13 +97,13 @@ export function SubmittedWorksScreen({ session }: { session: SessionResponseDto 
                 {name}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
 
         <Field label="Дата урока-срока">
           <input
             type="date"
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+            className="rounded-md border border-border px-3 py-2 text-sm"
             value={date}
             onChange={(event) => setDate(event.target.value)}
           />
@@ -128,7 +128,7 @@ export function SubmittedWorksScreen({ session }: { session: SessionResponseDto 
               </Badge>
             }
           >
-            <p className="whitespace-pre-wrap text-sm text-slate-700">{assignment.text}</p>
+            <p className="whitespace-pre-wrap text-sm text-foreground">{assignment.text}</p>
 
             {/*
               Вертикальный список учеников: напротив каждого — его ответ или пометка «не сдал».
@@ -146,13 +146,13 @@ export function SubmittedWorksScreen({ session }: { session: SessionResponseDto 
                       ) : (
                         <Badge tone="success">сдано</Badge>
                       )}
-                      <span className="text-xs text-slate-500">
+                      <span className="text-xs text-muted-foreground">
                         {new Date(row.submission.submittedAt).toLocaleDateString('ru-RU')}
                       </span>
                       {row.submission.files.map((file) => (
                         <a
                           key={file.id}
-                          className="text-blue-700 underline"
+                          className="text-primary underline"
                           href={`/api/homework/files/${file.id}`}
                           download
                         >
@@ -170,12 +170,12 @@ export function SubmittedWorksScreen({ session }: { session: SessionResponseDto 
               таблица перестаёт читаться построчно.
             */}
             {assignment.rows.some((row) => (row.submission?.text ?? '') !== '') && (
-              <div className="flex flex-col gap-1 rounded-md bg-[var(--color-surface-muted)] p-3">
+              <div className="flex flex-col gap-1 rounded-md bg-muted p-3">
                 {assignment.rows.map((row) =>
                   row.submission === null || row.submission.text === '' ? null : (
                     <p key={row.studentId} className="text-sm">
-                      <span className="font-medium text-slate-700">{row.studentName}: </span>
-                      <span className="whitespace-pre-wrap text-slate-700">
+                      <span className="font-medium text-foreground">{row.studentName}: </span>
+                      <span className="whitespace-pre-wrap text-foreground">
                         {row.submission.text}
                       </span>
                     </p>

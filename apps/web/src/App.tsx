@@ -63,7 +63,7 @@ const queryClient = new QueryClient({
 function Splash() {
   return (
     <main className="flex min-h-screen items-center justify-center p-6">
-      <p className="text-slate-500">Загружаем…</p>
+      <p className="text-muted-foreground">Загружаем…</p>
     </main>
   );
 }
@@ -335,7 +335,7 @@ function AppGate() {
         <Alert tone="error">
           Не удалось получить состояние системы: {errorMessage(setup.error)}
         </Alert>
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-muted-foreground">
           Проверьте, что API запущен и база данных доступна, затем обновите страницу.
         </p>
       </main>

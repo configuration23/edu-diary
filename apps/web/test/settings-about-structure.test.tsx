@@ -36,7 +36,7 @@ describe('настройки страницы «Обзор»', () => {
     const html = render();
 
     const about = html.indexOf('Об учебном заведении');
-    const news = html.indexOf('<h3 class="text-base font-semibold text-slate-900">Новости</h3>');
+    const news = html.indexOf('<h3 class="text-base font-semibold text-foreground">Новости</h3>');
 
     expect(about).toBeGreaterThanOrEqual(0);
     expect(news).toBeGreaterThanOrEqual(0);

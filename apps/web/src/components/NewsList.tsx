@@ -42,7 +42,7 @@ function NewsImage({ item }: { item: NewsItemDto }) {
     <img
       src={item.imageUrl}
       alt={item.imageName ?? 'Изображение к новости'}
-      className="max-h-96 max-w-full rounded-md border border-slate-200 object-contain shadow-sm"
+      className="max-h-96 max-w-full rounded-md border border-border object-contain shadow-sm"
     />
   );
 }
@@ -62,9 +62,9 @@ export function NewsArticle({ item }: { item: NewsItemDto }) {
        * Картинка сверху или снизу — выбор автора новости (решение владельца). Фото с линейки
        * уместнее сверху, а схему или таблицу — под текстом, поэтому вариантов два, а не один.
        */}
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-3">
         {item.imagePosition === 'top' && <NewsImage item={item} />}
-        <p className="whitespace-pre-wrap text-slate-800">{item.body}</p>
+        <p className="whitespace-pre-wrap text-foreground">{item.body}</p>
         {item.imagePosition === 'bottom' && <NewsImage item={item} />}
       </div>
     </Card>
@@ -82,29 +82,31 @@ export function NewsCollapsedItem({ item }: { item: NewsItemDto }) {
   const [open, setOpen] = useState(false);
 
   return (
-    <li className="border-b border-slate-100 last:border-0">
+    <li className="border-b border-border last:border-0">
       {/*
         Строка фиксированной высоты: список из десятка новостей должен читаться как список, а не
         расползаться на пол-экрана. Заголовок обрезается, полный виден в подсказке.
       */}
       <button
         type="button"
-        className="flex h-10 w-full items-center gap-3 px-1 text-left hover:bg-slate-50"
+        className="flex h-10 w-full items-center gap-3 px-1 text-left hover:bg-muted"
         onClick={() => setOpen((current) => !current)}
         aria-expanded={open}
         title={item.title}
       >
-        <span className="w-4 shrink-0 text-slate-400">{open ? '▾' : '▸'}</span>
-        <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-800">
+        <span className="w-4 shrink-0 text-subtle-foreground">{open ? '▾' : '▸'}</span>
+        <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
           {item.title}
         </span>
-        <span className="shrink-0 text-xs text-slate-500">{formatDay(item.publishedOn)}</span>
+        <span className="shrink-0 text-xs text-muted-foreground">
+          {formatDay(item.publishedOn)}
+        </span>
       </button>
 
       {open && (
         <div className="flex flex-col gap-3 px-1 pt-1 pb-4 pl-5">
           {item.imagePosition === 'top' && <NewsImage item={item} />}
-          <p className="whitespace-pre-wrap text-sm text-slate-800">{item.body}</p>
+          <p className="whitespace-pre-wrap text-sm text-foreground">{item.body}</p>
           {item.imagePosition === 'bottom' && <NewsImage item={item} />}
         </div>
       )}

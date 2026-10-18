@@ -7,9 +7,10 @@ import {
   Card,
   EmptyState,
   Field,
+  formatDate,
+  Select,
   Table,
   TextInput,
-  formatDate,
 } from '../components/ui';
 import { errorMessage } from '../lib/api-client';
 import {
@@ -30,7 +31,7 @@ import {
  * Замены публикуются сразу — черновика нет (решение владельца).
  */
 
-const selectClass = 'w-full rounded-md border border-slate-300 px-3 py-2 text-sm';
+const selectClass = 'w-full rounded-md border border-border px-3 py-2 text-sm';
 
 const REASONS = ['Больничный', 'Командировка', 'Мероприятие', 'Другое'];
 
@@ -99,7 +100,7 @@ function QuickSubstitution({
     >
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Урок" hint="Что заменяем: дата, пара и группа">
-          <select
+          <Select
             required
             name="lessonId"
             className={selectClass}
@@ -116,11 +117,11 @@ function QuickSubstitution({
                 {lesson.groupName} · {lesson.teacherName}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
 
         <Field label="Заменяющий" hint="Сначала свободные на эту пару">
-          <select
+          <Select
             required
             name="substituteUserId"
             className={selectClass}
@@ -140,11 +141,11 @@ function QuickSubstitution({
                     : `${candidate.fullName} — занят: ${candidate.busyGroupName ?? ''}, ${candidate.busySubjectName ?? ''}`}
                 </option>
               ))}
-          </select>
+          </Select>
         </Field>
 
         <Field label="Причина">
-          <select
+          <Select
             required
             name="reason"
             className={selectClass}
@@ -156,7 +157,7 @@ function QuickSubstitution({
                 {item}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
 
         {reason === 'Другое' && (
@@ -171,7 +172,7 @@ function QuickSubstitution({
       </div>
 
       {selectedLesson !== undefined && (
-        <div className="rounded-md bg-slate-50 p-3 text-sm text-slate-600">
+        <div className="rounded-md bg-muted p-3 text-sm text-muted-foreground">
           {formatDate(selectedLesson.lessonDate)}, {selectedLesson.pairNumber}-я пара,{' '}
           {selectedLesson.timeStart}–{selectedLesson.timeEnd} · {selectedLesson.groupName} · вместо:{' '}
           {selectedLesson.teacherName}
@@ -214,7 +215,7 @@ function SubstitutionJournal() {
       {items.length > 0 && (
         <Table head={['Дата', 'Кто заменён', 'Кто ведёт', 'Причина', 'Оформил', '']}>
           {items.map((substitution: SubstitutionDto) => (
-            <tr key={substitution.id} className="border-b border-slate-100">
+            <tr key={substitution.id} className="border-b border-border">
               <td className="px-3 py-2 whitespace-nowrap">
                 {formatDate(substitution.startsOn)}
                 {substitution.endsOn !== null && substitution.endsOn !== substitution.startsOn
@@ -224,7 +225,9 @@ function SubstitutionJournal() {
               <td className="px-3 py-2">{substitution.replacedName || '—'}</td>
               <td className="px-3 py-2">{substitution.substituteName || '—'}</td>
               <td className="px-3 py-2">{substitution.reason}</td>
-              <td className="px-3 py-2 text-slate-500">{substitution.createdByName ?? '—'}</td>
+              <td className="px-3 py-2 text-muted-foreground">
+                {substitution.createdByName ?? '—'}
+              </td>
               <td className="px-3 py-2">
                 <Button
                   tone="ghost"
@@ -276,7 +279,7 @@ export function SubstitutionsScreen({
         }
       >
         {canManage && creating && (
-          <div className="mb-4 rounded-md border border-slate-300 bg-slate-50 p-4">
+          <div className="mb-4 rounded-md border border-border bg-muted p-4">
             <QuickSubstitution
               groupId={groupId}
               initialLessonId={initialLessonId}

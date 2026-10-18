@@ -8,7 +8,9 @@ import {
   Badge,
   Button,
   Card,
+  Checkbox,
   EmptyState,
+  Field,
   Table,
   TextInput,
   formatDateTime,
@@ -51,33 +53,35 @@ export function AuditScreen({ heading = true }: { heading?: boolean } = {}) {
           : undefined
       }
     >
+      {/*
+        Фильтры — на примитивах: `Field` даёт подпись и подсказку, `Checkbox` — нажимаемую подпись
+        вместе с флажком. Раньше подпись была отдельным `<span>` рядом с `<label>`, и подпись с
+        флажком не связывалась.
+      */}
       <div className="mb-4 flex flex-wrap items-end gap-3">
-        <label className="text-sm">
-          <span className="mb-1 block text-slate-700">Сущность</span>
+        <Field label="Сущность">
           <TextInput
             placeholder="student, user, role…"
             value={entityKind}
             onChange={(event) => withReset(() => setEntityKind(event.target.value))}
             className="w-44"
           />
-        </label>
-        <label className="text-sm">
-          <span className="mb-1 block text-slate-700">Действие</span>
+        </Field>
+        <Field label="Действие">
           <TextInput
             placeholder="create, update, access…"
             value={action}
             onChange={(event) => withReset(() => setAction(event.target.value))}
             className="w-44"
           />
-        </label>
-        <label className="flex items-center gap-2 pb-2 text-sm">
-          <input
-            type="checkbox"
+        </Field>
+        <div className="pb-2">
+          <Checkbox
+            label="только доступ к персональным данным"
             checked={accessOnly}
             onChange={(event) => withReset(() => setAccessOnly(event.target.checked))}
           />
-          только доступ к персональным данным
-        </label>
+        </div>
         <Button
           tone="secondary"
           onClick={() =>
@@ -101,14 +105,14 @@ export function AuditScreen({ heading = true }: { heading?: boolean } = {}) {
       {audit.data !== undefined && audit.data.items.length > 0 && (
         <Table head={['Когда', 'Кто', 'Действие', 'Сущность', 'Изменения']}>
           {audit.data.items.map((entry) => (
-            <tr key={entry.id} className="border-b border-slate-100 align-top">
-              <td className="px-3 py-2 whitespace-nowrap text-slate-500">
+            <tr key={entry.id} className="border-b border-border align-top">
+              <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">
                 {formatDateTime(entry.createdAt)}
               </td>
               <td className="px-3 py-2">
                 {entry.actorName ?? 'система'}
                 {entry.actorIp !== null && (
-                  <span className="block text-xs text-slate-400">{entry.actorIp}</span>
+                  <span className="block text-xs text-subtle-foreground">{entry.actorIp}</span>
                 )}
               </td>
               <td className="px-3 py-2">
@@ -127,18 +131,20 @@ export function AuditScreen({ heading = true }: { heading?: boolean } = {}) {
               <td className="px-3 py-2">
                 {entry.entityKind}
                 {entry.entityId !== null && (
-                  <span className="block text-xs text-slate-400">
+                  <span className="block text-xs text-subtle-foreground">
                     {entry.entityId.slice(0, 8)}…
                   </span>
                 )}
               </td>
               <td className="px-3 py-2">
                 {entry.before === null && entry.after === null && entry.context === null ? (
-                  <span className="text-slate-400">—</span>
+                  <span className="text-subtle-foreground">—</span>
                 ) : (
                   <details>
-                    <summary className="cursor-pointer text-blue-700">показать</summary>
-                    <pre className="mt-2 max-w-xl overflow-x-auto rounded bg-slate-50 p-2 text-xs">
+                    <summary className="cursor-pointer text-primary hover:no-underline">
+                      показать
+                    </summary>
+                    <pre className="mt-2 max-w-xl overflow-x-auto rounded bg-muted p-2 text-xs">
                       {JSON.stringify(
                         { before: entry.before, after: entry.after, context: entry.context },
                         null,

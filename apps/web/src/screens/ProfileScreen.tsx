@@ -29,16 +29,16 @@ import type { SessionResponseDto } from '@edu-diary/contracts';
 /** Значение поля профиля: прочерк, если не заполнено. Не пустое место, а видимый ответ. */
 function Value({ children }: { children: string | null }) {
   if (children === null || children === '') {
-    return <span className="text-slate-400">не указано</span>;
+    return <span className="text-subtle-foreground">не указано</span>;
   }
 
-  return <span className="text-slate-800">{children}</span>;
+  return <span className="text-foreground">{children}</span>;
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-xs text-slate-500">{label}</span>
+    <div className="flex flex-col gap-1.5">
+      <span className="text-xs text-muted-foreground">{label}</span>
       <span className="text-sm">{children}</span>
     </div>
   );
@@ -90,7 +90,7 @@ export function ProfileScreen({ session }: { session: SessionResponseDto }) {
         </div>
 
         {session.user.mustChangePassword && (
-          <p className="text-sm text-amber-800">
+          <p className="text-sm text-warning-foreground">
             Требуется сменить пароль: он выдан администратором. Смените его ниже.
           </p>
         )}
@@ -117,15 +117,15 @@ export function ProfileScreen({ session }: { session: SessionResponseDto }) {
             .map((grant) => (
               <li
                 key={grant.permission}
-                className="flex justify-between gap-3 border-b border-slate-100 py-1"
+                className="flex justify-between gap-3 border-b border-border py-1"
               >
-                <span className="text-slate-700">{grant.permission}</span>
-                <span className="text-slate-400">{grant.scope}</span>
+                <span className="text-foreground">{grant.permission}</span>
+                <span className="text-subtle-foreground">{grant.scope}</span>
               </li>
             ))}
         </ul>
 
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-muted-foreground">
           Область действия: <code>own</code> — своё, <code>group</code> — своя группа,{' '}
           <code>assigned</code> — свои назначения, <code>all</code> — всё.
         </p>
@@ -148,20 +148,20 @@ export function ProfileScreen({ session }: { session: SessionResponseDto }) {
             title="О версии"
             description="Версия приложения меняется вместе с закрытым этапом роадмапа."
           >
-            <ul className="grid gap-1 text-sm text-slate-700 sm:grid-cols-2">
-              <li className="flex justify-between gap-3 border-b border-slate-100 py-1">
+            <ul className="grid gap-1 text-sm text-foreground sm:grid-cols-2">
+              <li className="flex justify-between gap-3 border-b border-border py-1">
                 <span>Версия API</span>
                 <span className="font-mono">{api?.version ?? 'недоступна'}</span>
               </li>
-              <li className="flex justify-between gap-3 border-b border-slate-100 py-1">
+              <li className="flex justify-between gap-3 border-b border-border py-1">
                 <span>Версия интерфейса</span>
                 <span className="font-mono">{client}</span>
               </li>
-              <li className="flex justify-between gap-3 border-b border-slate-100 py-1">
+              <li className="flex justify-between gap-3 border-b border-border py-1">
                 <span>Схема БД (миграций)</span>
                 <span className="font-mono">{api?.checks.migrations.applied ?? '—'}</span>
               </li>
-              <li className="flex justify-between gap-3 border-b border-slate-100 py-1">
+              <li className="flex justify-between gap-3 border-b border-border py-1">
                 <span>Запущен</span>
                 <span>{api === undefined ? '—' : formatDateTime(api.startedAt)}</span>
               </li>
@@ -172,7 +172,7 @@ export function ProfileScreen({ session }: { session: SessionResponseDto }) {
               сборку. Поэтому подсказка конкретная, вплоть до сочетания клавиш.
             */}
             {api !== undefined && api.version !== client && (
-              <p className="text-sm text-amber-800">
+              <p className="text-sm text-warning-foreground">
                 Версии API и интерфейса различаются: скорее всего, браузер держит старую сборку —
                 обновите страницу с очисткой кеша (Ctrl+Shift+R).
               </p>

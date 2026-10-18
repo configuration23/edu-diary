@@ -247,6 +247,15 @@ function frequencies(sources, pattern) {
 export function measureSources(sources) {
   const screens = sources.filter((source) => source.path.includes('/screens/'));
 
+  /**
+   * Замеры «что нарисовано по месту» не считают сам файл примитивов.
+   *
+   * В `ui.tsx` лежат `<select>`, `<textarea>` и чекбокс — это **единственное** законное место для
+   * таких элементов. Без исключения счётчик растёт от правильной работы: добавили примитив — цифра
+   * стала хуже.
+   */
+  const outsidePrimitives = sources.filter((source) => !source.path.endsWith('components/ui.tsx'));
+
   return {
     totals: {
       files: sources.length,
@@ -260,12 +269,12 @@ export function measureSources(sources) {
     })),
     rawControls: RAW_CONTROLS.map((control) => ({
       name: control.name,
-      count: countAll(sources, new RegExp(control.pattern.source, 'g')),
-      files: filesMatching(sources, new RegExp(control.pattern.source, 'g')).length,
+      count: countAll(outsidePrimitives, new RegExp(control.pattern.source, 'g')),
+      files: filesMatching(outsidePrimitives, new RegExp(control.pattern.source, 'g')).length,
     })),
     frame: {
-      count: countAll(sources, new RegExp(CONTROL_FRAME, 'g')),
-      files: filesMatching(sources, new RegExp(CONTROL_FRAME, 'g')).length,
+      count: countAll(outsidePrimitives, new RegExp(CONTROL_FRAME, 'g')),
+      files: filesMatching(outsidePrimitives, new RegExp(CONTROL_FRAME, 'g')).length,
     },
     heights: frequencies(sources, /\bpy-(0\.5|1|1\.5|2|2\.5|3)\b/g),
     radii: frequencies(sources, /\brounded(?:-(?:sm|md|lg|xl|full))?\b/g),

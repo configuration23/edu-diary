@@ -42,8 +42,8 @@ export function AppLayout({
   useReturnHomeAfterLogout(logout.isSuccess);
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="border-b border-slate-200 bg-white">
+    <div className="min-h-screen bg-background text-foreground">
+      <header className="border-b border-border bg-card">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-3">
           <div className="flex items-center gap-3">
             {branding.logoDataUrl !== null && (
@@ -68,8 +68,8 @@ export function AppLayout({
             */}
             <Link
               to="/profile"
-              className="rounded-md px-2 py-1 text-slate-700 hover:bg-slate-100"
-              activeProps={{ className: 'rounded-md px-2 py-1 bg-slate-900 text-white' }}
+              className="rounded-md px-2 py-1 text-muted-foreground hover:bg-muted"
+              activeProps={{ className: 'rounded-md px-2 py-1 bg-primary text-primary-foreground' }}
             >
               {session.user.fullName}
             </Link>
@@ -92,9 +92,10 @@ export function AppLayout({
               <li key={item.to}>
                 <Link
                   to={item.to}
-                  className="inline-block rounded-md px-3 py-1.5 text-slate-700 hover:bg-slate-100"
+                  className="inline-block rounded-md px-3 py-1.5 text-muted-foreground hover:bg-muted"
                   activeProps={{
-                    className: 'inline-block rounded-md px-3 py-1.5 bg-slate-900 text-white',
+                    className:
+                      'inline-block rounded-md px-3 py-1.5 bg-primary text-primary-foreground',
                   }}
                   // Точное совпадение пути: иначе «Расписание» подсвечивалось бы и
                   // на «Сетке (шаблон)» — она вложена в тот же путь.

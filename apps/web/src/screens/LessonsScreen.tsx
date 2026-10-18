@@ -5,7 +5,17 @@ import { useState } from 'react';
 
 import { useAcademicContext } from '../components/AcademicContext';
 import { useAppearanceSettings } from '../components/AppearanceContext';
-import { Alert, Badge, Button, Card, EmptyState, Field, TextInput } from '../components/ui';
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  Checkbox,
+  EmptyState,
+  Field,
+  Select,
+  TextInput,
+} from '../components/ui';
 import { SubjectDot, lessonMarker, subjectColor } from '../lib/appearance';
 import { errorMessage } from '../lib/api-client';
 import { hasBells, pairsFromBells } from '../lib/schedule-pairs';
@@ -47,7 +57,7 @@ const STATUS: Record<
   replaced: { label: 'Замена', tone: 'warning' },
 };
 
-const selectClass = 'w-full rounded-md border border-slate-300 px-3 py-2 text-sm';
+const selectClass = 'w-full rounded-md border border-border px-3 py-2 text-sm';
 
 function toIso(date: Date): string {
   return [
@@ -104,7 +114,7 @@ function ManualLessonForm({
 
   return (
     <form
-      className="flex flex-col gap-2"
+      className="flex flex-col gap-1"
       onSubmit={async (event) => {
         event.preventDefault();
         try {
@@ -125,13 +135,13 @@ function ManualLessonForm({
         }
       }}
     >
-      <div className="text-sm text-slate-600">
+      <div className="text-sm text-muted-foreground">
         Новый урок: {lessonDate}, {pairNumber}-я пара
       </div>
 
       <div className="grid gap-2 sm:grid-cols-2">
         <Field label="Предмет">
-          <select
+          <Select
             required
             name="subjectId"
             className={selectClass}
@@ -144,11 +154,11 @@ function ManualLessonForm({
                 {subject.name}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
 
         <Field label="Преподаватель">
-          <select
+          <Select
             required
             name="teacherUserId"
             className={selectClass}
@@ -161,11 +171,11 @@ function ManualLessonForm({
                 {teacher.fullName}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
 
         <Field label="Аудитория" hint="Необязательно">
-          <select
+          <Select
             name="roomId"
             className={selectClass}
             value={roomId}
@@ -177,7 +187,7 @@ function ManualLessonForm({
                 {room.name}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
 
         <div className="grid grid-cols-2 gap-2">
@@ -239,7 +249,7 @@ function LessonDetails({
   const status = STATUS[lesson.status] ?? { label: lesson.status, tone: 'neutral' as const };
 
   return (
-    <div className="flex flex-col gap-3 rounded-md border border-slate-200 bg-slate-50 p-4">
+    <div className="flex flex-col gap-3 rounded-md border border-border bg-muted p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-medium">
@@ -253,7 +263,7 @@ function LessonDetails({
         </Button>
       </div>
 
-      <div className="text-sm text-slate-700">
+      <div className="text-sm text-foreground">
         {/* Маркер цвета рядом с названием: в строках заливка была бы тяжёлой. */}
         <SubjectDot
           subjectId={lesson.subjectId}
@@ -262,20 +272,20 @@ function LessonDetails({
         />
         {lesson.subjectName} · {lesson.groupName}
       </div>
-      <div className="text-sm text-slate-600">
+      <div className="text-sm text-muted-foreground">
         {lesson.teacherName}
         {lesson.plannedTeacherName !== null && (
-          <span className="text-amber-800"> · вместо: {lesson.plannedTeacherName}</span>
+          <span className="text-warning-foreground"> · вместо: {lesson.plannedTeacherName}</span>
         )}
         {` · ${lesson.roomName ?? 'аудитория не указана'}`}
       </div>
 
       {reasons.length > 0 && (
-        <div className="text-sm text-amber-800">Замены: {reasons.join('; ')}</div>
+        <div className="text-sm text-warning-foreground">Замены: {reasons.join('; ')}</div>
       )}
 
       <form
-        className="flex flex-col gap-2 sm:flex-row sm:items-end"
+        className="flex flex-col gap-1 sm:flex-row sm:items-end"
         onSubmit={async (event) => {
           event.preventDefault();
           try {
@@ -419,7 +429,7 @@ function PeriodForm({
   return (
     <div className="flex flex-col gap-3">
       <Field label="Группа" hint="Сетка уроков строится по одной группе">
-        <select
+        <Select
           name="studyGroupId"
           className={selectClass}
           value={selectedGroupId ?? ''}
@@ -431,7 +441,7 @@ function PeriodForm({
               {group.name}
             </option>
           ))}
-        </select>
+        </Select>
       </Field>
 
       {canGenerate && (
@@ -479,7 +489,7 @@ function PeriodForm({
             }
           }}
         >
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-end">
             <Field label="С даты">
               <TextInput
                 required
@@ -509,20 +519,18 @@ function PeriodForm({
             </Button>
           </div>
 
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              name="recreate"
-              checked={recreate}
-              onChange={(event) => {
-                setRecreate(event.target.checked);
-                setConfirmed(false);
-                setCounts(null);
-                setResult(null);
-              }}
-            />
-            Пересоздать уроки за период
-          </label>
+          <Checkbox
+            className="flex items-center gap-2 text-sm"
+            name="recreate"
+            checked={recreate}
+            onChange={(event) => {
+              setRecreate(event.target.checked);
+              setConfirmed(false);
+              setCounts(null);
+              setResult(null);
+            }}
+            label="Пересоздать уроки за период"
+          />
 
           {recreate && (
             <Alert tone="warning">
@@ -538,7 +546,7 @@ function PeriodForm({
               <Button type="submit" tone="danger" disabled={generate.isPending}>
                 Подтверждаю: пересоздать
               </Button>
-              <span className="text-sm text-slate-600">
+              <span className="text-sm text-muted-foreground">
                 Действие попадёт в аудит: кто, когда и за какой период пересоздал уроки.
               </span>
             </div>
@@ -675,8 +683,8 @@ export function LessonsScreen({ session }: { session: SessionResponseDto }) {
         */
         className={`relative w-full rounded border px-1 py-0.5 text-left text-[13px] leading-4 transition ${
           cancelled || foreign
-            ? 'border-slate-200 bg-slate-50 text-slate-400'
-            : 'cursor-pointer border-slate-200 hover:shadow-sm'
+            ? 'border-border bg-muted text-subtle-foreground'
+            : 'cursor-pointer border-border hover:shadow-sm'
         }`}
         style={
           filled && !foreign ? { backgroundColor: `${color}22`, borderColor: color } : undefined
@@ -690,9 +698,9 @@ export function LessonsScreen({ session }: { session: SessionResponseDto }) {
           <span className="truncate">
             {subjectCode(lesson.subjectName, lesson.subjectShortName)}
           </span>
-          <span className="ml-auto shrink-0 text-slate-500">{lesson.roomName ?? '—'}</span>
+          <span className="ml-auto shrink-0 text-muted-foreground">{lesson.roomName ?? '—'}</span>
         </span>
-        <span className="block truncate text-slate-600">{lesson.groupName}</span>
+        <span className="block truncate text-muted-foreground">{lesson.groupName}</span>
       </button>
     );
   };
@@ -819,24 +827,21 @@ export function LessonsScreen({ session }: { session: SessionResponseDto }) {
         </div>
 
         {canGenerate && selectedGroupId === null && (
-          <p className="mt-2 text-sm text-slate-600">
+          <p className="mt-2 text-sm text-muted-foreground">
             Чтобы включить правку расписания, сначала выберите группу: занятия ставятся по одной
             группе.
           </p>
         )}
 
-        <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-slate-600">
+        <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
           <span>
             {rangeStart} — {rangeEnd}
           </span>
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={showCancelled}
-              onChange={(event) => setShowCancelled(event.target.checked)}
-            />
-            Показывать отменённые ({cancelledCount})
-          </label>
+          <Checkbox
+            checked={showCancelled}
+            onChange={(event) => setShowCancelled(event.target.checked)}
+            label={`Показывать отменённые (${cancelledCount})`}
+          />
         </div>
 
         {editing && (
@@ -872,7 +877,7 @@ export function LessonsScreen({ session }: { session: SessionResponseDto }) {
         )}
 
         {newSlot !== null && selectedGroupId !== null && (
-          <div className="mt-4 rounded-md border border-sky-200 bg-sky-50 p-4">
+          <div className="mt-4 rounded-md border border-selected bg-selected-soft p-4">
             <ManualLessonForm
               studyGroupId={selectedGroupId}
               lessonDate={newSlot.date}
@@ -893,18 +898,22 @@ export function LessonsScreen({ session }: { session: SessionResponseDto }) {
         )}
 
         {view === 'grid' && items.length > 0 && (
-          <div className="mt-4 flex flex-col gap-4">
+          <div className="mt-4 flex flex-col gap-3">
             {weeks.map((week) => (
               <div key={week[0]} className="overflow-x-auto">
                 <table className="w-full border-collapse text-sm">
                   <thead>
                     <tr>
-                      <th className="w-14 px-1 py-1 text-left text-xs text-slate-500">Пара</th>
+                      <th className="w-14 px-1 py-1 text-left text-xs text-muted-foreground">
+                        Пара
+                      </th>
                       {week.map((iso) => (
                         <th
                           key={iso}
                           className={`px-1 py-1 text-left text-xs ${
-                            iso === todayIso() ? 'text-sky-700' : 'text-slate-500'
+                            iso === todayIso()
+                              ? 'text-selected-foreground'
+                              : 'text-muted-foreground'
                           }`}
                         >
                           {iso.slice(8)} {DAYS_SHORT[dayIndex(iso)]}
@@ -914,8 +923,8 @@ export function LessonsScreen({ session }: { session: SessionResponseDto }) {
                   </thead>
                   <tbody>
                     {pairs.map((pair) => (
-                      <tr key={pair} className="border-t border-slate-100">
-                        <td className="px-1 py-1 align-top text-xs font-medium text-slate-500">
+                      <tr key={pair} className="border-t border-border">
+                        <td className="px-1 py-1 align-top text-xs font-medium text-muted-foreground">
                           {pair}
                         </td>
                         {week.map((iso) => {
@@ -938,20 +947,20 @@ export function LessonsScreen({ session }: { session: SessionResponseDto }) {
                                     title="Поставить урок"
                                     className={`w-full rounded border border-dashed px-1 py-0.5 text-left text-[11px] ${
                                       isNewSlot
-                                        ? 'border-sky-500 bg-sky-100 text-sky-800'
-                                        : 'border-slate-300 text-slate-400 hover:border-sky-400 hover:text-sky-700'
+                                        ? 'border-selected bg-selected-soft text-selected-foreground'
+                                        : 'border-border text-subtle-foreground hover:border-selected hover:text-selected-foreground'
                                     }`}
                                   >
                                     + урок
                                   </button>
                                 ) : (
-                                  <span className="text-[11px] text-slate-300">·</span>
+                                  <span className="text-[11px] text-subtle-foreground">·</span>
                                 )
                               ) : (
-                                <span className="flex flex-col gap-0.5">
+                                <span className="flex flex-col gap-1.5">
                                   {cell.slice(0, 2).map((lesson) => tile(lesson))}
                                   {cell.length > 2 && (
-                                    <span className="text-[11px] text-slate-500">
+                                    <span className="text-[11px] text-muted-foreground">
                                       и ещё {cell.length - 2}
                                     </span>
                                   )}
@@ -970,19 +979,19 @@ export function LessonsScreen({ session }: { session: SessionResponseDto }) {
         )}
 
         {view === 'list' && visible.length > 0 && (
-          <ul className="mt-4 flex flex-col divide-y divide-slate-100">
+          <ul className="mt-4 flex flex-col divide-y divide-border">
             {visible.map((lesson) => (
               <li key={lesson.id}>
                 <button
                   type="button"
                   onClick={() => setSelectedLessonId(lesson.id)}
-                  className="flex w-full flex-wrap items-center gap-2 px-2 py-2 text-left text-sm hover:bg-slate-50"
+                  className="flex w-full flex-wrap items-center gap-2 px-2 py-2 text-left text-sm hover:bg-muted"
                 >
-                  <span className="w-24 text-slate-500">{lesson.lessonDate}</span>
-                  <span className="w-14 text-slate-500">{lesson.pairNumber}-я</span>
+                  <span className="w-24 text-muted-foreground">{lesson.lessonDate}</span>
+                  <span className="w-14 text-muted-foreground">{lesson.pairNumber}-я</span>
                   <span className="font-medium">{lesson.subjectName}</span>
-                  <span className="text-slate-500">{lesson.groupName}</span>
-                  <span className="text-slate-500">{lesson.teacherName}</span>
+                  <span className="text-muted-foreground">{lesson.groupName}</span>
+                  <span className="text-muted-foreground">{lesson.teacherName}</span>
                   <Badge tone={(STATUS[lesson.status] ?? { tone: 'neutral' as const }).tone}>
                     {(STATUS[lesson.status] ?? { label: lesson.status }).label}
                   </Badge>

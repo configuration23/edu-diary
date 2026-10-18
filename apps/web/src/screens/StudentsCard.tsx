@@ -17,11 +17,13 @@ import {
   Badge,
   Button,
   Card,
+  Checkbox,
   EmptyState,
   Field,
+  formatDate,
+  Select,
   Table,
   TextInput,
-  formatDate,
 } from '../components/ui';
 
 /**
@@ -75,7 +77,7 @@ function CreateStudentForm({
       description="Учётную запись можно создать сразу или позже — по необходимости."
     >
       <form
-        className="flex flex-col gap-4"
+        className="flex flex-col gap-3"
         onSubmit={async (event) => {
           event.preventDefault();
 
@@ -144,17 +146,15 @@ function CreateStudentForm({
           </Field>
         </div>
 
-        <label className="flex items-center gap-2 text-sm text-slate-700">
-          <input
-            type="checkbox"
-            checked={withAccount}
-            onChange={(event) => setWithAccount(event.target.checked)}
-          />
-          Сразу создать учётную запись (роль «Ученик»)
-        </label>
+        <Checkbox
+          className="flex items-center gap-2 text-sm text-foreground"
+          checked={withAccount}
+          onChange={(event) => setWithAccount(event.target.checked)}
+          label="Сразу создать учётную запись (роль «Ученик»)"
+        />
 
         {withAccount && (
-          <div className="grid gap-4 rounded-md border border-slate-200 p-4 sm:grid-cols-2">
+          <div className="grid gap-4 rounded-md border border-border p-4 sm:grid-cols-2">
             <Field label="Логин" hint="Строчные латинские буквы и цифры">
               <TextInput
                 required={withAccount}
@@ -235,7 +235,7 @@ export function LinkGuardianForm({ onLinked }: { onLinked: (message: string) => 
       description="Один представитель привязывается к ученику один раз; к ученику можно привязать несколько представителей."
     >
       <form
-        className="flex flex-col gap-4"
+        className="flex flex-col gap-3"
         onSubmit={async (event) => {
           event.preventDefault();
 
@@ -255,9 +255,9 @@ export function LinkGuardianForm({ onLinked }: { onLinked: (message: string) => 
       >
         <div className="grid gap-4 sm:grid-cols-3">
           <Field label="Ученик">
-            <select
+            <Select
               required
-              className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+              className="rounded-md border border-border px-3 py-2 text-sm"
               value={studentId}
               onChange={(event) => setStudentId(event.target.value)}
             >
@@ -267,12 +267,12 @@ export function LinkGuardianForm({ onLinked }: { onLinked: (message: string) => 
                   {student.fullName}
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
           <Field label="Законный представитель">
-            <select
+            <Select
               required
-              className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+              className="rounded-md border border-border px-3 py-2 text-sm"
               value={guardianUserId}
               onChange={(event) => setGuardianUserId(event.target.value)}
             >
@@ -282,11 +282,11 @@ export function LinkGuardianForm({ onLinked }: { onLinked: (message: string) => 
                   {user.fullName} ({user.username})
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>{' '}
           <Field label="Кем является">
-            <select
-              className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+            <Select
+              className="rounded-md border border-border px-3 py-2 text-sm"
               value={relation}
               onChange={(event) => setRelation(event.target.value)}
             >
@@ -295,7 +295,7 @@ export function LinkGuardianForm({ onLinked }: { onLinked: (message: string) => 
                   {item.label}
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
         </div>
 
@@ -308,7 +308,7 @@ export function LinkGuardianForm({ onLinked }: { onLinked: (message: string) => 
         )}
 
         {linkedGuardians.length > 0 && (
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-muted-foreground">
             Уже привязаны: {linkedGuardians.map((user: UserSummaryDto) => user.fullName).join(', ')}
             . Одного и того же человека нельзя привязать дважды.
           </p>
@@ -342,8 +342,8 @@ function AccountForm({
   const [phone, setPhone] = useState('');
 
   return (
-    <div className="mt-3 rounded-md border border-slate-200 p-4">
-      <p className="mb-3 text-sm text-slate-700">
+    <div className="mt-3 rounded-md border border-border p-4">
+      <p className="mb-3 text-sm text-foreground">
         Учётная запись для «{studentName}»: роль «Ученик» подставляется автоматически.
       </p>
       <div className="grid gap-3 sm:grid-cols-2">
@@ -445,7 +445,7 @@ export function StudentsCard({ onNotice }: { onNotice: (message: string) => void
           </Field>
         </div>
 
-        {students.isLoading && <p className="text-sm text-slate-500">Загружаем…</p>}
+        {students.isLoading && <p className="text-sm text-muted-foreground">Загружаем…</p>}
         {students.isError && <Alert tone="error">{errorMessage(students.error)}</Alert>}
 
         {students.data !== undefined && students.data.items.length === 0 && (
@@ -459,7 +459,7 @@ export function StudentsCard({ onNotice }: { onNotice: (message: string) => void
         {students.data !== undefined && students.data.items.length > 0 && (
           <Table head={['ФИО', 'Дата рождения', 'Учётная запись', 'Примечание', '']}>
             {students.data.items.map((student) => (
-              <tr key={student.id} className="border-b border-slate-100">
+              <tr key={student.id} className="border-b border-border">
                 <td className="px-3 py-2 font-medium">{student.fullName}</td>
                 <td className="px-3 py-2">{formatDate(student.birthDate)}</td>
                 <td className="px-3 py-2">
@@ -469,7 +469,7 @@ export function StudentsCard({ onNotice }: { onNotice: (message: string) => void
                     <Badge tone="success">{student.username}</Badge>
                   )}
                 </td>
-                <td className="px-3 py-2 text-slate-500">{student.note ?? '—'}</td>
+                <td className="px-3 py-2 text-muted-foreground">{student.note ?? '—'}</td>
                 <td className="px-3 py-2">
                   {student.username === null && (
                     <Button
@@ -529,7 +529,7 @@ export function GuardianLinksCard({ onNotice }: { onNotice: (message: string) =>
       title="Связи учеников и представителей"
       description="Отвязка убирает доступ представителя к данным ученика."
     >
-      {links.isLoading && <p className="text-sm text-slate-500">Загружаем…</p>}
+      {links.isLoading && <p className="text-sm text-muted-foreground">Загружаем…</p>}
       {links.isError && <Alert tone="error">{errorMessage(links.error)}</Alert>}
 
       {links.data !== undefined && links.data.items.length === 0 && (
@@ -539,13 +539,13 @@ export function GuardianLinksCard({ onNotice }: { onNotice: (message: string) =>
       {links.data !== undefined && links.data.items.length > 0 && (
         <Table head={['Ученик', 'Представитель', 'Логин', 'Кем является', '']}>
           {links.data.items.map((link) => (
-            <tr key={link.id} className="border-b border-slate-100">
+            <tr key={link.id} className="border-b border-border">
               <td className="px-3 py-2 font-medium">{link.studentName}</td>
               <td className="px-3 py-2">{link.guardianName}</td>
-              <td className="px-3 py-2 font-mono text-xs text-slate-600">
+              <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
                 {link.guardianUsername}
               </td>
-              <td className="px-3 py-2 text-slate-600">{relationLabel(link.relation)}</td>
+              <td className="px-3 py-2 text-muted-foreground">{relationLabel(link.relation)}</td>
               <td className="px-3 py-2">
                 <Button
                   tone="ghost"

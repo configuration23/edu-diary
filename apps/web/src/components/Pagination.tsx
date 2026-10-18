@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import { Button, EmptyState, Field } from './ui';
+import { Button, EmptyState, Field, Select, TextInput } from './ui';
 
 /**
  * Постраничный вывод длинных списков.
@@ -56,9 +56,9 @@ export function Pagination({
   return (
     <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
       <Field label="Строк на странице">
-        <select
+        <Select
           name="pageSize"
-          className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+          className="rounded-md border border-border px-3 py-2 text-sm"
           value={String(pageSize)}
           onChange={(event) => onPageSizeChange(Number(event.target.value) as PageSize)}
         >
@@ -67,7 +67,7 @@ export function Pagination({
               {size}
             </option>
           ))}
-        </select>
+        </Select>
       </Field>
 
       {pages > 1 && (
@@ -80,7 +80,7 @@ export function Pagination({
           >
             ← Назад
           </Button>
-          <span className="text-sm text-slate-600">
+          <span className="text-sm text-muted-foreground">
             Страница {page} из {pages} · всего {total}
           </span>
           <Button
@@ -94,7 +94,9 @@ export function Pagination({
         </div>
       )}
 
-      {pages === 1 && total > 0 && <span className="text-sm text-slate-600">Всего: {total}</span>}
+      {pages === 1 && total > 0 && (
+        <span className="text-sm text-muted-foreground">Всего: {total}</span>
+      )}
     </div>
   );
 }
@@ -135,9 +137,9 @@ export function PaginatedList<T>({
       {onSearchChange !== undefined && (
         <div className="mb-3">
           <Field label="Поиск">
-            <input
+            <TextInput
               name="search"
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm sm:max-w-xs"
+              className="sm:max-w-xs"
               placeholder={searchPlaceholder ?? 'Начните вводить'}
               value={search ?? ''}
               onChange={(event) => onSearchChange(event.target.value)}

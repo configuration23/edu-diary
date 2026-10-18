@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useMemo, useState, type ReactNo
 import type { SessionResponseDto } from '@edu-diary/contracts';
 
 import { useAcademicYears, useAssignments, useGroups, useScheduleGroups } from '../lib/queries';
+import { Select } from './ui';
 
 /**
  * Контекст учебного процесса в шапке (ARCHITECTURE.md §4.1).
@@ -152,19 +153,21 @@ export function GroupSwitcher() {
 
   if (groups.length === 0) {
     return (
-      <span className="text-xs text-slate-500">
+      <span className="text-xs text-muted-foreground">
         {activeYearTitle === null ? 'Учебный год не выбран' : `Год ${activeYearTitle}`}
       </span>
     );
   }
 
   return (
-    <span className="flex items-center gap-2 text-xs text-slate-600">
-      {activeYearTitle !== null && <span className="text-slate-500">Год {activeYearTitle}</span>}
+    <span className="flex items-center gap-2 text-xs text-muted-foreground">
+      {activeYearTitle !== null && (
+        <span className="text-muted-foreground">Год {activeYearTitle}</span>
+      )}
       <label className="flex items-center gap-1">
-        <span className="text-slate-500">Группа</span>
-        <select
-          className="rounded-md border border-slate-300 px-2 py-1 text-xs"
+        <span className="text-muted-foreground">Группа</span>
+        <Select
+          className="rounded-md border border-border px-2 py-1 text-xs"
           value={selectedGroupId ?? ''}
           onChange={(event) => selectGroup(event.target.value === '' ? null : event.target.value)}
         >
@@ -174,7 +177,7 @@ export function GroupSwitcher() {
               {group.name}
             </option>
           ))}
-        </select>
+        </Select>
       </label>
     </span>
   );

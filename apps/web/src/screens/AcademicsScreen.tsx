@@ -10,11 +10,13 @@ import {
   Badge,
   Button,
   Card,
+  Checkbox,
   EmptyState,
   Field,
+  formatDate,
+  Select,
   Table,
   TextInput,
-  formatDate,
 } from '../components/ui';
 import { errorMessage } from '../lib/api-client';
 import {
@@ -80,7 +82,7 @@ function CreateYearCard({ onDone }: { onDone: () => void }) {
   return (
     <Card title="Новый учебный год" description="Даты периода задают границы для групп.">
       <form
-        className="flex flex-col gap-4"
+        className="flex flex-col gap-3"
         noValidate
         onSubmit={form.handleSubmit(async (values) => {
           try {
@@ -103,10 +105,11 @@ function CreateYearCard({ onDone }: { onDone: () => void }) {
           <Field label="Окончание" error={form.formState.errors.endsOn?.message}>
             <TextInput type="date" {...form.register('endsOn')} />
           </Field>
-          <label className="flex items-end gap-2 pb-2 text-sm text-slate-700">
-            <input type="checkbox" {...form.register('isActive')} />
-            Сделать активным
-          </label>
+          <Checkbox
+            className="flex items-end gap-2 pb-2 text-sm text-foreground"
+            {...form.register('isActive')}
+            label="Сделать активным"
+          />
         </div>
 
         {create.isError && <Alert tone="error">{errorMessage(create.error)}</Alert>}
@@ -138,7 +141,7 @@ function AddPeriodCard({ year }: { year: AcademicYearDto }) {
 
   return (
     <form
-      className="flex flex-col gap-3 border-t border-slate-100 pt-4"
+      className="flex flex-col gap-3 border-t border-border pt-4"
       noValidate
       onSubmit={form.handleSubmit(async (values) => {
         try {
@@ -159,8 +162,8 @@ function AddPeriodCard({ year }: { year: AcademicYearDto }) {
           <TextInput placeholder="1 семестр" {...form.register('title')} />
         </Field>
         <Field label="Тип">
-          <select
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+          <Select
+            className="rounded-md border border-border px-3 py-2 text-sm"
             {...form.register('kind')}
           >
             {PERIOD_KINDS.map((item) => (
@@ -168,7 +171,7 @@ function AddPeriodCard({ year }: { year: AcademicYearDto }) {
                 {item.label}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
         <Field label="Начало" error={form.formState.errors.startsOn?.message}>
           <TextInput type="date" {...form.register('startsOn')} />
@@ -198,7 +201,7 @@ function YearDetails({ yearId, onClose }: { yearId: string; onClose: () => void 
   const [editStartsOn, setEditStartsOn] = useState('');
   const [editEndsOn, setEditEndsOn] = useState('');
 
-  if (detail.isLoading) return <p className="text-sm text-slate-500">Загружаем год…</p>;
+  if (detail.isLoading) return <p className="text-sm text-muted-foreground">Загружаем год…</p>;
   if (detail.isError || detail.data === undefined) {
     return <Alert tone="error">{errorMessage(detail.error)}</Alert>;
   }
@@ -221,9 +224,9 @@ function YearDetails({ yearId, onClose }: { yearId: string; onClose: () => void 
         <>
           <Table head={['Период', 'Тип', 'Начало', 'Окончание', '']}>
             {year.periods.map((period: PeriodDto) => (
-              <tr key={period.id} className="border-b border-slate-100">
+              <tr key={period.id} className="border-b border-border">
                 <td className="px-3 py-2">{period.title}</td>
-                <td className="px-3 py-2 text-slate-600">{kindLabel(period.kind)}</td>
+                <td className="px-3 py-2 text-muted-foreground">{kindLabel(period.kind)}</td>
                 <td className="px-3 py-2">{formatDate(period.startsOn)}</td>
                 <td className="px-3 py-2">{formatDate(period.endsOn)}</td>
                 <td className="px-3 py-2">
@@ -256,7 +259,7 @@ function YearDetails({ yearId, onClose }: { yearId: string; onClose: () => void 
 
           {editing !== null && (
             <form
-              className="mt-4 flex flex-wrap items-end gap-3 rounded-md border border-slate-200 p-4"
+              className="mt-4 flex flex-wrap items-end gap-3 rounded-md border border-border p-4"
               onSubmit={async (event) => {
                 event.preventDefault();
                 try {
@@ -338,7 +341,7 @@ function EditYearForm({
 
   return (
     <form
-      className="mt-4 flex flex-wrap items-end gap-3 rounded-md border border-slate-200 p-4"
+      className="mt-4 flex flex-wrap items-end gap-3 rounded-md border border-border p-4"
       noValidate
       onSubmit={form.handleSubmit(async (values) => {
         try {
@@ -405,7 +408,7 @@ export function AcademicsScreen() {
           creating ? undefined : <Button onClick={() => setCreating(true)}>Создать год</Button>
         }
       >
-        {years.isLoading && <p className="text-sm text-slate-500">Загружаем…</p>}
+        {years.isLoading && <p className="text-sm text-muted-foreground">Загружаем…</p>}
         {years.isError && <Alert tone="error">{errorMessage(years.error)}</Alert>}
 
         {years.data !== undefined && years.data.items.length === 0 && (
@@ -415,7 +418,7 @@ export function AcademicsScreen() {
         {years.data !== undefined && years.data.items.length > 0 && (
           <Table head={['Год', 'Начало', 'Окончание', 'Состояние', '']}>
             {years.data.items.map((year) => (
-              <tr key={year.id} className="border-b border-slate-100">
+              <tr key={year.id} className="border-b border-border">
                 <td className="px-3 py-2 font-medium">{year.title}</td>
                 <td className="px-3 py-2">{formatDate(year.startsOn)}</td>
                 <td className="px-3 py-2">{formatDate(year.endsOn)}</td>

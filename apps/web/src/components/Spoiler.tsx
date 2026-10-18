@@ -37,10 +37,7 @@ export function Spoiler({
   children: ReactNode;
 }) {
   return (
-    <details
-      open={defaultOpen}
-      className="group rounded-lg border border-slate-200 bg-[var(--color-surface)] shadow-sm"
-    >
+    <details open={defaultOpen} className="group rounded-lg border border-border bg-card shadow-sm">
       {/*
         `<summary>` — единственная нажимаемая часть. Убираем системный маркер (`list-none`) и
         рисуем свой, иначе у разных браузеров вид разный.
@@ -48,7 +45,7 @@ export function Spoiler({
       <summary className="flex cursor-pointer list-none items-start justify-between gap-3 p-4 [&::-webkit-details-marker]:hidden">
         <span className="flex min-w-0 flex-col gap-1">
           <span className="flex flex-wrap items-center gap-2">
-            <span className="text-base font-semibold text-slate-900">{title}</span>
+            <span className="text-base font-semibold text-foreground">{title}</span>
             {meta}
           </span>
 
@@ -58,7 +55,7 @@ export function Spoiler({
           */}
           {summary !== undefined && summary !== '' && (
             <span
-              className="overflow-hidden text-sm text-slate-500 group-open:hidden"
+              className="overflow-hidden text-sm text-muted-foreground group-open:hidden"
               style={{
                 display: '-webkit-box',
                 WebkitBoxOrient: 'vertical',
@@ -71,13 +68,13 @@ export function Spoiler({
         </span>
 
         {/* Подсказка меняется по состоянию: браузер сам знает, раскрыт блок или нет. */}
-        <span className="shrink-0 pt-0.5 text-sm text-blue-700">
+        <span className="shrink-0 pt-0.5 text-sm text-primary">
           <span className="group-open:hidden">Развернуть</span>
           <span className="hidden group-open:inline">Свернуть</span>
         </span>
       </summary>
 
-      <div className="border-t border-slate-100 p-4">{children}</div>
+      <div className="border-t border-border p-4">{children}</div>
     </details>
   );
 }

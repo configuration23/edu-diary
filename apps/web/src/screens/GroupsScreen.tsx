@@ -13,9 +13,10 @@ import {
   Card,
   EmptyState,
   Field,
+  formatDate,
+  Select,
   Table,
   TextInput,
-  formatDate,
 } from '../components/ui';
 import { errorMessage } from '../lib/api-client';
 import {
@@ -73,7 +74,7 @@ function CreateGroupCard({ onDone }: { onDone: () => void }) {
       }
     >
       <form
-        className="flex flex-col gap-4"
+        className="flex flex-col gap-3"
         noValidate
         onSubmit={form.handleSubmit(async (values) => {
           if (activeYear === null) return;
@@ -142,7 +143,7 @@ function EnrollForm({ groupId, groupName }: { groupId: string; groupName: string
 
   return (
     <form
-      className="flex flex-col gap-3 border-t border-slate-100 pt-4"
+      className="flex flex-col gap-3 border-t border-border pt-4"
       onSubmit={async (event) => {
         event.preventDefault();
         try {
@@ -160,7 +161,7 @@ function EnrollForm({ groupId, groupName }: { groupId: string; groupName: string
         }
       }}
     >
-      <p className="text-sm text-slate-600">
+      <p className="text-sm text-muted-foreground">
         Зачислить в «{groupName}»: дата должна попадать в период существования группы.
       </p>
 
@@ -174,9 +175,9 @@ function EnrollForm({ groupId, groupName }: { groupId: string; groupName: string
           колонке подпись и поле наезжают друг на друга. */}
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Ученик">
-          <select
+          <Select
             required
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+            className="rounded-md border border-border px-3 py-2 text-sm"
             value={studentId}
             onChange={(event) => setStudentId(event.target.value)}
           >
@@ -186,7 +187,7 @@ function EnrollForm({ groupId, groupName }: { groupId: string; groupName: string
                 {student.fullName}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
         <Field label="Дата зачисления">
           <TextInput
@@ -242,8 +243,8 @@ function GroupComposition({
           отчисляем по конкретному ученику. */}
       <EnrollForm groupId={groupId} groupName={groupName} />
 
-      <div className="mt-4 border-t border-slate-100 pt-4">
-        {enrollments.isLoading && <p className="text-sm text-slate-500">Загружаем…</p>}
+      <div className="mt-4 border-t border-border pt-4">
+        {enrollments.isLoading && <p className="text-sm text-muted-foreground">Загружаем…</p>}
         {enrollments.isError && <Alert tone="error">{errorMessage(enrollments.error)}</Alert>}
 
         {enrollments.data !== undefined && enrollments.data.items.length === 0 && (
@@ -253,17 +254,19 @@ function GroupComposition({
         {enrollments.data !== undefined && enrollments.data.items.length > 0 && (
           <Table head={['Ученик', 'Зачислен', 'Состояние', 'Примечание', '']}>
             {enrollments.data.items.map((enrollment) => (
-              <tr key={enrollment.id} className="border-b border-slate-100">
+              <tr key={enrollment.id} className="border-b border-border">
                 <td className="px-3 py-2">{enrollment.studentName}</td>
                 <td className="px-3 py-2">{formatDate(enrollment.joinedOn)}</td>
                 <td className="px-3 py-2">
                   {enrollment.leftOn === null ? (
                     <Badge tone="success">числится</Badge>
                   ) : (
-                    <span className="text-slate-500">отчислен {formatDate(enrollment.leftOn)}</span>
+                    <span className="text-muted-foreground">
+                      отчислен {formatDate(enrollment.leftOn)}
+                    </span>
                   )}
                 </td>
-                <td className="px-3 py-2 text-slate-500">{enrollment.note ?? '—'}</td>
+                <td className="px-3 py-2 text-muted-foreground">{enrollment.note ?? '—'}</td>
                 <td className="px-3 py-2">
                   {enrollment.leftOn === null && (
                     <Button tone="ghost" onClick={() => setWithdrawFor(enrollment.id)}>
@@ -277,7 +280,7 @@ function GroupComposition({
         )}
 
         {withdrawFor !== null && (
-          <div className="mt-4 flex flex-wrap items-end gap-3 rounded-md border border-slate-200 p-4">
+          <div className="mt-4 flex flex-wrap items-end gap-3 rounded-md border border-border p-4">
             <Field label="Дата отчисления" hint="Закроет зачисление, история останется">
               <TextInput
                 type="date"
@@ -342,7 +345,7 @@ function EditGroupForm({
 
   return (
     <form
-      className="mt-4 flex flex-col gap-4 rounded-md border border-slate-200 p-4"
+      className="mt-4 flex flex-col gap-3 rounded-md border border-border p-4"
       noValidate
       onSubmit={form.handleSubmit(async (values) => {
         try {
@@ -443,7 +446,7 @@ export function GroupsScreen({ canManageStudents = false }: { canManageStudents?
           )
         }
       >
-        {groups.isLoading && <p className="text-sm text-slate-500">Загружаем…</p>}
+        {groups.isLoading && <p className="text-sm text-muted-foreground">Загружаем…</p>}
         {groups.isError && <Alert tone="error">{errorMessage(groups.error)}</Alert>}
 
         {groups.data !== undefined && groups.data.items.length === 0 && (
@@ -453,11 +456,11 @@ export function GroupsScreen({ canManageStudents = false }: { canManageStudents?
         {groups.data !== undefined && groups.data.items.length > 0 && (
           <Table head={['Группа', 'Курс', 'Специальность', 'Даты', 'Учеников', '']}>
             {groups.data.items.map((group) => (
-              <tr key={group.id} className="border-b border-slate-100">
+              <tr key={group.id} className="border-b border-border">
                 <td className="px-3 py-2 font-medium">{group.name}</td>
                 <td className="px-3 py-2">{group.course ?? '—'}</td>
-                <td className="px-3 py-2 text-slate-600">{group.specialty ?? '—'}</td>
-                <td className="px-3 py-2 text-slate-600">
+                <td className="px-3 py-2 text-muted-foreground">{group.specialty ?? '—'}</td>
+                <td className="px-3 py-2 text-muted-foreground">
                   {formatDate(group.startsOn)} — {formatDate(group.endsOn)}
                 </td>
                 <td className="px-3 py-2">{group.studentsCount}</td>
