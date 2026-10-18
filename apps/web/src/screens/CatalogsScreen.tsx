@@ -125,7 +125,7 @@ function SubjectsCard() {
               </Field>
               <Field label="Вид">
                 <select
-                  className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+                  className="rounded-md border border-border px-3 py-2 text-sm"
                   value={kind}
                   onChange={(event) =>
                     setKind(event.target.value as 'mandatory' | 'optional' | 'practice')
@@ -143,12 +143,12 @@ function SubjectsCard() {
                   <input
                     type="color"
                     name="color"
-                    className="h-9 w-12 rounded border border-slate-300"
+                    className="h-9 w-12 rounded border border-border"
                     value={color === '' ? nextSubjectColor : color}
                     onChange={(event) => setColor(event.target.value)}
                   />
                   {color === '' && (
-                    <span className="text-xs text-slate-500">по кругу оттенков</span>
+                    <span className="text-xs text-muted-foreground">по кругу оттенков</span>
                   )}
                 </span>
               </Field>
@@ -172,7 +172,7 @@ function SubjectsCard() {
       )}
 
       <div className="mt-4">
-        {subjects.isLoading && <p className="text-sm text-slate-500">Загружаем…</p>}
+        {subjects.isLoading && <p className="text-sm text-muted-foreground">Загружаем…</p>}
         {subjects.isError && <Alert tone="error">{errorMessage(subjects.error)}</Alert>}
 
         {subjects.data !== undefined && subjects.data.items.length === 0 && (
@@ -182,12 +182,12 @@ function SubjectsCard() {
         {subjects.data !== undefined && subjects.data.items.length > 0 && (
           <Table head={['Предмет', 'Коротко', 'Вид', '']}>
             {subjects.data.items.map((subject) => (
-              <tr key={subject.id} className="border-b border-slate-100">
+              <tr key={subject.id} className="border-b border-border">
                 <td className="px-3 py-2 font-medium">
                   <SubjectDot subjectId={subject.id} color={subject.color} />
                   {subject.name}
                 </td>
-                <td className="px-3 py-2 text-slate-600">{subject.shortName ?? '—'}</td>
+                <td className="px-3 py-2 text-muted-foreground">{subject.shortName ?? '—'}</td>
                 <td className="px-3 py-2">
                   <Badge>{subjectKindLabel(subject.kind)}</Badge>
                 </td>
@@ -221,7 +221,7 @@ function SubjectsCard() {
 
         {editing !== null && (
           <form
-            className="mt-4 flex flex-wrap items-end gap-3 rounded-md border border-slate-200 p-4"
+            className="mt-4 flex flex-wrap items-end gap-3 rounded-md border border-border p-4"
             onSubmit={async (event) => {
               event.preventDefault();
               try {
@@ -253,7 +253,7 @@ function SubjectsCard() {
             </Field>
             <Field label="Вид">
               <select
-                className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+                className="rounded-md border border-border px-3 py-2 text-sm"
                 value={editKind}
                 onChange={(event) =>
                   setEditKind(event.target.value as 'mandatory' | 'optional' | 'practice')
@@ -271,7 +271,7 @@ function SubjectsCard() {
                 <input
                   type="color"
                   name="editColor"
-                  className="h-9 w-12 rounded border border-slate-300"
+                  className="h-9 w-12 rounded border border-border"
                   value={editColor === '' ? subjectColor(editing.id) : editColor}
                   onChange={(event) => setEditColor(event.target.value)}
                 />
@@ -389,10 +389,10 @@ function RoomsCard() {
         {rooms.data !== undefined && rooms.data.items.length > 0 && (
           <Table head={['Аудитория', 'Вместимость', 'Примечание', '']}>
             {rooms.data.items.map((room) => (
-              <tr key={room.id} className="border-b border-slate-100">
+              <tr key={room.id} className="border-b border-border">
                 <td className="px-3 py-2 font-medium">{room.name}</td>
                 <td className="px-3 py-2">{room.capacity ?? '—'}</td>
-                <td className="px-3 py-2 text-slate-600">{room.note ?? '—'}</td>
+                <td className="px-3 py-2 text-muted-foreground">{room.note ?? '—'}</td>
                 <td className="px-3 py-2">
                   <span className="flex flex-wrap gap-2">
                     <Button tone="ghost" onClick={() => startEditing(room)}>
@@ -416,7 +416,7 @@ function RoomsCard() {
 
         {editing !== null && (
           <form
-            className="mt-4 flex flex-wrap items-end gap-3 rounded-md border border-slate-200 p-4"
+            className="mt-4 flex flex-wrap items-end gap-3 rounded-md border border-border p-4"
             onSubmit={async (event) => {
               event.preventDefault();
               try {
@@ -551,7 +551,7 @@ function CategoriesCard() {
         {categories.data !== undefined && categories.data.items.length > 0 && (
           <Table head={['Код', 'Название', 'Вес', '', '']}>
             {categories.data.items.map((category) => (
-              <tr key={category.id} className="border-b border-slate-100">
+              <tr key={category.id} className="border-b border-border">
                 <td className="px-3 py-2 font-mono text-xs">{category.code}</td>
                 <td className="px-3 py-2">{category.title}</td>
                 <td className="px-3 py-2">{category.weight}</td>
@@ -590,7 +590,7 @@ function CategoriesCard() {
 
         {editing !== null && (
           <form
-            className="mt-4 flex flex-wrap items-end gap-3 rounded-md border border-slate-200 p-4"
+            className="mt-4 flex flex-wrap items-end gap-3 rounded-md border border-border p-4"
             onSubmit={async (event) => {
               event.preventDefault();
               try {
@@ -663,13 +663,13 @@ function SignRulesCard() {
       {rules.data !== undefined && (
         <Table head={['Знак', 'Причина оценки', 'Сколько знаков', 'Пересчёт', '']}>
           {rules.data.items.map((rule) => (
-            <tr key={rule.id} className="border-b border-slate-100">
+            <tr key={rule.id} className="border-b border-border">
               <td className="px-3 py-2 text-lg font-semibold">
                 {rule.sign === 'plus' ? '+' : '·'}
               </td>
               <td className="px-3 py-2">
                 {rule.categoryTitle}
-                <span className="block text-xs text-slate-500">
+                <span className="block text-xs text-muted-foreground">
                   выдаётся оценка «{rule.sign === 'plus' ? '5' : '2'}»
                 </span>
               </td>
@@ -704,7 +704,9 @@ function SignRulesCard() {
                   {rule.isActive ? 'включён' : 'выключен'}
                 </label>
               </td>
-              <td className="px-3 py-2 text-xs text-slate-500">порог меняется при уходе из поля</td>
+              <td className="px-3 py-2 text-xs text-muted-foreground">
+                порог меняется при уходе из поля
+              </td>
             </tr>
           ))}
         </Table>
@@ -760,7 +762,7 @@ function BellsCard() {
             <div className="grid gap-3 sm:grid-cols-4">
               <Field label="Пара">
                 <select
-                  className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+                  className="rounded-md border border-border px-3 py-2 text-sm"
                   value={pairNumber}
                   onChange={(event) => setPairNumber(event.target.value)}
                 >
@@ -822,11 +824,11 @@ function BellsCard() {
         {bells.data !== undefined && bells.data.items.length > 0 && (
           <Table head={['Пара', 'Начало', 'Окончание', 'Перемена', '']}>
             {bells.data.items.map((bell) => (
-              <tr key={bell.id} className="border-b border-slate-100">
+              <tr key={bell.id} className="border-b border-border">
                 <td className="px-3 py-2 font-medium">{bell.pairNumber}-я</td>
                 <td className="px-3 py-2">{bell.timeStart}</td>
                 <td className="px-3 py-2">{bell.timeEnd}</td>
-                <td className="px-3 py-2 text-slate-500">{bell.breakMinutes ?? '—'}</td>
+                <td className="px-3 py-2 text-muted-foreground">{bell.breakMinutes ?? '—'}</td>
                 <td className="px-3 py-2">
                   <span className="flex flex-wrap gap-2">
                     <Button

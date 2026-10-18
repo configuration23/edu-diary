@@ -181,7 +181,7 @@ export function SetupScreen({ status }: { status: SetupStatusResponseDto }) {
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6">
       <header>
         <h1 className="text-2xl font-semibold">Первичная настройка дневника</h1>
-        <p className="mt-1 text-sm text-slate-500">
+        <p className="mt-1 text-sm text-muted-foreground">
           Шаг {step + 1} из {STEPS.length}: {STEPS[step]}
         </p>
       </header>
@@ -192,17 +192,27 @@ export function SetupScreen({ status }: { status: SetupStatusResponseDto }) {
       >
         <ul className="flex flex-col gap-2 text-sm">
           <li className="flex justify-between gap-4">
-            <span className="text-slate-500">Подключение к базе данных</span>
-            <span className={checks.database.status === 'ok' ? 'text-green-700' : 'text-red-700'}>
+            <span className="text-muted-foreground">Подключение к базе данных</span>
+            <span
+              className={
+                checks.database.status === 'ok'
+                  ? 'text-success-foreground'
+                  : 'text-danger-foreground'
+              }
+            >
               {checks.database.status === 'ok'
                 ? `есть, ${checks.database.latencyMs ?? 0} мс`
                 : (checks.database.message ?? 'нет подключения')}
             </span>
           </li>
           <li className="flex justify-between gap-4">
-            <span className="text-slate-500">Миграции</span>
+            <span className="text-muted-foreground">Миграции</span>
             <span
-              className={checks.migrations.status === 'ok' ? 'text-green-700' : 'text-amber-700'}
+              className={
+                checks.migrations.status === 'ok'
+                  ? 'text-success-foreground'
+                  : 'text-warning-foreground'
+              }
             >
               применено {checks.migrations.applied}, ожидает {checks.migrations.pending}
             </span>
@@ -286,7 +296,7 @@ export function SetupScreen({ status }: { status: SetupStatusResponseDto }) {
               <div className="grid gap-4 sm:grid-cols-3">
                 <Field label="Тип периода">
                   <select
-                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                    className="w-full rounded-md border border-border px-3 py-2 text-sm"
                     {...form.register('periodKind')}
                   >
                     <option value="semester">Семестр</option>

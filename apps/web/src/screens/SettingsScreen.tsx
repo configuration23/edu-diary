@@ -22,7 +22,7 @@ import { SecurityScreen } from './SecurityScreen';
 
 const MAX_LOGO_BYTES = 256 * 1024;
 
-const selectClass = 'w-full rounded-md border border-slate-300 px-3 py-2 text-sm';
+const selectClass = 'w-full rounded-md border border-border px-3 py-2 text-sm';
 
 /**
  * Оформление уроков: чем обозначать события и использовать ли цвета предметов.
@@ -133,7 +133,7 @@ function AppearanceForm({
           Использовать цвета предметов
         </label>
 
-        <div className="rounded-md bg-slate-50 p-3 text-sm text-slate-600">
+        <div className="rounded-md bg-muted p-3 text-sm text-muted-foreground">
           Пример: занятие по предмету с закреплённым цветом
           {markersEnabled && <span className="ml-1 text-base">{markers.replaced}</span>} — значок
           стоит в углу плитки, а цвет плитки показывает предмет.

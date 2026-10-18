@@ -76,8 +76,8 @@ export function SecurityScreen({ heading = true }: { heading?: boolean } = {}) {
       {events.data !== undefined && events.data.items.length > 0 && (
         <Table head={['Когда', 'Тип', 'Важность', 'Кто', 'Подробности', '']}>
           {events.data.items.map((event) => (
-            <tr key={event.id} className="border-b border-slate-100 align-top">
-              <td className="px-3 py-2 whitespace-nowrap text-slate-500">
+            <tr key={event.id} className="border-b border-border align-top">
+              <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">
                 {formatDateTime(event.detectedAt)}
               </td>
               <td className="px-3 py-2 font-medium">{event.kind}</td>
@@ -91,19 +91,19 @@ export function SecurityScreen({ heading = true }: { heading?: boolean } = {}) {
               <td className="px-3 py-2">
                 {event.actorName ?? 'система'}
                 {event.ip !== null && (
-                  <span className="block text-xs text-slate-400">{event.ip}</span>
+                  <span className="block text-xs text-subtle-foreground">{event.ip}</span>
                 )}
               </td>
               <td className="px-3 py-2">
                 {event.details === null ? (
-                  <span className="text-slate-400">—</span>
+                  <span className="text-subtle-foreground">—</span>
                 ) : (
-                  <pre className="max-w-md overflow-x-auto rounded bg-slate-50 p-2 text-xs">
+                  <pre className="max-w-md overflow-x-auto rounded bg-muted p-2 text-xs">
                     {JSON.stringify(event.details, null, 2)}
                   </pre>
                 )}
                 {event.resolution !== null && (
-                  <p className="mt-1 text-xs text-slate-500">Разбор: {event.resolution}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Разбор: {event.resolution}</p>
                 )}
               </td>
               <td className="px-3 py-2 text-right">

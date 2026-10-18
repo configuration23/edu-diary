@@ -27,8 +27,8 @@ const MIGRATIONS_LABELS: Record<HealthResponse['checks']['migrations']['status']
 
 function Row({ title, value }: { title: string; value: string }) {
   return (
-    <div className="flex justify-between gap-4 border-b border-slate-200 py-2 last:border-b-0">
-      <dt className="text-slate-500">{title}</dt>
+    <div className="flex justify-between gap-4 border-b border-border py-2 last:border-b-0">
+      <dt className="text-muted-foreground">{title}</dt>
       <dd className="text-right font-medium">{value}</dd>
     </div>
   );
@@ -39,9 +39,9 @@ export function SystemStatus({ state }: { state: HealthState }) {
     return (
       <section
         data-testid="health-status"
-        className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm"
+        className="rounded-lg border border-border bg-card p-6 shadow-sm"
       >
-        <p className="text-slate-600">Проверяем состояние системы…</p>
+        <p className="text-muted-foreground">Проверяем состояние системы…</p>
       </section>
     );
   }
@@ -50,10 +50,10 @@ export function SystemStatus({ state }: { state: HealthState }) {
     return (
       <section
         data-testid="health-status"
-        className="rounded-lg border border-red-300 bg-red-50 p-6 shadow-sm"
+        className="rounded-lg border border-danger-border bg-danger-soft p-6 shadow-sm"
       >
-        <h2 className="text-lg font-semibold text-red-800">Нет связи с сервером</h2>
-        <p className="mt-1 text-sm text-red-700">{state.message}</p>
+        <h2 className="text-lg font-semibold text-danger-foreground">Нет связи с сервером</h2>
+        <p className="mt-1 text-sm text-danger-foreground">{state.message}</p>
       </section>
     );
   }
@@ -65,10 +65,10 @@ export function SystemStatus({ state }: { state: HealthState }) {
   return (
     <section
       data-testid="health-status"
-      className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm"
+      className="rounded-lg border border-border bg-card p-6 shadow-sm"
     >
       <h2 className="text-lg font-semibold">{STATUS_LABELS[health.status]}</h2>
-      <p className="mt-1 text-sm text-slate-500">Версия API: {health.version}</p>
+      <p className="mt-1 text-sm text-muted-foreground">Версия API: {health.version}</p>
 
       <dl className="mt-4 text-sm">
         <Row

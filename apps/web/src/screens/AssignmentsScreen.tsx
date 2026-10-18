@@ -173,7 +173,7 @@ function CreateAssignmentCard({ onDone }: { onDone: () => void }) {
           <Field label="Преподаватель">
             <select
               required
-              className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+              className="rounded-md border border-border px-3 py-2 text-sm"
               value={teacherUserId}
               onChange={(event) => setTeacherUserId(event.target.value)}
             >
@@ -188,7 +188,7 @@ function CreateAssignmentCard({ onDone }: { onDone: () => void }) {
           <Field label="Предмет">
             <select
               required
-              className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+              className="rounded-md border border-border px-3 py-2 text-sm"
               value={subjectId}
               onChange={(event) => setSubjectId(event.target.value)}
             >
@@ -203,7 +203,7 @@ function CreateAssignmentCard({ onDone }: { onDone: () => void }) {
           <Field label="Группа">
             <select
               required
-              className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+              className="rounded-md border border-border px-3 py-2 text-sm"
               value={studyGroupId}
               onChange={(event) => setStudyGroupId(event.target.value)}
             >
@@ -331,7 +331,7 @@ export function AssignmentsScreen({ session }: { session: SessionResponseDto }) 
          */}
         <div className="mb-3">
           <select
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+            className="rounded-md border border-border px-3 py-2 text-sm"
             value={groupId}
             onChange={(event) => setGroupId(event.target.value)}
           >
@@ -344,7 +344,7 @@ export function AssignmentsScreen({ session }: { session: SessionResponseDto }) 
           </select>
         </div>
 
-        {assignments.isLoading && <p className="text-sm text-slate-500">Загружаем…</p>}
+        {assignments.isLoading && <p className="text-sm text-muted-foreground">Загружаем…</p>}
         {assignments.isError && <Alert tone="error">{errorMessage(assignments.error)}</Alert>}
         {close.isError && <Alert tone="error">{errorMessage(close.error)}</Alert>}
 
@@ -355,11 +355,11 @@ export function AssignmentsScreen({ session }: { session: SessionResponseDto }) 
         {assignments.data !== undefined && assignments.data.items.length > 0 && (
           <Table head={['Преподаватель', 'Предмет', 'Группа', 'Период', 'Часов', 'Состояние', '']}>
             {assignments.data.items.map((assignment) => (
-              <tr key={assignment.id} className="border-b border-slate-100">
+              <tr key={assignment.id} className="border-b border-border">
                 <td className="px-3 py-2">{assignment.teacherName}</td>
                 <td className="px-3 py-2">{assignment.subjectName}</td>
                 <td className="px-3 py-2">{assignment.groupName}</td>
-                <td className="px-3 py-2 text-slate-600">
+                <td className="px-3 py-2 text-muted-foreground">
                   {formatDate(assignment.startsOn)} —{' '}
                   {assignment.endsOn === null ? 'действует' : formatDate(assignment.endsOn)}
                 </td>

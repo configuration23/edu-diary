@@ -125,7 +125,7 @@ export function NewGuardianForm({ onCreated }: { onCreated: (message: string) =>
           </Field>
           <Field label="Кем является">
             <select
-              className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+              className="rounded-md border border-border px-3 py-2 text-sm"
               value={relation}
               onChange={(event) => setRelation(event.target.value)}
             >
@@ -141,7 +141,7 @@ export function NewGuardianForm({ onCreated }: { onCreated: (message: string) =>
         <Field label="Ученик" hint="К кому привязать представителя">
           <select
             required
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+            className="rounded-md border border-border px-3 py-2 text-sm"
             value={studentId}
             onChange={(event) => setStudentId(event.target.value)}
           >
@@ -161,7 +161,7 @@ export function NewGuardianForm({ onCreated }: { onCreated: (message: string) =>
           </EmptyState>
         )}
 
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-muted-foreground">
           Создаются два действия подряд: учётная запись с ролью «Родитель» и привязка к ученику.
           Если привязка не прошла, учётная запись остаётся — её видно в списке ниже, и привязку
           можно повторить блоком «Привязка законного представителя».

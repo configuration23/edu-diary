@@ -99,7 +99,7 @@ function AboutSettings() {
 
   return (
     <form
-      className="flex flex-col gap-4 rounded-md border border-slate-300 bg-slate-50 p-4"
+      className="flex flex-col gap-4 rounded-md border border-border bg-muted p-4"
       onSubmit={async (event) => {
         event.preventDefault();
         setSaved(false);
@@ -121,7 +121,7 @@ function AboutSettings() {
         Заголовок того же вида, что у саб-блока «Новости»: два блока должны читаться как равные
         части одной страницы, а не как «заголовок и приписка под ним».
       */}
-      <h3 className="text-base font-semibold text-slate-900">Об учебном заведении</h3>
+      <h3 className="text-base font-semibold text-foreground">Об учебном заведении</h3>
 
       <Field label="Заголовок">
         <TextInput
@@ -133,14 +133,14 @@ function AboutSettings() {
 
       <Field label="Текст">
         <textarea
-          className="min-h-28 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+          className="min-h-28 w-full rounded-md border border-border px-3 py-2 text-sm"
           value={text}
           onChange={(event) => setText(event.target.value)}
           placeholder="История, направления, контакты"
         />
       </Field>
 
-      <label className="flex items-center gap-2 text-sm text-slate-800">
+      <label className="flex items-center gap-2 text-sm text-foreground">
         <input
           type="checkbox"
           checked={visible}
@@ -224,9 +224,9 @@ export function NewsSettingsCard({
       <AboutSettings />
 
       {/* Оформление то же, что у саб-блока «Об учебном заведении»: два блока — равные части. */}
-      <div className="flex flex-col gap-4 rounded-md border border-slate-300 bg-slate-50 p-4">
+      <div className="flex flex-col gap-4 rounded-md border border-border bg-muted p-4">
         <header className="flex flex-wrap items-start justify-between gap-3">
-          <h3 className="text-base font-semibold text-slate-900">Новости</h3>
+          <h3 className="text-base font-semibold text-foreground">Новости</h3>
           {draft === null && (
             <Button onClick={() => setDraft(emptyDraft())}>Написать новость</Button>
           )}
@@ -234,7 +234,7 @@ export function NewsSettingsCard({
 
         {draft !== null && (
           <form
-            className="flex flex-col gap-4 rounded-md border border-slate-300 bg-slate-50 p-4"
+            className="flex flex-col gap-4 rounded-md border border-border bg-muted p-4"
             onSubmit={async (event) => {
               event.preventDefault();
               await save();
@@ -249,7 +249,7 @@ export function NewsSettingsCard({
 
             <Field label="Текст новости">
               <textarea
-                className="min-h-32 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                className="min-h-32 w-full rounded-md border border-border px-3 py-2 text-sm"
                 value={draft.body}
                 onChange={(event) => setDraft({ ...draft, body: event.target.value })}
               />
@@ -262,7 +262,7 @@ export function NewsSettingsCard({
                   value={draft.publishedOn}
                   onChange={(event) => setDraft({ ...draft, publishedOn: event.target.value })}
                 />
-                <span className="text-xs text-slate-500">
+                <span className="text-xs text-muted-foreground">
                   Дату можно поставить вперёд: новость появится в назначенный день.
                 </span>
               </Field>
@@ -273,7 +273,7 @@ export function NewsSettingsCard({
                   value={draft.visibleUntil}
                   onChange={(event) => setDraft({ ...draft, visibleUntil: event.target.value })}
                 />
-                <span className="text-xs text-slate-500">
+                <span className="text-xs text-muted-foreground">
                   Пусто — бессрочно. Так обычно и бывает.
                 </span>
               </Field>
@@ -302,7 +302,7 @@ export function NewsSettingsCard({
                   event.target.value = '';
                 }}
               />
-              <span className="text-xs text-slate-500">
+              <span className="text-xs text-muted-foreground">
                 {draft.imageName === null
                   ? 'Размер и тип проверяет сервер. Файл хранится там же, где вложения заданий.'
                   : `Прикреплено: ${draft.imageName}`}
@@ -311,7 +311,7 @@ export function NewsSettingsCard({
 
             <Field label="Где показать картинку">
               <select
-                className="w-full max-w-xs rounded-md border border-slate-300 px-3 py-2 text-sm"
+                className="w-full max-w-xs rounded-md border border-border px-3 py-2 text-sm"
                 value={draft.imagePosition}
                 onChange={(event) =>
                   setDraft({
@@ -323,7 +323,7 @@ export function NewsSettingsCard({
                 <option value="top">Сверху текста</option>
                 <option value="bottom">Снизу текста</option>
               </select>
-              <span className="text-xs text-slate-500">
+              <span className="text-xs text-muted-foreground">
                 Выбор сохраняется вместе с новостью и действует и на «Обзоре», и в свёрнутом виде.
               </span>
             </Field>
@@ -342,16 +342,16 @@ export function NewsSettingsCard({
         )}
 
         {items.length === 0 ? (
-          <p className="text-sm text-slate-500">Новостей пока нет.</p>
+          <p className="text-sm text-muted-foreground">Новостей пока нет.</p>
         ) : (
           <ul className="flex flex-col">
             {items.map((item) => (
               <li
                 key={item.id}
-                className="flex flex-wrap items-center gap-3 border-b border-slate-100 py-2 last:border-0"
+                className="flex flex-wrap items-center gap-3 border-b border-border py-2 last:border-0"
               >
                 <span className="min-w-0 flex-1 truncate text-sm font-medium">{item.title}</span>
-                <span className="text-xs text-slate-500">{item.publishedOn}</span>
+                <span className="text-xs text-muted-foreground">{item.publishedOn}</span>
 
                 {/*
                 Состояние словами, а не по датам в голове: администратор должен видеть, показывается

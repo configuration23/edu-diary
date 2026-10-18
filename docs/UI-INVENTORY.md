@@ -3,7 +3,7 @@
 Отчёт **генерируется**: `npm run ui:inventory`. Руками не правится — правки затрутся при
 следующем запуске, а числа разойдутся с кодом.
 
-Файлов `.tsx`: **42** (экранов: 24), строк: 13241.
+Файлов `.tsx`: **42** (экранов: 24), строк: 13277.
 
 ## Примитивы: что уже есть
 
@@ -33,7 +33,7 @@
 | <input> без type | 1 | 1 |
 
 Сырых контролов всего: **75**. Рамка поля ввода `rounded-md border border-slate-300` скопирована руками
-**49** раз в 22 файлах — это один и тот же класс, повторённый
+**0** раз в 0 файлах — это один и тот же класс, повторённый
 по месту.
 
 ## Дыра вторая: отступы без правила
@@ -80,7 +80,7 @@
 
 | Способ | Раз |
 | --- | --- |
-| text-blue-700 underline | 8 |
+| text-blue-700 underline | 0 |
 | cursor-pointer text-blue-700 | 0 |
 | activeProps (навигация) | 2 |
 | <Link | 4 |
@@ -89,20 +89,13 @@
 
 | Токен | Раз | Файлов |
 | --- | --- | --- |
-| bg-slate-900 | 7 | 4 |
-| bg-white | 7 | 4 |
+| bg-slate-900 | 1 | 1 |
 
 Семейства цветов:
 
 | Семейство | Раз |
 | --- | --- |
-| slate | 376 |
-| amber | 18 |
-| sky | 18 |
-| red | 11 |
-| blue | 10 |
-| emerald | 7 |
-| green | 2 |
+| slate | 1 |
 
 ## Заголовки и ширины страниц
 
@@ -199,24 +192,24 @@
 
 | Экран | Сырых контролов | Рамка | Card | Section | Заголовков |
 | --- | --- | --- | --- | --- | --- |
-| `GradesAttendanceScreen.tsx` | 6 | 4 | 10 | 0 | 3 |
-| `ScheduleTemplateScreen.tsx` | 7 | 2 | 1 | 0 | 0 |
-| `AssignmentsScreen.tsx` | 4 | 4 | 2 | 0 | 0 |
-| `PrivacyScreen.tsx` | 4 | 4 | 4 | 0 | 0 |
-| `CatalogsScreen.tsx` | 4 | 3 | 5 | 0 | 0 |
-| `LessonsScreen.tsx` | 6 | 1 | 1 | 0 | 0 |
-| `StudentsCard.tsx` | 4 | 3 | 4 | 0 | 0 |
-| `LessonJournalScreen.tsx` | 4 | 1 | 5 | 0 | 0 |
-| `SubstitutionsScreen.tsx` | 3 | 2 | 1 | 0 | 0 |
-| `MyHomeworkScreen.tsx` | 3 | 1 | 4 | 0 | 0 |
-| `NewGuardianCard.tsx` | 2 | 2 | 0 | 0 | 0 |
-| `SettingsScreen.tsx` | 3 | 1 | 2 | 0 | 0 |
-| `AcademicsScreen.tsx` | 2 | 1 | 3 | 0 | 0 |
-| `SubmittedWorksScreen.tsx` | 1 | 2 | 0 | 1 | 0 |
-| `GroupsScreen.tsx` | 1 | 1 | 3 | 0 | 0 |
-| `ScheduleScreen.tsx` | 1 | 1 | 1 | 0 | 0 |
-| `SetupScreen.tsx` | 1 | 1 | 2 | 0 | 1 |
+| `ScheduleTemplateScreen.tsx` | 7 | 0 | 1 | 0 | 0 |
+| `GradesAttendanceScreen.tsx` | 6 | 0 | 10 | 0 | 3 |
+| `LessonsScreen.tsx` | 6 | 0 | 1 | 0 | 0 |
+| `AssignmentsScreen.tsx` | 4 | 0 | 2 | 0 | 0 |
+| `CatalogsScreen.tsx` | 4 | 0 | 5 | 0 | 0 |
+| `LessonJournalScreen.tsx` | 4 | 0 | 5 | 0 | 0 |
+| `PrivacyScreen.tsx` | 4 | 0 | 4 | 0 | 0 |
+| `StudentsCard.tsx` | 4 | 0 | 4 | 0 | 0 |
+| `MyHomeworkScreen.tsx` | 3 | 0 | 4 | 0 | 0 |
+| `SettingsScreen.tsx` | 3 | 0 | 2 | 0 | 0 |
+| `SubstitutionsScreen.tsx` | 3 | 0 | 1 | 0 | 0 |
+| `AcademicsScreen.tsx` | 2 | 0 | 3 | 0 | 0 |
+| `NewGuardianCard.tsx` | 2 | 0 | 0 | 0 | 0 |
 | `UsersScreen.tsx` | 2 | 0 | 2 | 0 | 0 |
+| `GroupsScreen.tsx` | 1 | 0 | 3 | 0 | 0 |
+| `ScheduleScreen.tsx` | 1 | 0 | 1 | 0 | 0 |
+| `SetupScreen.tsx` | 1 | 0 | 2 | 0 | 1 |
+| `SubmittedWorksScreen.tsx` | 1 | 0 | 0 | 1 | 0 |
 | `AcademicProcessScreen.tsx` | 0 | 0 | 0 | 0 | 0 |
 | `AuditScreen.tsx` | 0 | 0 | 1 | 0 | 0 |
 | `DashboardScreen.tsx` | 0 | 0 | 2 | 0 | 0 |

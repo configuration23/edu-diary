@@ -43,7 +43,7 @@ export function MyHomeworkScreen() {
       >
         <Field label="Показать задания на дату">
           <TextInput type="date" value={date} onChange={(event) => setDate(event.target.value)} />
-          <span className="text-xs text-slate-500">
+          <span className="text-xs text-muted-foreground">
             Продолжительное задание видно в уроках предмета до своей даты, но сдаётся один раз — в
             списке оно встречается один раз.
           </span>
@@ -98,7 +98,7 @@ function HomeworkItem({ assignment }: { assignment: HomeworkAssignmentSummaryDto
           Обе даты нужны ученику: к какому уроку сдать и когда задали. Вторая помогает
           понять, «свежее» это задание или висит давно.
         */}
-        <p className="text-sm text-slate-600">
+        <p className="text-sm text-muted-foreground">
           Сдать к уроку {assignment.dueLessonDate}
           {/* Сдавать после срока можно: не наказываем за задержку, но показываем факт. */}
           {own === null && assignment.dueLessonDate < todayIso() && ' — срок прошёл, сдать можно'}
@@ -111,7 +111,7 @@ function HomeworkItem({ assignment }: { assignment: HomeworkAssignmentSummaryDto
             {assignment.links.map((link) => (
               <li key={link.id}>
                 <a
-                  className="text-blue-700 underline"
+                  className="text-primary underline"
                   href={link.url}
                   target="_blank"
                   rel="noreferrer noopener"
@@ -128,7 +128,7 @@ function HomeworkItem({ assignment }: { assignment: HomeworkAssignmentSummaryDto
             {assignment.files.map((file) => (
               <li key={file.id}>
                 <a
-                  className="text-blue-700 underline"
+                  className="text-primary underline"
                   href={`/api/homework/files/${file.id}`}
                   download
                 >
@@ -140,15 +140,15 @@ function HomeworkItem({ assignment }: { assignment: HomeworkAssignmentSummaryDto
         )}
 
         {own !== null && (
-          <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm">
-            <p className="font-medium text-emerald-900">Ваше решение отправлено</p>
+          <div className="rounded-md border border-success-border bg-success-soft p-3 text-sm">
+            <p className="font-medium text-success-foreground">Ваше решение отправлено</p>
             {own.text !== '' && <p className="mt-1 whitespace-pre-wrap">{own.text}</p>}
             {own.files.length > 0 && (
               <ul className="mt-1 flex flex-col gap-1">
                 {own.files.map((file) => (
                   <li key={file.id}>
                     <a
-                      className="text-blue-700 underline"
+                      className="text-primary underline"
                       href={`/api/homework/files/${file.id}`}
                       download
                     >
@@ -158,7 +158,7 @@ function HomeworkItem({ assignment }: { assignment: HomeworkAssignmentSummaryDto
                 ))}
               </ul>
             )}
-            <p className="mt-2 text-xs text-emerald-800">
+            <p className="mt-2 text-xs text-success-foreground">
               Оценку за работу ставит преподаватель — факт сдачи оценку не проставляет.
             </p>
           </div>
@@ -166,7 +166,7 @@ function HomeworkItem({ assignment }: { assignment: HomeworkAssignmentSummaryDto
 
         {canSubmit && (
           <form
-            className="flex flex-col gap-3 border-t border-slate-200 pt-3"
+            className="flex flex-col gap-3 border-t border-border pt-3"
             onSubmit={async (event) => {
               event.preventDefault();
               setError(null);
@@ -191,7 +191,7 @@ function HomeworkItem({ assignment }: { assignment: HomeworkAssignmentSummaryDto
                 Поле ввода решения — главное на экране, ему нужна вся ширина.
               */}
               <textarea
-                className="min-h-20 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+                className="min-h-20 w-full rounded-md border border-border px-2 py-1.5 text-sm"
                 value={text}
                 onChange={(event) => setText(event.target.value)}
                 placeholder="Ответ или пояснение к работе"
@@ -216,7 +216,7 @@ function HomeworkItem({ assignment }: { assignment: HomeworkAssignmentSummaryDto
                   event.target.value = '';
                 }}
               />
-              <span className="text-xs text-slate-500">
+              <span className="text-xs text-muted-foreground">
                 Можно приложить несколько файлов по очереди. Размер и тип проверяет сервер.
               </span>
             </Field>
@@ -228,7 +228,7 @@ function HomeworkItem({ assignment }: { assignment: HomeworkAssignmentSummaryDto
                     <span>{file.originalName}</span>
                     <button
                       type="button"
-                      className="text-xs text-red-700 underline"
+                      className="text-xs text-danger-foreground underline"
                       onClick={() => setFiles((current) => current.filter((f) => f.id !== file.id))}
                     >
                       убрать
@@ -244,7 +244,7 @@ function HomeworkItem({ assignment }: { assignment: HomeworkAssignmentSummaryDto
               </Button>
             </div>
 
-            <span className="text-xs text-slate-500">
+            <span className="text-xs text-muted-foreground">
               Отправка одна: изменить решение после отправки нельзя.
             </span>
 

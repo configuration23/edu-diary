@@ -185,7 +185,9 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
               </div>
 
               <fieldset>
-                <legend className="mb-2 text-sm font-medium text-slate-700">Роли сотрудника</legend>
+                <legend className="mb-2 text-sm font-medium text-foreground">
+                  Роли сотрудника
+                </legend>
                 <div className="flex flex-wrap gap-3">
                   {staffRoles.map((role) => (
                     <label key={role.code} className="flex items-center gap-2 text-sm">
@@ -205,11 +207,11 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
                   ))}
                 </div>
                 {form.formState.errors.roles !== undefined && (
-                  <span className="mt-1 block text-xs text-red-700">
+                  <span className="mt-1 block text-xs text-danger-foreground">
                     {form.formState.errors.roles.message}
                   </span>
                 )}
-                <p className="mt-2 text-xs text-slate-500">
+                <p className="mt-2 text-xs text-muted-foreground">
                   Учеников заводят в разделе «Группы и ученики» (блок «Новый ученик»), законных
                   представителей — блоком ниже: у них учётная запись всегда связана с человеком.
                 </p>
@@ -231,7 +233,7 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
             </form>
           ) : (
             <div className="flex flex-col gap-3">
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-muted-foreground">
                 Учётная запись законного представителя создаётся вместе с привязкой к ученику:
                 отдельно, без ученика, она смысла не имеет.
               </p>
@@ -269,7 +271,7 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
         {users.data !== undefined && users.data.items.length > 0 && (
           <Table head={['Логин', 'ФИО', 'Роли', 'Состояние', 'Создан', '']}>
             {users.data.items.map((user) => (
-              <tr key={user.id} className="border-b border-slate-100 align-top">
+              <tr key={user.id} className="border-b border-border align-top">
                 <td className="px-3 py-2 font-medium">{user.username}</td>
                 <td className="px-3 py-2">{user.fullName}</td>
                 <td className="px-3 py-2">
@@ -287,7 +289,9 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
                     </span>
                   )}
                 </td>
-                <td className="px-3 py-2 text-slate-500">{formatDateTime(user.createdAt)}</td>
+                <td className="px-3 py-2 text-muted-foreground">
+                  {formatDateTime(user.createdAt)}
+                </td>
                 <td className="px-3 py-2">
                   {canManage && (
                     <div className="flex flex-wrap justify-end gap-2">
@@ -337,7 +341,7 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
         )}
 
         {editing !== null && (
-          <div className="mt-4 rounded-md border border-slate-200 p-4">
+          <div className="mt-4 rounded-md border border-border p-4">
             <p className="mb-2 text-sm font-medium">Роли учётной записи</p>
             <div className="flex flex-wrap gap-3">
               {(roles.data?.items ?? []).map((role) => (
@@ -376,7 +380,7 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
         )}
 
         {passwordFor !== null && (
-          <div className="mt-4 rounded-md border border-slate-200 p-4">
+          <div className="mt-4 rounded-md border border-border p-4">
             <Field label="Новый временный пароль" hint="Все сессии учётной записи будут отозваны">
               <TextInput
                 type="password"

@@ -45,7 +45,7 @@ function dayLabel(dayOfWeek: number): string {
   return DAYS.find((day) => day.value === dayOfWeek)?.label ?? String(dayOfWeek);
 }
 
-const selectClass = 'w-full rounded-md border border-slate-300 px-3 py-2 text-sm';
+const selectClass = 'w-full rounded-md border border-border px-3 py-2 text-sm';
 
 /**
  * Выбор группы для расписания.
@@ -251,7 +251,7 @@ function EntryForm({
           </select>
           {/* Название серым под селектом: в списке из одних номеров легко запутаться. */}
           {selectedRoom !== undefined && selectedRoom.note !== null && (
-            <span className="mt-1 block text-xs text-slate-500">{selectedRoom.note}</span>
+            <span className="mt-1 block text-xs text-muted-foreground">{selectedRoom.note}</span>
           )}
         </Field>
 
@@ -278,7 +278,7 @@ function EntryForm({
         </Field>
       </div>
 
-      <div className="rounded-md bg-slate-50 p-3 text-sm text-slate-600">
+      <div className="rounded-md bg-muted p-3 text-sm text-muted-foreground">
         {needsManualTime ? (
           <div className="flex flex-col gap-3">
             <p>
@@ -311,7 +311,7 @@ function EntryForm({
             Время по звонкам: <strong>{bell?.timeStart}</strong> — <strong>{bell?.timeEnd}</strong>.{' '}
             <button
               type="button"
-              className="text-sky-700 underline"
+              className="text-selected-foreground underline"
               onClick={() => setManualTime(true)}
             >
               Указать другое время
@@ -414,7 +414,7 @@ function EntryEditor({
           ))}
         </select>
         {selectedRoom !== undefined && selectedRoom.note !== null && (
-          <span className="mt-1 block text-xs text-slate-500">{selectedRoom.note}</span>
+          <span className="mt-1 block text-xs text-muted-foreground">{selectedRoom.note}</span>
         )}
       </Field>
       <Field label="Действует по" hint="Пусто — не менять">
@@ -515,7 +515,7 @@ export function ScheduleTemplateScreen({ session }: { session: SessionResponseDt
           открывается кнопкой и показывается **над списком** — там же, где её ждут.
         */}
         {editable && creating && (
-          <div className="mb-4 rounded-md border border-slate-300 bg-slate-50 p-4">
+          <div className="mb-4 rounded-md border border-border bg-muted p-4">
             <EntryForm
               groupId={selectedGroupId}
               groups={groups}
@@ -564,9 +564,9 @@ export function ScheduleTemplateScreen({ session }: { session: SessionResponseDt
                     удаление не должно срабатывать случайным нажатием на строку.
                   */}
                   <tr
-                    className={`border-b border-slate-100 align-top ${
+                    className={`border-b border-border align-top ${
                       editable ? 'cursor-pointer' : ''
-                    } ${editingId === entry.id ? 'bg-slate-50' : ''}`}
+                    } ${editingId === entry.id ? 'bg-muted' : ''}`}
                     onClick={editable ? () => setEditingId(entry.id) : undefined}
                   >
                     <td className="px-3 py-2">{dayLabel(entry.dayOfWeek)}</td>
@@ -576,13 +576,13 @@ export function ScheduleTemplateScreen({ session }: { session: SessionResponseDt
                     </td>
                     <td className="px-3 py-2">
                       {entry.subjectName}
-                      <div className="text-xs text-slate-500">
+                      <div className="text-xs text-muted-foreground">
                         {entry.groupName} · с {entry.validFrom}
                         {entry.validTo === null ? '' : ` по ${entry.validTo}`}
                       </div>
                     </td>
                     <td className="px-3 py-2">{teacherName(entry.teacherUserId)}</td>
-                    <td className="px-3 py-2 text-slate-500">{entry.roomName ?? '—'}</td>
+                    <td className="px-3 py-2 text-muted-foreground">{entry.roomName ?? '—'}</td>
                     <td className="px-3 py-2">
                       {editable && editingId !== entry.id && (
                         <Button
@@ -601,7 +601,7 @@ export function ScheduleTemplateScreen({ session }: { session: SessionResponseDt
                   {editingId === entry.id && (
                     // Правка — отдельной строкой таблицы: поля выстраиваются в линию,
                     // а не сжимаются в ячейку «Предмет».
-                    <tr data-static className="border-b border-slate-100 bg-slate-50">
+                    <tr data-static className="border-b border-border bg-muted">
                       <td colSpan={7} className="px-3 py-2">
                         <EntryEditor
                           entry={entry}

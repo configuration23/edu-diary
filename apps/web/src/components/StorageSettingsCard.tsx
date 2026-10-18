@@ -86,7 +86,7 @@ export function StorageSettingsCard({ heading = true }: { heading?: boolean } = 
       <div className="flex flex-col gap-4">
         <Field label="Где хранить файлы">
           <select
-            className="rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+            className="rounded-md border border-border px-2 py-1.5 text-sm"
             value={mode}
             onChange={(event) => {
               setMode(event.target.value === 's3' ? 's3' : 'local');
@@ -105,7 +105,7 @@ export function StorageSettingsCard({ heading = true }: { heading?: boolean } = 
               onChange={(event) => setLocalPath(event.target.value)}
               placeholder="/data/edu-diary/files"
             />
-            <span className="text-xs text-slate-500">
+            <span className="text-xs text-muted-foreground">
               Каталог должен быть вне папки приложения, иначе файлы исчезнут при обновлении.
             </span>
           </Field>
@@ -165,7 +165,7 @@ export function StorageSettingsCard({ heading = true }: { heading?: boolean } = 
             onChange={(event) => setMaxFileMb(event.target.value)}
             inputMode="numeric"
           />
-          <span className="text-xs text-slate-500">От 1 до 50. По умолчанию 10.</span>
+          <span className="text-xs text-muted-foreground">От 1 до 50. По умолчанию 10.</span>
         </Field>
 
         <Field label="Разрешённые типы файлов">
@@ -174,7 +174,7 @@ export function StorageSettingsCard({ heading = true }: { heading?: boolean } = 
             onChange={(event) => setAllowedTypes(event.target.value)}
             placeholder="pdf, docx, jpg, png, zip"
           />
-          <span className="text-xs text-slate-500">
+          <span className="text-xs text-muted-foreground">
             Через запятую. Пусто — набор по умолчанию. Исполняемые файлы, скрипты, HTML и SVG
             запрещены всегда, независимо от этого списка.
           </span>
@@ -205,9 +205,9 @@ export function StorageSettingsCard({ heading = true }: { heading?: boolean } = 
             {test.isPending ? 'Проверяем…' : 'Проверить подключение'}
           </Button>
 
-          {saved && <span className="text-sm text-emerald-700">Настройки сохранены.</span>}
+          {saved && <span className="text-sm text-success-foreground">Настройки сохранены.</span>}
           {update.isError && (
-            <span className="text-sm text-red-700">{errorMessage(update.error)}</span>
+            <span className="text-sm text-danger-foreground">{errorMessage(update.error)}</span>
           )}
         </div>
 
@@ -220,9 +220,9 @@ export function StorageSettingsCard({ heading = true }: { heading?: boolean } = 
               <span>{result.message}</span>
               {/* Что делать — самое нужное в отказе: без этого сообщение бесполезно. */}
               <span className="text-sm">{result.hint}</span>
-              <span className="text-xs text-slate-500">Проверяли: {result.checked}</span>
+              <span className="text-xs text-muted-foreground">Проверяли: {result.checked}</span>
               {result.detail !== null && (
-                <span className="text-xs text-slate-500">Подробность: {result.detail}</span>
+                <span className="text-xs text-muted-foreground">Подробность: {result.detail}</span>
               )}
             </div>
           </Alert>

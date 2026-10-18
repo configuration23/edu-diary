@@ -204,8 +204,8 @@ export function Checkbox({
 /**
  * Строчная ссылка.
  *
- * Была четырьмя разными способами: `text-blue-700 underline` (7 мест), `cursor-pointer
- * text-blue-700`, `<summary>` и `<Link>` в навигации. Один примитив — одно поведение и один вид.
+ * Была четырьмя разными способами: `text-primary underline` (7 мест), `cursor-pointer
+ * text-primary`, `<summary>` и `<Link>` в навигации. Один примитив — одно поведение и один вид.
  */
 export function Link({
   children,

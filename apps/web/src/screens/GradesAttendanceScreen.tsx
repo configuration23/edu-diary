@@ -75,14 +75,14 @@ function MarkChip({
   return (
     <span
       title={markTitle(mark)}
-      className="inline-flex items-baseline rounded bg-slate-100 px-1 text-sm leading-tight font-medium text-slate-800"
+      className="inline-flex items-baseline rounded bg-muted px-1 text-sm leading-tight font-medium text-foreground"
     >
       {mark.value ?? (mark.sign === 'plus' ? '+' : '·')}
       {mark.categoryCode !== null && (
-        <sup className="ml-0.5 text-[9px] text-slate-500">{mark.categoryCode}</sup>
+        <sup className="ml-0.5 text-[9px] text-muted-foreground">{mark.categoryCode}</sup>
       )}
       {mark.categoryWeight > 1 && (
-        <sub className="text-[9px] text-slate-500">{mark.categoryWeight}</sub>
+        <sub className="text-[9px] text-muted-foreground">{mark.categoryWeight}</sub>
       )}
     </span>
   );
@@ -102,7 +102,7 @@ function AttendanceChip({
     .join(' · ');
 
   return (
-    <span title={title} className="inline-block rounded bg-slate-100 px-1 text-xs text-slate-700">
+    <span title={title} className="inline-block rounded bg-muted px-1 text-xs text-foreground">
       {letter}
     </span>
   );
@@ -111,9 +111,9 @@ function AttendanceChip({
 /** Итог в конце списка: средняя или процент, отделён визуально. */
 function TotalBadge({ label, value }: { label: string; value: string }) {
   return (
-    <div className="mt-3 flex items-center justify-end gap-2 border-t border-slate-200 pt-2">
-      <span className="text-xs text-slate-500">{label}</span>
-      <span className="rounded bg-slate-900 px-2 py-0.5 text-sm font-medium text-white">
+    <div className="mt-3 flex items-center justify-end gap-2 border-t border-border pt-2">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="rounded bg-primary px-2 py-0.5 text-sm font-medium text-primary-foreground">
         {value}
       </span>
     </div>
@@ -230,8 +230,8 @@ export function GradesAttendanceScreen({ session }: { session: SessionResponseDt
   return (
     <div className="flex flex-col gap-4">
       <Card>
-        <h2 className="text-lg font-medium text-slate-900">Оценки и посещение</h2>
-        <p className="mt-1 text-sm text-slate-600">
+        <h2 className="text-lg font-medium text-foreground">Оценки и посещение</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
           Отчёт за текущий учебный период. Знаки «+» и «·» показываются в списке, но в средний балл
           не входят — это накопление, а не оценка.
         </p>
@@ -245,8 +245,8 @@ export function GradesAttendanceScreen({ session }: { session: SessionResponseDt
                 onClick={() => setTab('grades')}
                 className={`rounded-md border px-3 py-2 text-sm ${
                   tab === 'grades'
-                    ? 'border-slate-900 bg-slate-900 text-white'
-                    : 'border-slate-300 bg-white text-slate-700'
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'border-border bg-card text-foreground'
                 }`}
               >
                 Оценки
@@ -257,8 +257,8 @@ export function GradesAttendanceScreen({ session }: { session: SessionResponseDt
                 onClick={() => setTab('attendance')}
                 className={`rounded-md border px-3 py-2 text-sm ${
                   tab === 'attendance'
-                    ? 'border-slate-900 bg-slate-900 text-white'
-                    : 'border-slate-300 bg-white text-slate-700'
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'border-border bg-card text-foreground'
                 }`}
               >
                 Посещение
@@ -271,7 +271,7 @@ export function GradesAttendanceScreen({ session }: { session: SessionResponseDt
               <Field label="Группа">
                 <select
                   name="studyGroupId"
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                  className="w-full rounded-md border border-border px-3 py-2 text-sm"
                   value={adminGroupId}
                   onChange={(event) => {
                     setAdminGroupId(event.target.value);
@@ -290,7 +290,7 @@ export function GradesAttendanceScreen({ session }: { session: SessionResponseDt
               <Field label="Ученик">
                 <select
                   name="studentId"
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                  className="w-full rounded-md border border-border px-3 py-2 text-sm"
                   value={adminStudentId}
                   onChange={(event) => setAdminStudentId(event.target.value)}
                 >
@@ -310,7 +310,7 @@ export function GradesAttendanceScreen({ session }: { session: SessionResponseDt
               <Field label="Группа">
                 <select
                   name="teacherGroupId"
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                  className="w-full rounded-md border border-border px-3 py-2 text-sm"
                   value={teacherGroupId}
                   onChange={(event) => setTeacherGroupId(event.target.value)}
                 >
@@ -325,7 +325,7 @@ export function GradesAttendanceScreen({ session }: { session: SessionResponseDt
               <Field label="Предмет">
                 <select
                   name="teacherSubjectId"
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                  className="w-full rounded-md border border-border px-3 py-2 text-sm"
                   value={teacherSubjectId}
                   /* Один предмет — выбор заблокирован: выбирать не из чего. */
                   disabled={teacherSubjects.length <= 1}
@@ -343,7 +343,7 @@ export function GradesAttendanceScreen({ session }: { session: SessionResponseDt
         </div>
 
         {tab === 'attendance' && (
-          <div className="mt-4 flex flex-wrap gap-4 border-t border-slate-200 pt-3 text-sm">
+          <div className="mt-4 flex flex-wrap gap-4 border-t border-border pt-3 text-sm">
             <label className="flex items-center gap-2">
               <input
                 type="checkbox"
@@ -407,7 +407,7 @@ function SubjectView({
   if (isLoading) {
     return (
       <Card>
-        <p className="text-sm text-slate-600">Загружаем…</p>
+        <p className="text-sm text-muted-foreground">Загружаем…</p>
       </Card>
     );
   }
@@ -426,7 +426,7 @@ function SubjectView({
       <>
         {subjects.map((subject) => (
           <Card key={subject.subjectId}>
-            <h3 className="font-medium text-slate-900">{subject.subjectName}</h3>
+            <h3 className="font-medium text-foreground">{subject.subjectName}</h3>
             <div className="mt-2 flex flex-wrap gap-1">
               {subject.marks.map((mark) => (
                 <MarkChip key={mark.id} mark={mark} />
@@ -455,7 +455,7 @@ function SubjectView({
     <>
       {subjects.map((subject) => (
         <Card key={subject.subjectId}>
-          <h3 className="font-medium text-slate-900">{subject.subjectName}</h3>
+          <h3 className="font-medium text-foreground">{subject.subjectName}</h3>
           <div className="mt-2 flex flex-wrap gap-1">
             {subject.marks.map((mark) => (
               <AttendanceChip key={mark.id} mark={mark} />
@@ -490,7 +490,7 @@ function TeacherView({
   if (isLoading) {
     return (
       <Card>
-        <p className="text-sm text-slate-600">Загружаем…</p>
+        <p className="text-sm text-muted-foreground">Загружаем…</p>
       </Card>
     );
   }
@@ -518,7 +518,7 @@ function TeacherView({
         }
       >
         {students.map((student) => (
-          <tr key={student.studentId} className="border-b border-slate-100">
+          <tr key={student.studentId} className="border-b border-border">
             <td className="px-3 py-2 font-medium">{student.studentName}</td>
             {tab === 'grades' ? (
               <>
@@ -545,7 +545,7 @@ function TeacherView({
                 <td className="px-3 py-2 font-medium">
                   {student.attendance.percent}%
                   {options.countExcused || options.countSick ? (
-                    <span className="ml-1 text-xs text-slate-500">
+                    <span className="ml-1 text-xs text-muted-foreground">
                       (без галочек {student.attendance.basePercent}%)
                     </span>
                   ) : null}

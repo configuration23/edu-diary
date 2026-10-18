@@ -81,16 +81,19 @@ export function HomeworkCard({
           на этом занятии её пора проверять, и не путать со своим заданием.
         */}
         {fromEarlierLessons.length > 0 && (
-          <div className="flex flex-col gap-2 rounded-md border border-amber-300 bg-amber-50 p-3">
-            <p className="text-sm font-medium text-amber-900">
+          <div className="flex flex-col gap-2 rounded-md border border-warning-border bg-warning-soft p-3">
+            <p className="text-sm font-medium text-warning-foreground">
               К этому уроку задано раньше — проверьте:
             </p>
             {fromEarlierLessons.map((assignment) => (
               <div key={assignment.id} className="text-sm">
-                <span className="text-slate-600">от {assignment.lessonDate}: </span>
+                <span className="text-muted-foreground">от {assignment.lessonDate}: </span>
                 <span>{assignment.text}</span>
                 {assignment.files.length > 0 && (
-                  <span className="text-slate-600"> · файлов: {assignment.files.length}</span>
+                  <span className="text-muted-foreground">
+                    {' '}
+                    · файлов: {assignment.files.length}
+                  </span>
                 )}
               </div>
             ))}
@@ -99,7 +102,7 @@ export function HomeworkCard({
 
         {assignedHere.length > 0 && (
           <div className="flex flex-col gap-3">
-            <p className="text-sm font-medium text-slate-700">Задано на этом уроке</p>
+            <p className="text-sm font-medium text-foreground">Задано на этом уроке</p>
             {assignedHere.map((assignment) => (
               <AssignmentBlock
                 key={assignment.id}
@@ -140,7 +143,7 @@ export function HomeworkCard({
 
         {canManage && (
           <form
-            className="flex flex-col gap-3 border-t border-slate-200 pt-3"
+            className="flex flex-col gap-3 border-t border-border pt-3"
             onSubmit={async (event) => {
               event.preventDefault();
               setError(null);
@@ -169,7 +172,7 @@ export function HomeworkCard({
                 несколько строк, поэтому поле должно занимать всю ширину.
               */}
               <textarea
-                className="min-h-20 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+                className="min-h-20 w-full rounded-md border border-border px-2 py-1.5 text-sm"
                 value={text}
                 onChange={(event) => setText(event.target.value)}
                 placeholder="Прочитать главу 3 и ответить на вопросы"
@@ -178,7 +181,7 @@ export function HomeworkCard({
 
             <Field label="К какому уроку">
               <select
-                className="w-full max-w-md rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+                className="w-full max-w-md rounded-md border border-border px-2 py-1.5 text-sm"
                 value={dueLessonId}
                 onChange={(event) => setDueLessonId(event.target.value)}
               >
@@ -190,7 +193,7 @@ export function HomeworkCard({
                   </option>
                 ))}
               </select>
-              <span className="text-xs text-slate-500">
+              <span className="text-xs text-muted-foreground">
                 Ученик увидит задание в этом уроке и во всех промежуточных: можно принести раньше.
                 Если следующего урока нет — задание останется на текущем.
               </span>
@@ -222,7 +225,7 @@ export function HomeworkCard({
                   event.target.value = '';
                 }}
               />
-              <span className="text-xs text-slate-500">
+              <span className="text-xs text-muted-foreground">
                 Размер и тип проверяет сервер. Исполняемые файлы, скрипты, HTML и SVG запрещены
                 всегда.
               </span>
@@ -233,10 +236,10 @@ export function HomeworkCard({
                 {files.map((file) => (
                   <li key={file.id} className="flex items-center gap-2">
                     <span>{file.originalName}</span>
-                    <span className="text-slate-500">{formatSize(file.sizeBytes)}</span>
+                    <span className="text-muted-foreground">{formatSize(file.sizeBytes)}</span>
                     <button
                       type="button"
-                      className="text-xs text-red-700 underline"
+                      className="text-xs text-danger-foreground underline"
                       onClick={() =>
                         setFiles((current) => current.filter((item) => item.id !== file.id))
                       }
@@ -254,7 +257,7 @@ export function HomeworkCard({
               </Button>
             </div>
 
-            <span className="text-xs text-slate-500">
+            <span className="text-xs text-muted-foreground">
               К одному уроку можно задать несколько работ: новая не затирает прошлую.
             </span>
 
@@ -334,7 +337,7 @@ function AssignmentBlock({
   if (isEditing) {
     return (
       <form
-        className="flex flex-col gap-2 rounded-md border border-slate-300 bg-slate-50 p-3"
+        className="flex flex-col gap-2 rounded-md border border-border bg-muted p-3"
         onSubmit={async (event) => {
           event.preventDefault();
           await onSave({
@@ -353,7 +356,7 @@ function AssignmentBlock({
         <Field label="Что задано">
           {/* Та же правка, что в форме создания: поле задания — на всю ширину блока. */}
           <textarea
-            className="min-h-20 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+            className="min-h-20 w-full rounded-md border border-border px-2 py-1.5 text-sm"
             value={text}
             onChange={(event) => setText(event.target.value)}
           />
@@ -361,7 +364,7 @@ function AssignmentBlock({
 
         <Field label="К какому уроку">
           <select
-            className="w-full max-w-md rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+            className="w-full max-w-md rounded-md border border-border px-2 py-1.5 text-sm"
             value={dueLessonId}
             onChange={(event) => setDueLessonId(event.target.value)}
           >
@@ -374,7 +377,7 @@ function AssignmentBlock({
               </option>
             ))}
           </select>
-          <span className="text-xs text-slate-500">
+          <span className="text-xs text-muted-foreground">
             Ученик увидит задание в новом уроке-сроке и во всех промежуточных.
           </span>
         </Field>
@@ -385,14 +388,14 @@ function AssignmentBlock({
             onChange={(event) => setLink(event.target.value)}
             placeholder="адрес ссылки"
           />
-          <span className="text-xs text-slate-500">
+          <span className="text-xs text-muted-foreground">
             Ссылки заменяются целиком: то, что осталось в поле, и будет в задании. Очистите поле,
             чтобы убрать ссылку.
           </span>
         </Field>
 
         {assignment.links.length > 0 && (
-          <div className="text-xs text-slate-500">
+          <div className="text-xs text-muted-foreground">
             Сейчас в задании: {assignment.links.map((item) => item.title ?? item.url).join(', ')}
           </div>
         )}
@@ -409,7 +412,7 @@ function AssignmentBlock({
               event.target.value = '';
             }}
           />
-          <span className="text-xs text-slate-500">
+          <span className="text-xs text-muted-foreground">
             Размер и тип проверяет сервер. Исполняемые файлы, скрипты, HTML и SVG запрещены всегда.
           </span>
         </Field>
@@ -422,7 +425,7 @@ function AssignmentBlock({
         */}
         {assignment.files.length > 0 && (
           <div className="flex flex-col gap-1 text-sm">
-            <span className="text-xs text-slate-500">Файлы задания:</span>
+            <span className="text-xs text-muted-foreground">Файлы задания:</span>
             {assignment.files.map((file) => (
               <label key={file.id} className="flex items-center gap-2">
                 <input
@@ -437,14 +440,16 @@ function AssignmentBlock({
                   }
                 />
                 <span
-                  className={removedFiles.includes(file.id) ? 'text-slate-400 line-through' : ''}
+                  className={
+                    removedFiles.includes(file.id) ? 'text-subtle-foreground line-through' : ''
+                  }
                 >
                   {file.originalName}
                 </span>
-                <span className="text-slate-500">{formatSize(file.sizeBytes)}</span>
+                <span className="text-muted-foreground">{formatSize(file.sizeBytes)}</span>
               </label>
             ))}
-            <span className="text-xs text-slate-500">
+            <span className="text-xs text-muted-foreground">
               Снятая галочка помечает файл убранным: он исчезнет из задания, но останется в истории
               — файлы мы не стираем.
             </span>
@@ -458,7 +463,7 @@ function AssignmentBlock({
                 <span>{file.originalName}</span>
                 <button
                   type="button"
-                  className="text-xs text-red-700 underline"
+                  className="text-xs text-danger-foreground underline"
                   onClick={() =>
                     setNewFiles((current) => current.filter((item) => item.id !== file.id))
                   }
@@ -483,10 +488,10 @@ function AssignmentBlock({
   }
 
   return (
-    <div className="flex flex-col gap-2 rounded-md border border-slate-200 p-3">
+    <div className="flex flex-col gap-2 rounded-md border border-border p-3">
       <p className="whitespace-pre-wrap text-sm">{assignment.text}</p>
 
-      <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
+      <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
         {/*
           Две даты: когда задали и к какому уроку. Учителю важно видеть обе — задание могло
           быть задано раньше, а проверять его нужно сейчас.
@@ -506,7 +511,7 @@ function AssignmentBlock({
 
           {confirming ? (
             <>
-              <span className="text-sm text-red-700">
+              <span className="text-sm text-danger-foreground">
                 Убрать задание у группы? Сдачи останутся в журнале.
               </span>
               <Button
@@ -537,7 +542,7 @@ function AssignmentBlock({
           {assignment.links.map((item) => (
             <li key={item.id}>
               <a
-                className="text-blue-700 underline"
+                className="text-primary underline"
                 href={item.url}
                 target="_blank"
                 rel="noreferrer noopener"
@@ -554,13 +559,13 @@ function AssignmentBlock({
           {assignment.files.map((file) => (
             <li key={file.id}>
               <a
-                className="text-blue-700 underline"
+                className="text-primary underline"
                 href={`/api/homework/files/${file.id}`}
                 download
               >
                 {file.originalName}
               </a>{' '}
-              <span className="text-slate-500">{formatSize(file.sizeBytes)}</span>
+              <span className="text-muted-foreground">{formatSize(file.sizeBytes)}</span>
             </li>
           ))}
         </ul>
@@ -568,7 +573,7 @@ function AssignmentBlock({
 
       {canManage && (
         <div>
-          <p className="text-sm font-medium text-slate-700">Сдавшие</p>
+          <p className="text-sm font-medium text-foreground">Сдавшие</p>
           {submissions === undefined || submissions.length === 0 ? (
             <EmptyState>Пока никто не сдал.</EmptyState>
           ) : (
@@ -584,7 +589,7 @@ function AssignmentBlock({
                   {submission.files.map((file) => (
                     <a
                       key={file.id}
-                      className="text-blue-700 underline"
+                      className="text-primary underline"
                       href={`/api/homework/files/${file.id}`}
                       download
                     >

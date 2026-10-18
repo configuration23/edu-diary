@@ -105,14 +105,14 @@ export function AuditScreen({ heading = true }: { heading?: boolean } = {}) {
       {audit.data !== undefined && audit.data.items.length > 0 && (
         <Table head={['Когда', 'Кто', 'Действие', 'Сущность', 'Изменения']}>
           {audit.data.items.map((entry) => (
-            <tr key={entry.id} className="border-b border-slate-100 align-top">
-              <td className="px-3 py-2 whitespace-nowrap text-slate-500">
+            <tr key={entry.id} className="border-b border-border align-top">
+              <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">
                 {formatDateTime(entry.createdAt)}
               </td>
               <td className="px-3 py-2">
                 {entry.actorName ?? 'система'}
                 {entry.actorIp !== null && (
-                  <span className="block text-xs text-slate-400">{entry.actorIp}</span>
+                  <span className="block text-xs text-subtle-foreground">{entry.actorIp}</span>
                 )}
               </td>
               <td className="px-3 py-2">
@@ -131,7 +131,7 @@ export function AuditScreen({ heading = true }: { heading?: boolean } = {}) {
               <td className="px-3 py-2">
                 {entry.entityKind}
                 {entry.entityId !== null && (
-                  <span className="block text-xs text-slate-400">
+                  <span className="block text-xs text-subtle-foreground">
                     {entry.entityId.slice(0, 8)}…
                   </span>
                 )}

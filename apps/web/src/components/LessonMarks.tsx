@@ -56,14 +56,14 @@ export function LessonGrades({ grades }: { grades: Grade[] }) {
         <span
           key={`${grade.lessonId}-${String(index)}`}
           title={gradeTitle(grade)}
-          className="inline-flex items-baseline rounded bg-slate-100 px-1 text-sm leading-tight font-medium text-slate-800"
+          className="inline-flex items-baseline rounded bg-muted px-1 text-sm leading-tight font-medium text-foreground"
         >
           {gradeValue(grade)}
           {grade.categoryCode !== null && (
-            <sup className="ml-0.5 text-[9px] text-slate-500">{grade.categoryCode}</sup>
+            <sup className="ml-0.5 text-[9px] text-muted-foreground">{grade.categoryCode}</sup>
           )}
           {grade.categoryWeight > 1 && (
-            <sub className="text-[9px] text-slate-500">{grade.categoryWeight}</sub>
+            <sub className="text-[9px] text-muted-foreground">{grade.categoryWeight}</sub>
           )}
         </span>
       ))}
@@ -78,7 +78,7 @@ export function LessonAttendance({ mark }: { mark: Attendance | undefined }) {
   return (
     <span
       title={attendanceTitle(mark)}
-      className="inline-block rounded bg-slate-100 px-1 text-xs leading-tight text-slate-700"
+      className="inline-block rounded bg-muted px-1 text-xs leading-tight text-foreground"
     >
       {attendanceLetter(mark.status, mark.isExcused)}
     </span>
@@ -98,7 +98,7 @@ export function LessonGradesCount({ grades }: { grades: Grade[] }) {
   return (
     <span
       title="Количество оценок за день"
-      className="inline-block rounded bg-slate-100 px-1 text-[10px] leading-tight text-slate-700"
+      className="inline-block rounded bg-muted px-1 text-[10px] leading-tight text-foreground"
     >
       {grades.length}
     </span>

@@ -47,7 +47,7 @@ export function DashboardScreen(_props: { session: SessionResponseDto }) {
       */}
       {showAbout && (
         <Card title={aboutTitle ?? 'Об учебном заведении'}>
-          {aboutText !== null && <p className="whitespace-pre-wrap text-slate-800">{aboutText}</p>}
+          {aboutText !== null && <p className="whitespace-pre-wrap text-foreground">{aboutText}</p>}
         </Card>
       )}
 
