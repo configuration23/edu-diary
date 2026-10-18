@@ -14,6 +14,7 @@ import {
   Badge,
   Button,
   Card,
+  Checkbox,
   EmptyState,
   Field,
   FilePicker,
@@ -430,27 +431,29 @@ function AssignmentBlock({
           <div className="flex flex-col gap-1 text-sm">
             <span className="text-xs text-muted-foreground">Файлы задания:</span>
             {assignment.files.map((file) => (
-              <label key={file.id} className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={!removedFiles.includes(file.id)}
-                  onChange={(event) =>
-                    setRemovedFiles((current) =>
-                      event.target.checked
-                        ? current.filter((id) => id !== file.id)
-                        : [...current, file.id],
-                    )
-                  }
-                />
-                <span
-                  className={
-                    removedFiles.includes(file.id) ? 'text-subtle-foreground line-through' : ''
-                  }
-                >
-                  {file.originalName}
-                </span>
-                <span className="text-muted-foreground">{formatSize(file.sizeBytes)}</span>
-              </label>
+              <Checkbox
+                key={file.id}
+                checked={!removedFiles.includes(file.id)}
+                onChange={(event) =>
+                  setRemovedFiles((current) =>
+                    event.target.checked
+                      ? current.filter((id) => id !== file.id)
+                      : [...current, file.id],
+                  )
+                }
+                label={
+                  <>
+                    <span
+                      className={
+                        removedFiles.includes(file.id) ? 'text-subtle-foreground line-through' : ''
+                      }
+                    >
+                      {file.originalName}
+                    </span>
+                    <span className="ml-2 text-muted-foreground">{formatSize(file.sizeBytes)}</span>
+                  </>
+                }
+              />
             ))}
             <span className="text-xs text-muted-foreground">
               Снятая галочка помечает файл убранным: он исчезнет из задания, но останется в истории

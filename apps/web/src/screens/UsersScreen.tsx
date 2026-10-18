@@ -21,11 +21,12 @@ import {
   Badge,
   Button,
   Card,
+  Checkbox,
   EmptyState,
   Field,
+  formatDateTime,
   Table,
   TextInput,
-  formatDateTime,
 } from '../components/ui';
 
 const createUserFormSchema = z.object({
@@ -190,20 +191,17 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
                 </legend>
                 <div className="flex flex-wrap gap-3">
                   {staffRoles.map((role) => (
-                    <label key={role.code} className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        value={role.code}
-                        {...form.register('roles')}
-                        onChange={(event) => {
-                          // Роли дают права все вместе: показываем предупреждение,
-                          // чтобы случайно не выдать лишнее.
-                          void form.register('roles').onChange(event);
-                          setNotice(null);
-                        }}
-                      />
-                      {roleTitle(role.code, role.title)}
-                    </label>
+                    <Checkbox
+                      value={role.code}
+                      {...form.register('roles')}
+                      onChange={(event) => {
+                        // Роли дают права все вместе: показываем предупреждение,
+                        // чтобы случайно не выдать лишнее.
+                        void form.register('roles').onChange(event);
+                        setNotice(null);
+                      }}
+                      label={roleTitle(role.code, role.title)}
+                    />
                   ))}
                 </div>
                 {form.formState.errors.roles !== undefined && (
@@ -345,20 +343,17 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
             <p className="mb-2 text-sm font-medium">Роли учётной записи</p>
             <div className="flex flex-wrap gap-3">
               {(roles.data?.items ?? []).map((role) => (
-                <label key={role.code} className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={selectedRoles.includes(role.code)}
-                    onChange={(event) =>
-                      setSelectedRoles((current) =>
-                        event.target.checked
-                          ? [...current, role.code]
-                          : current.filter((code) => code !== role.code),
-                      )
-                    }
-                  />
-                  {role.title}
-                </label>
+                <Checkbox
+                  checked={selectedRoles.includes(role.code)}
+                  onChange={(event) =>
+                    setSelectedRoles((current) =>
+                      event.target.checked
+                        ? [...current, role.code]
+                        : current.filter((code) => code !== role.code),
+                    )
+                  }
+                  label={role.title}
+                />
               ))}
             </div>
             <div className="mt-3 flex gap-2">

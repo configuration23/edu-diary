@@ -6,6 +6,7 @@ import {
   Badge,
   Button,
   Card,
+  Checkbox,
   EmptyState,
   Field,
   Select,
@@ -700,19 +701,16 @@ function SignRulesCard() {
                 />
               </td>
               <td className="px-3 py-2">
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={rule.isActive}
-                    aria-label={`Пересчитывать ${rule.sign === 'plus' ? 'плюсы' : 'точки'} в оценки`}
-                    onChange={(event) =>
-                      void update
-                        .mutateAsync({ sign: rule.sign, isActive: event.target.checked })
-                        .catch(() => undefined)
-                    }
-                  />
-                  {rule.isActive ? 'включён' : 'выключен'}
-                </label>
+                <Checkbox
+                  checked={rule.isActive}
+                  aria-label={`Пересчитывать ${rule.sign === 'plus' ? 'плюсы' : 'точки'} в оценки`}
+                  onChange={(event) =>
+                    void update
+                      .mutateAsync({ sign: rule.sign, isActive: event.target.checked })
+                      .catch(() => undefined)
+                  }
+                  label={rule.isActive ? 'включён' : 'выключен'}
+                />
               </td>
               <td className="px-3 py-2 text-xs text-muted-foreground">
                 порог меняется при уходе из поля

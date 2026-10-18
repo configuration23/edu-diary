@@ -837,14 +837,11 @@ export function LessonsScreen({ session }: { session: SessionResponseDto }) {
           <span>
             {rangeStart} — {rangeEnd}
           </span>
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={showCancelled}
-              onChange={(event) => setShowCancelled(event.target.checked)}
-            />
-            Показывать отменённые ({cancelledCount})
-          </label>
+          <Checkbox
+            checked={showCancelled}
+            onChange={(event) => setShowCancelled(event.target.checked)}
+            label={`Показывать отменённые (${cancelledCount})`}
+          />
         </div>
 
         {editing && (

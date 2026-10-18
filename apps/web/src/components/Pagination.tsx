@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import { Button, EmptyState, Field, Select } from './ui';
+import { Button, EmptyState, Field, Select, TextInput } from './ui';
 
 /**
  * Постраничный вывод длинных списков.
@@ -137,9 +137,9 @@ export function PaginatedList<T>({
       {onSearchChange !== undefined && (
         <div className="mb-3">
           <Field label="Поиск">
-            <input
+            <TextInput
               name="search"
-              className="w-full rounded-md border border-border px-3 py-2 text-sm sm:max-w-xs"
+              className="sm:max-w-xs"
               placeholder={searchPlaceholder ?? 'Начните вводить'}
               value={search ?? ''}
               onChange={(event) => onSearchChange(event.target.value)}
