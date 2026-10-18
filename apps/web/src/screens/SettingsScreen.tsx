@@ -147,7 +147,7 @@ function AppearanceForm({
         {update.isError && <Alert tone="error">{errorMessage(update.error)}</Alert>}
         {saved && <Alert tone="success">Сохранено: расписание и уроки покажут новые значки.</Alert>}
 
-        <div>
+        <div className="flex justify-end">
           <Button type="submit" disabled={update.isPending}>
             Сохранить оформление
           </Button>
@@ -259,7 +259,24 @@ export function SettingsScreen() {
                   onChange={(event) => setSignature(event.target.value)}
                 />
               </Field>
-              <Field label="Логотип" hint="PNG, JPEG или SVG до 256 КБ">
+              {/*
+                Миниатюра и «Убрать логотип» — в ряду с выбором файла справа: это одно действие с
+                логотипом, а не два блока в разных местах страницы.
+              */}
+              <Field
+                label="Логотип"
+                hint="PNG, JPEG или SVG до 256 КБ"
+                actions={
+                  logoDataUrl !== null && (
+                    <span className="flex items-center gap-2">
+                      <img src={logoDataUrl} alt="Логотип" className="h-12 w-12 object-contain" />
+                      <Button tone="ghost" type="button" onClick={() => setLogoDataUrl(null)}>
+                        Убрать логотип
+                      </Button>
+                    </span>
+                  )
+                }
+              >
                 <FilePicker
                   accept="image/png,image/jpeg,image/svg+xml"
                   name="logo"
@@ -271,21 +288,12 @@ export function SettingsScreen() {
             </div>
 
             {logoError !== null && <Alert tone="warning">{logoError}</Alert>}
-            {logoDataUrl !== null && (
-              <div className="flex items-center gap-3">
-                <img src={logoDataUrl} alt="Логотип" className="h-12 w-12 object-contain" />
-                <Button tone="ghost" onClick={() => setLogoDataUrl(null)}>
-                  Убрать логотип
-                </Button>
-              </div>
-            )}
-
             {update.isError && <Alert tone="error">{errorMessage(update.error)}</Alert>}
             {saved && (
               <Alert tone="success">Сохранено: шапка и экран входа покажут новые значения.</Alert>
             )}
 
-            <div>
+            <div className="flex justify-end">
               <Button type="submit" disabled={update.isPending}>
                 Сохранить
               </Button>

@@ -160,7 +160,7 @@ function AboutSettings() {
       {error !== null && <Alert tone="error">{error}</Alert>}
       {saved && <Alert tone="success">Сохранено: блок покажется на «Обзоре».</Alert>}
 
-      <div>
+      <div className="flex justify-end">
         <Button type="submit" disabled={update.isPending}>
           Сохранить описание
         </Button>
@@ -334,7 +334,7 @@ export function NewsSettingsCard({
 
             {error !== null && <Alert tone="error">{error}</Alert>}
 
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap justify-end gap-2">
               <Button type="submit" disabled={saving}>
                 {saving ? 'Сохраняем…' : draft.id === null ? 'Опубликовать' : 'Сохранить'}
               </Button>
