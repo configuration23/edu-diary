@@ -3,14 +3,14 @@
 Отчёт **генерируется**: `npm run ui:inventory`. Руками не правится — правки затрутся при
 следующем запуске, а числа разойдутся с кодом.
 
-Файлов `.tsx`: **42** (экранов: 24), строк: 13046.
+Файлов `.tsx`: **42** (экранов: 24), строк: 13241.
 
 ## Примитивы: что уже есть
 
 | Объект | Использований | Файлов |
 | --- | --- | --- |
-| Button | 169 | 27 |
-| Field | 197 | 25 |
+| Button | 171 | 27 |
+| Field | 200 | 27 |
 | Card | 59 | 24 |
 | Section | 6 | 4 |
 | Spoiler | 13 | 3 |
@@ -26,14 +26,14 @@
 
 | Элемент | Штук | Файлов |
 | --- | --- | --- |
-| <select> | 49 | 22 |
+| <select> | 48 | 21 |
 | <textarea> | 8 | 4 |
-| input[type=checkbox] | 15 | 11 |
-| input[type=file] | 6 | 4 |
-| <input> без type | 2 | 2 |
+| input[type=checkbox] | 14 | 10 |
+| input[type=file] | 4 | 3 |
+| <input> без type | 1 | 1 |
 
-Сырых контролов всего: **80**. Рамка поля ввода `rounded-md border border-slate-300` скопирована руками
-**51** раз в 24 файлах — это один и тот же класс, повторённый
+Сырых контролов всего: **75**. Рамка поля ввода `rounded-md border border-slate-300` скопирована руками
+**49** раз в 22 файлах — это один и тот же класс, повторённый
 по месту.
 
 ## Дыра вторая: отступы без правила
@@ -58,7 +58,7 @@
 
 | Высота контрола | Раз |
 | --- | --- |
-| py-2 | 162 |
+| py-2 | 160 |
 | py-1 | 22 |
 | py-0.5 | 5 |
 | py-3 | 2 |
@@ -66,7 +66,7 @@
 | Радиус | Раз |
 | --- | --- |
 | rounded-md | 92 |
-| rounded | 18 |
+| rounded | 20 |
 | rounded-lg | 7 |
 | rounded-sm | 1 |
 
@@ -80,31 +80,29 @@
 
 | Способ | Раз |
 | --- | --- |
-| text-blue-700 underline | 7 |
-| cursor-pointer text-blue-700 | 1 |
+| text-blue-700 underline | 8 |
+| cursor-pointer text-blue-700 | 0 |
 | activeProps (навигация) | 2 |
-| <Link | 3 |
+| <Link | 4 |
 
 ## Акценты: сколько «главных» цветов
 
 | Токен | Раз | Файлов |
 | --- | --- | --- |
-| bg-blue-700 | 1 | 1 |
-| bg-slate-900 | 6 | 3 |
-| bg-red-700 | 1 | 1 |
-| bg-white | 9 | 5 |
+| bg-slate-900 | 7 | 4 |
+| bg-white | 7 | 4 |
 
 Семейства цветов:
 
 | Семейство | Раз |
 | --- | --- |
-| slate | 400 |
-| amber | 23 |
-| red | 20 |
+| slate | 376 |
+| amber | 18 |
 | sky | 18 |
-| blue | 14 |
+| red | 11 |
+| blue | 10 |
 | emerald | 7 |
-| green | 7 |
+| green | 2 |
 
 ## Заголовки и ширины страниц
 
@@ -151,20 +149,20 @@
 уровень собирается из двух файлов и здесь не виден. Поэтому реальная вложенность на собранных
 страницах **выше** этих чисел, а не равна им.
 
-Максимальная глубина: **13**. Средняя: **3.9**.
-Элементов глубже пятого уровня: **282**.
+Максимальная глубина: **13**. Средняя: **4**.
+Элементов глубже пятого уровня: **302**.
 
 | Уровень | Элементов |
 | --- | --- |
 | 1 | 134 |
-| 2 | 299 |
-| 3 | 419 |
-| 4 | 424 |
-| 5 | 368 |
-| 6 | 159 |
-| 7 | 49 |
-| 8 | 14 |
-| 9 | 18 |
+| 2 | 294 |
+| 3 | 415 |
+| 4 | 419 |
+| 5 | 370 |
+| 6 | 166 |
+| 7 | 56 |
+| 8 | 19 |
+| 9 | 19 |
 | 10 | 22 |
 | 11 | 15 |
 | 12 | 4 |
@@ -187,13 +185,13 @@
 | `screens/LessonJournalScreen.tsx` | 13 |
 | `screens/ScheduleScreen.tsx` | 11 |
 | `screens/LessonsScreen.tsx` | 10 |
+| `components/ui.tsx` | 9 |
 | `components/Spoiler.tsx` | 8 |
+| `screens/AuditScreen.tsx` | 8 |
 | `screens/ScheduleTemplateScreen.tsx` | 8 |
-| `components/ui.tsx` | 7 |
 | `screens/AcademicsScreen.tsx` | 7 |
 | `screens/CatalogsScreen.tsx` | 7 |
 | `screens/GroupsScreen.tsx` | 7 |
-| `screens/SettingsScreen.tsx` | 7 |
 
 ## Экраны: где расхождений больше
 
@@ -217,11 +215,11 @@
 | `SubmittedWorksScreen.tsx` | 1 | 2 | 0 | 1 | 0 |
 | `GroupsScreen.tsx` | 1 | 1 | 3 | 0 | 0 |
 | `ScheduleScreen.tsx` | 1 | 1 | 1 | 0 | 0 |
-| `SecurityScreen.tsx` | 1 | 1 | 1 | 0 | 0 |
 | `SetupScreen.tsx` | 1 | 1 | 2 | 0 | 1 |
 | `UsersScreen.tsx` | 2 | 0 | 2 | 0 | 0 |
-| `AuditScreen.tsx` | 1 | 0 | 1 | 0 | 0 |
 | `AcademicProcessScreen.tsx` | 0 | 0 | 0 | 0 | 0 |
+| `AuditScreen.tsx` | 0 | 0 | 1 | 0 | 0 |
 | `DashboardScreen.tsx` | 0 | 0 | 2 | 0 | 0 |
 | `LoginScreen.tsx` | 0 | 0 | 1 | 0 | 1 |
 | `ProfileScreen.tsx` | 0 | 0 | 0 | 3 | 0 |
+| `SecurityScreen.tsx` | 0 | 0 | 1 | 0 | 0 |

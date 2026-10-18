@@ -8,6 +8,8 @@ import {
   Button,
   Card,
   EmptyState,
+  Field,
+  Segmented,
   Table,
   TextInput,
   formatDateTime,
@@ -38,27 +40,31 @@ export function SecurityScreen({ heading = true }: { heading?: boolean } = {}) {
           : undefined
       }
     >
+      {/*
+        Выбор из трёх состояний — переключатель, а не выпадающий список: варианты короткие и
+        постоянные, и человеку полезно видеть их все сразу. `Segmented` заодно перестал быть
+        «чёрной кнопкой», которая спорила с главным действием.
+      */}
       <div className="mb-4 flex flex-wrap items-end gap-3">
-        <label className="text-sm">
-          <span className="mb-1 block text-slate-700">Показать</span>
-          <select
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+        <div className="pb-2">
+          <Segmented
+            label="Показать события"
             value={acknowledged}
-            onChange={(event) => setAcknowledged(event.target.value as typeof acknowledged)}
-          >
-            <option value="pending">Неразобранные</option>
-            <option value="done">Разобранные</option>
-            <option value="all">Все</option>
-          </select>
-        </label>
-        <label className="flex-1 text-sm">
-          <span className="mb-1 block text-slate-700">Комментарий к разбору</span>
+            onChange={(next) => setAcknowledged(next)}
+            options={[
+              { value: 'pending', label: 'Неразобранные' },
+              { value: 'done', label: 'Разобранные' },
+              { value: 'all', label: 'Все' },
+            ]}
+          />
+        </div>
+        <Field label="Комментарий к разбору" className="flex-1">
           <TextInput
             value={resolution}
             placeholder="Что сделано по событию"
             onChange={(event) => setResolution(event.target.value)}
           />
-        </label>
+        </Field>
       </div>
 
       {events.isLoading && <EmptyState>Загружаем…</EmptyState>}

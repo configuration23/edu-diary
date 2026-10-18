@@ -61,6 +61,26 @@
   --color-danger: #b91c1c;
 
   /**
+   * Заливки статусов: фон, рамка и текст для `Alert` и `Badge`.
+   *
+   * Отдельными токенами, а не «светлый оттенок того же цвета»: в тёмной теме заливка обязана
+   * темнеть, иначе предупреждение станет ярким пятном на тёмной странице и перетянет внимание с
+   * содержимого.
+   */
+  --color-info-soft: #f8fafc;
+  --color-info-border: #e2e8f0;
+  --color-info-foreground: #0f172a;
+  --color-success-soft: #ecfdf5;
+  --color-success-border: #a7f3d0;
+  --color-success-foreground: #065f46;
+  --color-warning-soft: #fffbeb;
+  --color-warning-border: #fde68a;
+  --color-warning-foreground: #92400e;
+  --color-danger-soft: #fef2f2;
+  --color-danger-border: #fecaca;
+  --color-danger-foreground: #991b1b;
+
+  /**
    * Плотность. Длинные списки (журнал, «кто × значение») идут плотным шагом: на экран должно
    * попадать больше строк, иначе журнал класса листается без конца.
    */
@@ -103,6 +123,20 @@
   --color-success: #6ee7b7;
   --color-warning: #fcd34d;
   --color-danger: #fca5a5;
+
+  /* Заливки статусов темнеют: иначе предупреждение станет ярким пятном на тёмной странице. */
+  --color-info-soft: #1e293b;
+  --color-info-border: #334155;
+  --color-info-foreground: #e2e8f0;
+  --color-success-soft: #052e21;
+  --color-success-border: #0f5132;
+  --color-success-foreground: #6ee7b7;
+  --color-warning-soft: #38260a;
+  --color-warning-border: #92400e;
+  --color-warning-foreground: #fcd34d;
+  --color-danger-soft: #3a1212;
+  --color-danger-border: #991b1b;
+  --color-danger-foreground: #fca5a5;
 }
 
 html,
