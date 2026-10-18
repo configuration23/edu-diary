@@ -304,6 +304,20 @@ export function useCreateUser() {
   });
 }
 
+/** Правка учётной записи: почта. Роли и пароль меняются отдельными действиями. */
+export function useUpdateUser() {
+  const client = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: { userId: string; email: string | null }) =>
+      apiRequest(`/api/users/${input.userId}`, userSummarySchema, {
+        method: 'PATCH',
+        body: { email: input.email },
+      }),
+    onSuccess: () => invalidateUsers(client),
+  });
+}
+
 export function useSetUserRoles() {
   const client = useQueryClient();
   return useMutation({

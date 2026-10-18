@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
@@ -14,6 +14,7 @@ import {
   useResetPassword,
   useRoles,
   useSetUserRoles,
+  useUpdateUser,
   useUsers,
 } from '../lib/queries';
 import {
@@ -24,6 +25,7 @@ import {
   Checkbox,
   EmptyState,
   Field,
+  FormActions,
   formatDateTime,
   Table,
   TextInput,
@@ -66,6 +68,122 @@ function RolesCell({ user }: { user: UserSummaryDto }) {
   );
 }
 
+/**
+ * Правка учётной записи — строкой под ней, как у учеников.
+ *
+ * Владелец: по клику на логин показывать правку, а в неё вынести почту, роли и сброс пароля —
+ * раньше это были три отдельные кнопки в конце строки, и связь «это всё про одного человека»
+ * терялась.
+ */
+function UserEditForm({
+  user,
+  roles,
+  onDone,
+}: {
+  user: UserSummaryDto;
+  roles: Array<{ code: string; title: string }>;
+  onDone: () => void;
+}) {
+  const update = useUpdateUser();
+  const setRoles = useSetUserRoles();
+  const resetPassword = useResetPassword();
+
+  const [email, setEmail] = useState(user.email ?? '');
+  const [selectedRoles, setSelectedRoles] = useState<string[]>(user.roles.map((role) => role.code));
+  const [newPassword, setNewPassword] = useState('');
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const rolesChanged =
+    selectedRoles.length !== user.roles.length ||
+    selectedRoles.some((code) => !user.roles.some((role) => role.code === code));
+  const emailChanged = email.trim() !== (user.email ?? '');
+
+  return (
+    <form
+      className="rounded-md border border-border bg-card p-3"
+      onSubmit={async (event) => {
+        event.preventDefault();
+        try {
+          if (emailChanged) {
+            await update.mutateAsync({
+              userId: user.id,
+              email: email.trim() === '' ? null : email.trim(),
+            });
+          }
+          if (rolesChanged) {
+            await setRoles.mutateAsync({ userId: user.id, roles: selectedRoles });
+          }
+          onDone();
+        } catch {
+          // Ошибка показывается ниже из состояния запроса.
+        }
+      }}
+    >
+      <div className="grid gap-3 sm:grid-cols-4">
+        <Field label="Почта" hint="Логин не меняется: это ключ входа">
+          <TextInput
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+          />
+        </Field>
+      </div>
+
+      <p className="mt-3 mb-2 text-sm font-medium">Роли учётной записи</p>
+      <div className="flex flex-wrap gap-3">
+        {roles.map((role) => (
+          <Checkbox
+            key={role.code}
+            checked={selectedRoles.includes(role.code)}
+            onChange={(event) =>
+              setSelectedRoles((current) =>
+                event.target.checked
+                  ? [...current, role.code]
+                  : current.filter((code) => code !== role.code),
+              )
+            }
+            label={role.title}
+          />
+        ))}
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-end gap-2">
+        <Field label="Новый временный пароль" hint="Все сессии учётной записи будут отозваны">
+          <TextInput
+            type="password"
+            autoComplete="new-password"
+            value={newPassword}
+            onChange={(event) => setNewPassword(event.target.value)}
+          />
+        </Field>
+        <Button
+          tone="secondary"
+          disabled={resetPassword.isPending || newPassword.length < 10}
+          onClick={async () => {
+            await resetPassword.mutateAsync({ userId: user.id, password: newPassword });
+            setNewPassword('');
+            setNotice('Пароль сброшен, сессии учётной записи отозваны.');
+          }}
+        >
+          Сбросить пароль
+        </Button>
+      </div>
+
+      <FormActions
+        submitLabel="Сохранить"
+        pending={update.isPending || setRoles.isPending}
+        onCancel={onDone}
+        align="end"
+        className="mt-3"
+      />
+      {notice !== null && <Alert tone="success">{notice}</Alert>}
+      {update.isError && <Alert tone="error">{errorMessage(update.error)}</Alert>}
+      {setRoles.isError && <Alert tone="error">{errorMessage(setRoles.error)}</Alert>}
+      {resetPassword.isError && <Alert tone="error">{errorMessage(resetPassword.error)}</Alert>}
+    </form>
+  );
+}
+
 export function UsersScreen({ session }: { session: SessionResponseDto }) {
   /** Какая форма открыта: учётная запись или законный представитель. */
   const [tab, setTab] = useState<'user' | 'guardian'>('user');
@@ -73,17 +191,12 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = usePageSize(10);
   const [editing, setEditing] = useState<string | null>(null);
-  const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
-  const [passwordFor, setPasswordFor] = useState<string | null>(null);
-  const [newPassword, setNewPassword] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
 
   const users = useUsers({ search, limit: pageSize, offset: (page - 1) * pageSize });
   const roles = useRoles();
   const createUser = useCreateUser();
-  const setUserRoles = useSetUserRoles();
   const deactivate = useDeactivateUser();
-  const resetPassword = useResetPassword();
 
   const form = useForm<CreateUserForm>({
     resolver: zodResolver(createUserFormSchema),
@@ -269,61 +382,71 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
         {users.data !== undefined && users.data.items.length > 0 && (
           <Table head={['Логин', 'ФИО', 'Роли', 'Состояние', 'Создан', '']}>
             {users.data.items.map((user) => (
-              <tr key={user.id} className="border-b border-border align-top">
-                <td className="px-3 py-2 font-medium">{user.username}</td>
-                <td className="px-3 py-2">{user.fullName}</td>
-                <td className="px-3 py-2">
-                  <RolesCell user={user} />
-                </td>
-                <td className="px-3 py-2">
-                  {user.isActive ? (
-                    <Badge tone="success">активен</Badge>
-                  ) : (
-                    <Badge tone="danger">отключён</Badge>
-                  )}
-                  {user.mustChangePassword && (
-                    <span className="ml-1">
-                      <Badge tone="warning">сменить пароль</Badge>
-                    </span>
-                  )}
-                </td>
-                <td className="px-3 py-2 text-muted-foreground">
-                  {formatDateTime(user.createdAt)}
-                </td>
-                <td className="px-3 py-2">
-                  {canManage && (
-                    <div className="flex flex-wrap justify-end gap-2">
-                      <Button
-                        tone="ghost"
-                        onClick={() => {
-                          setEditing(editing === user.id ? null : user.id);
-                          setSelectedRoles(user.roles.map((role) => role.code));
-                          setPasswordFor(null);
-                        }}
-                      >
-                        Роли
-                      </Button>
-                      <Button
-                        tone="ghost"
-                        onClick={() => {
-                          setPasswordFor(user.id);
-                          setEditing(null);
-                        }}
-                      >
-                        Сбросить пароль
-                      </Button>
-                      <Button
-                        tone="ghost"
-                        onClick={() =>
-                          void deactivate.mutateAsync({ userId: user.id, isActive: !user.isActive })
-                        }
-                      >
-                        {user.isActive ? 'Отключить' : 'Включить'}
-                      </Button>
-                    </div>
-                  )}
-                </td>
-              </tr>
+              <Fragment key={user.id}>
+                <tr className="border-b border-border align-top">
+                  <td className="px-3 py-2 font-medium">
+                    {/*
+                  Правка открывается кликом по логину (как у учеников по ФИО): карточка и есть
+                  объект правки, отдельная кнопка «Роли» в конце строки больше не нужна.
+                */}
+                    <Button
+                      tone="ghost"
+                      className="px-0"
+                      onClick={() => setEditing(editing === user.id ? null : user.id)}
+                    >
+                      {user.username}
+                    </Button>
+                  </td>
+                  <td className="px-3 py-2">{user.fullName}</td>
+                  <td className="px-3 py-2">
+                    <RolesCell user={user} />
+                  </td>
+                  <td className="px-3 py-2">
+                    {user.isActive ? (
+                      <Badge tone="success">активен</Badge>
+                    ) : (
+                      <Badge tone="danger">отключён</Badge>
+                    )}
+                    {user.mustChangePassword && (
+                      <span className="ml-1">
+                        <Badge tone="warning">сменить пароль</Badge>
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-muted-foreground">
+                    {formatDateTime(user.createdAt)}
+                  </td>
+                  <td className="px-3 py-2">
+                    {canManage && (
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <Button
+                          tone="ghost"
+                          onClick={() =>
+                            void deactivate.mutateAsync({
+                              userId: user.id,
+                              isActive: !user.isActive,
+                            })
+                          }
+                        >
+                          {user.isActive ? 'Отключить' : 'Включить'}
+                        </Button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+
+                {editing === user.id && (
+                  <tr data-static className="border-b border-border">
+                    <td colSpan={6} className="px-3 py-3">
+                      <UserEditForm
+                        user={user}
+                        roles={roles.data?.items ?? []}
+                        onDone={() => setEditing(null)}
+                      />
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
             ))}
           </Table>
         )}
@@ -336,73 +459,6 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
             onPageChange={setPage}
             onPageSizeChange={setPageSize}
           />
-        )}
-
-        {editing !== null && (
-          <div className="mt-4 rounded-md border border-border p-4">
-            <p className="mb-2 text-sm font-medium">Роли учётной записи</p>
-            <div className="flex flex-wrap gap-3">
-              {(roles.data?.items ?? []).map((role) => (
-                <Checkbox
-                  checked={selectedRoles.includes(role.code)}
-                  onChange={(event) =>
-                    setSelectedRoles((current) =>
-                      event.target.checked
-                        ? [...current, role.code]
-                        : current.filter((code) => code !== role.code),
-                    )
-                  }
-                  label={role.title}
-                />
-              ))}
-            </div>
-            <div className="mt-3 flex gap-2">
-              <Button
-                onClick={async () => {
-                  await setUserRoles.mutateAsync({ userId: editing, roles: selectedRoles });
-                  setEditing(null);
-                }}
-                disabled={setUserRoles.isPending}
-              >
-                Сохранить роли
-              </Button>
-              <Button tone="secondary" onClick={() => setEditing(null)}>
-                Отмена
-              </Button>
-            </div>
-            {setUserRoles.isError && <Alert tone="error">{errorMessage(setUserRoles.error)}</Alert>}
-          </div>
-        )}
-
-        {passwordFor !== null && (
-          <div className="mt-4 rounded-md border border-border p-4">
-            <Field label="Новый временный пароль" hint="Все сессии учётной записи будут отозваны">
-              <TextInput
-                type="password"
-                value={newPassword}
-                onChange={(event) => setNewPassword(event.target.value)}
-              />
-            </Field>
-            <div className="mt-3 flex gap-2">
-              <Button
-                onClick={async () => {
-                  await resetPassword.mutateAsync({ userId: passwordFor, password: newPassword });
-                  setPasswordFor(null);
-                  setNewPassword('');
-                  setNotice('Пароль сброшен, сессии учётной записи отозваны.');
-                }}
-                disabled={resetPassword.isPending || newPassword.length < 10}
-              >
-                Сбросить пароль
-              </Button>
-              <Button tone="secondary" onClick={() => setPasswordFor(null)}>
-                Отмена
-              </Button>
-            </div>
-            {resetPassword.isError && (
-              <Alert tone="error">{errorMessage(resetPassword.error)}</Alert>
-            )}
-          </div>
         )}
       </Card>
 
