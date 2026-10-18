@@ -208,7 +208,19 @@ function HomeworkItem({ assignment }: { assignment: HomeworkAssignmentSummaryDto
               />
             </Field>
 
-            <Field label="Файл">
+            {/*
+              Выбор файла и отправка — в одном ряду, кнопка справа (просьба владельца): это одно
+              действие «приложил и отправил», а не два шага в разных концах формы.
+            */}
+            <Field
+              label="Файл"
+              hint="Можно приложить несколько файлов по очереди. Размер и тип проверяет сервер."
+              actions={
+                <Button type="submit" disabled={submit.isPending || upload.isPending}>
+                  {submit.isPending ? 'Отправляем…' : 'Отправить решение'}
+                </Button>
+              }
+            >
               <FilePicker
                 onSelect={async (file) => {
                   if (file === undefined) return;
@@ -222,9 +234,6 @@ function HomeworkItem({ assignment }: { assignment: HomeworkAssignmentSummaryDto
                   }
                 }}
               />
-              <span className="text-xs text-muted-foreground">
-                Можно приложить несколько файлов по очереди. Размер и тип проверяет сервер.
-              </span>
             </Field>
 
             {files.length > 0 && (
@@ -243,12 +252,6 @@ function HomeworkItem({ assignment }: { assignment: HomeworkAssignmentSummaryDto
                 ))}
               </ul>
             )}
-
-            <div>
-              <Button type="submit" disabled={submit.isPending || upload.isPending}>
-                {submit.isPending ? 'Отправляем…' : 'Отправить решение'}
-              </Button>
-            </div>
 
             <span className="text-xs text-muted-foreground">
               Отправка одна: изменить решение после отправки нельзя.

@@ -100,6 +100,11 @@ function ThemeChoice({ current }: { current: ThemePreference }) {
  * Один переключатель на всё приложение: «Справочники», «Настройки», «Настройки обучения». Решение
  * владельца: кому-то нужен короткий обзор разделов, кому-то — всё сразу.
  */
+/** Ученик или представитель: этим ролям настройка вида страниц не нужна. */
+function isLearner(session: SessionResponseDto): boolean {
+  return session.user.roles.some((role) => role.code === 'student' || role.code === 'parent');
+}
+
 function ViewModeChoice({ current }: { current: ViewMode }) {
   const update = useUpdateViewMode();
   const [error, setError] = useState<string | null>(null);
@@ -173,9 +178,13 @@ export function ProfileScreen({ session }: { session: SessionResponseDto }) {
         )}
       </Section>
 
+      {/*
+        Вид страниц — настройка сотрудников. Ученику и представителю менять нечего: спойлеры на их
+        экранах не используются, и переключатель только задавал бы вопрос без ответа.
+      */}
       <Section title="Оформление">
         <ThemeChoice current={session.user.theme} />
-        <ViewModeChoice current={session.user.viewMode} />
+        {!isLearner(session) && <ViewModeChoice current={session.user.viewMode} />}
       </Section>
 
       <ChangePasswordCard />
