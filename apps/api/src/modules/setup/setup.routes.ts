@@ -20,7 +20,14 @@ export function registerSetupRoutes(
   setup: SetupService,
   auth: AuthService,
 ): void {
-  app.get('/setup/status', async () => setupStatusResponseSchema.parse(await setup.status()));
+  app.get('/setup/status', async () => {
+    const status = await setup.status();
+
+    /** После настройки наружу — только название и логотип: состояние БД и миграции не показываем. */
+    return setupStatusResponseSchema.parse(
+      status.initialized ? { initialized: true, branding: status.branding } : status,
+    );
+  });
 
   app.post('/setup/complete', async (request, reply) => {
     const body = setupCompleteRequestSchema.parse(request.body);

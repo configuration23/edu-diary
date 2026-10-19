@@ -209,4 +209,29 @@ describeWithDatabase('защита входа', () => {
     expect(response.statusCode).toBe(403);
     expect((response.json() as { error: { code: string } }).error.code).toBe('FORBIDDEN');
   });
+
+  it('перебор по списку логинов упирается в лимит адреса', async () => {
+    /**
+     * Находка: несуществующие логины не лимитировались — 6 попыток и ни одного 429. Ограничение по
+     * учётной записи такой перебор не ловит, поэтому счётчик ведётся по адресу.
+     */
+    const attempt = (username: string) =>
+      testApp.app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        headers: { 'x-forwarded-for': '203.0.113.7' },
+        payload: { username, password: 'nesushchestvuyushchiy-parol-2025' },
+      });
+
+    /** Двадцать разных логинов — каждый по одному разу. */
+    for (let index = 0; index < 20; index += 1) {
+      const response = await attempt(`net-takogo-${index}`);
+      expect(response.statusCode).toBe(401);
+    }
+
+    /** Двадцать первая попытка — блокировка адреса. */
+    const blocked = await attempt('net-takogo-21');
+    expect(blocked.statusCode).toBe(429);
+    expect(blocked.headers['retry-after']).toBeDefined();
+  });
 });

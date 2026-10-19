@@ -148,6 +148,13 @@
       "when": 1792200000005,
       "tag": "0020_session_absolute_expiry",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1792200000006,
+      "tag": "0021_login_throttle",
+      "breakpoints": true
     }
   ]
 }

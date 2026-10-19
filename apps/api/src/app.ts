@@ -86,7 +86,14 @@ export async function buildApp({
     logger: createLoggerOptions(env),
     genReqId: (request) => resolveRequestId(request.headers['x-request-id']),
     trustProxy: true,
-    bodyLimit: 8 * 1024 * 1024,
+    /**
+     * JSON-API не принимает мегабайты: 256 КБ хватает любому запросу. Файлы идут отдельным
+     * multipart-маршрутом со своим лимитом, его это не касается.
+     */
+    bodyLimit: 256 * 1024,
+    /** Соединение не должно висеть вечно: это защита от медленного чтения тела. */
+    connectionTimeout: 30_000,
+    requestTimeout: 120_000,
   });
 
   await app.register(cookie);

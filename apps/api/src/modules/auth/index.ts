@@ -5,6 +5,7 @@ import type { PasswordHasher } from '../../shared/password-hasher';
 import type { AuditService } from '../audit';
 import type { UsersService } from '../iam';
 import { createAuthRepository } from './auth.repository';
+import { createLoginThrottleRepository } from './login-throttle.repository';
 import { registerAuthRoutes } from './auth.routes';
 import { createAuthService, type AuthService } from './auth.service';
 
@@ -13,6 +14,14 @@ import { createAuthService, type AuthService } from './auth.service';
  */
 
 export { createAuthRepository, type SessionRecord } from './auth.repository';
+export {
+  createLoginThrottleRepository,
+  ipThrottleKey,
+  IP_FAILURES_LIMIT,
+  IP_LOCK_MINUTES,
+  IP_FAILURES_WINDOW_MINUTES,
+  type LoginThrottleRepository,
+} from './login-throttle.repository';
 export {
   createAuthService,
   SESSION_COOKIE_NAME,
@@ -39,6 +48,7 @@ export function buildAuthService(dependencies: {
   return createAuthService({
     db: dependencies.db,
     sessions: createAuthRepository(dependencies.db),
+    throttle: createLoginThrottleRepository(dependencies.db),
     users: dependencies.users,
     audit: dependencies.audit,
     hasher: dependencies.hasher,
