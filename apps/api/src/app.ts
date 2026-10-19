@@ -460,6 +460,14 @@ export async function buildApp({
     '/api/auth/logout',
   ]);
 
+  /**
+   * Маршруты, без которых приложение не отрисуется: состояние системы, здоровье, оформление.
+   *
+   * Гейт временного пароля не должен ломать загрузку экрана: иначе человек видит «не удалось
+   * получить состояние системы» вместо просьбы сменить пароль (дефект, найденный владельцем).
+   */
+  const PASSWORD_CHANGE_ALLOWED_PREFIXES = ['/api/setup/', '/api/health', '/api/settings/'];
+
   app.addHook('onRequest', async (request) => {
     const auth = request.auth;
     if (auth === null || !auth.mustChangePassword) return;
@@ -467,6 +475,7 @@ export async function buildApp({
     const path = request.url.split('?')[0] ?? '';
     if (!path.startsWith('/api/')) return;
     if (PASSWORD_CHANGE_ALLOWED_PATHS.has(path)) return;
+    if (PASSWORD_CHANGE_ALLOWED_PREFIXES.some((prefix) => path.startsWith(prefix))) return;
 
     throw new AppError('FORBIDDEN', 'Сначала смените временный пароль', {
       details: { reason: 'PASSWORD_CHANGE_REQUIRED' },

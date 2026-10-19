@@ -242,8 +242,15 @@ export function useChangePassword(): UseMutationResult<
   Error,
   { currentPassword: string; newPassword: string }
 > {
+  const client = useQueryClient();
+
   return useMutation({
     mutationFn: (input) => apiSend('/api/auth/change-password', { method: 'POST', body: input }),
+    /**
+     * Сессию перезапрашиваем: сервер снимает признак временного пароля, и приложение должно
+     * увидеть это сразу, а не после перезагрузки страницы.
+     */
+    onSuccess: () => client.invalidateQueries({ queryKey: ['session'] }),
   });
 }
 

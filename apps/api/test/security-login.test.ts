@@ -95,6 +95,15 @@ describeWithDatabase('защита входа', () => {
       'PASSWORD_CHANGE_REQUIRED',
     );
 
+    /**
+     * Служебные маршруты не блокируются: без них приложение не отрисуется и вместо просьбы
+     * сменить пароль человек увидит «не удалось получить состояние системы» (баг со стенда).
+     */
+    for (const url of ['/api/setup/status', '/api/health']) {
+      const boot = await testApp.app.inject({ method: 'GET', url, headers: { cookie } });
+      expect(boot.statusCode, `${url}: ${boot.body}`).toBe(200);
+    }
+
     /** Себя узнать можно: без этого экран не поймёт, что происходит. */
     expect(
       (await testApp.app.inject({ method: 'GET', url: '/api/auth/me', headers: { cookie } }))

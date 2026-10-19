@@ -485,3 +485,36 @@ test.describe.serial('Этап 1: настройка, вход, права', () 
     ).toEqual([]);
   });
 });
+
+test('временный пароль: сначала профиль, после смены — рабочие разделы', async ({ page }) => {
+  await ensureSession(page, ADMIN.username, ADMIN.password);
+
+  /** Заводим учётку с обязательной сменой пароля — тем же путём, что и администратор. */
+  const username = `e2e-vremennyy-${String(Date.now()).slice(-6)}`;
+  const temporary = 'kolledzh-vremennyy-2025';
+  const permanent = 'postoyannyy-parol-2025';
+
+  const created = await page.request.post('/api/users', {
+    data: {
+      username,
+      fullName: 'Пользователь Временный',
+      password: temporary,
+      roles: ['teacher'],
+      mustChangePassword: true,
+    },
+  });
+  expect(created.ok(), await created.text()).toBe(true);
+
+  await page.getByRole('button', { name: 'Выйти' }).click();
+  await login(page, username, temporary);
+
+  /** Попадаем в профиль с формой смены, а не на «Обзор» и не в ошибку системы. */
+  await expect(page.getByText('Вы вошли с временным паролем')).toBeVisible();
+  await page.getByLabel('Текущий пароль').fill(temporary);
+  await page.getByLabel('Новый пароль', { exact: true }).fill(permanent);
+  await page.getByLabel('Повтор нового пароля').fill(permanent);
+  await page.getByRole('button', { name: 'Сменить пароль' }).click();
+
+  /** После смены сессия обновляется, и открывается обычное приложение. */
+  await expect(page.getByRole('link', { name: 'Обзор' })).toBeVisible();
+});
