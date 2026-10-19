@@ -11,13 +11,18 @@ test('GET /api/health отвечает 200 и подтверждает гото�
 
   const body = (await response.json()) as {
     status: string;
-    checks: { database: { status: string }; migrations: { status: string; pending: number } };
+    checks?: unknown;
+    version?: unknown;
   };
 
   expect(body.status).toBe('ok');
-  expect(body.checks.database.status).toBe('ok');
-  expect(body.checks.migrations.status).toBe('ok');
-  expect(body.checks.migrations.pending).toBe(0);
+
+  /**
+   * Снаружи виден только статус: версия, uptime и состояние миграций — разведданные для
+   * атакующего (F-09). Стенд проверяет именно это, а подробности видны администратору в профиле.
+   */
+  expect(body.checks).toBeUndefined();
+  expect(body.version).toBeUndefined();
 });
 
 test('страница не обращается к внешним доменам', async ({ page }) => {

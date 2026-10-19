@@ -16,6 +16,7 @@ export interface UserRow {
   mustChangePassword: boolean;
   theme: string;
   viewMode: string;
+  passwordChangedAt: Date | null;
   failedLoginCount: number;
   lockedUntil: Date | null;
   createdAt: Date;
@@ -72,6 +73,8 @@ export interface UsersRepository {
   setTheme(id: string, theme: string, executor?: Executor): Promise<void>;
   /** Вид страниц: личная настройка, без прав администратора. */
   setViewMode(id: string, viewMode: string, executor?: Executor): Promise<void>;
+  /** Отметка «человек сменил пароль сам»: для ограничения частоты. */
+  setPasswordChangedAt(id: string, at: Date | null, executor?: Executor): Promise<void>;
   updatePassword(
     id: string,
     input: { passwordHash: string; mustChangePassword: boolean },
@@ -99,6 +102,7 @@ function toUserRow(row: typeof appUser.$inferSelect): UserRow {
     mustChangePassword: row.mustChangePassword,
     theme: row.theme,
     viewMode: row.viewMode,
+    passwordChangedAt: row.passwordChangedAt,
     failedLoginCount: row.failedLoginCount,
     lockedUntil: row.lockedUntil,
     createdAt: row.createdAt,
@@ -264,6 +268,18 @@ export function createUsersRepository(db: Database): UsersRepository {
       await executor
         .update(appUser)
         .set({ viewMode, updatedAt: new Date() })
+        .where(eq(appUser.id, id));
+    },
+
+    /** Отметка «человек сменил пароль сам»: для ограничения частоты смены. */
+    async setPasswordChangedAt(
+      id: string,
+      at: Date | null,
+      executor: Executor = db.orm,
+    ): Promise<void> {
+      await executor
+        .update(appUser)
+        .set({ passwordChangedAt: at, updatedAt: new Date() })
         .where(eq(appUser.id, id));
     },
 

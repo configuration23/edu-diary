@@ -12,6 +12,9 @@ import type { AuditService } from '../audit';
 import type { SessionRevokerPort, UsersService } from '../iam';
 import type { AuthRepository, SessionRecord } from './auth.repository';
 
+/** Сколько часов должно пройти между сменами пароля самим человеком (решение владельца). */
+export const PASSWORD_CHANGE_MIN_INTERVAL_HOURS = 6;
+
 /**
  * Вход, серверные сессии и смена пароля (ADR-004, SECURITY.md §3.1).
  *
@@ -243,6 +246,27 @@ export function createAuthService(dependencies: AuthServiceDependencies): AuthSe
         throw new AppError('UNAUTHORIZED', 'Неверный текущий пароль');
       }
 
+      /**
+       * Частоту смены ограничиваем (решение владельца): не чаще одного раза в 6 часов.
+       *
+       * Отметку снимает только сброс пароля администратором — иначе человек не смог бы войти с
+       * выданным паролем.
+       */
+      if (user.passwordChangedAt !== null) {
+        const limitMs = PASSWORD_CHANGE_MIN_INTERVAL_HOURS * 60 * 60 * 1000;
+        const elapsedMs = Date.now() - user.passwordChangedAt.getTime();
+
+        if (elapsedMs < limitMs) {
+          const retryAfterMinutes = Math.max(1, Math.ceil((limitMs - elapsedMs) / 60_000));
+
+          throw new AppError(
+            'RATE_LIMITED',
+            `Пароль можно менять не чаще одного раза в ${PASSWORD_CHANGE_MIN_INTERVAL_HOURS} часов. Повторите через ${retryAfterMinutes} мин`,
+            { details: { retryAfterMinutes } },
+          );
+        }
+      }
+
       const issues = validatePassword(input.newPassword, {
         username: user.username,
         fullName: user.fullName,
@@ -256,6 +280,7 @@ export function createAuthService(dependencies: AuthServiceDependencies): AuthSe
       }
 
       await users.setPassword(user.id, input.newPassword, { mustChangePassword: false }, { actor });
+      await users.setPasswordChangedAt(user.id, new Date());
 
       // Смена пароля отзывает остальные сессии (SECURITY.md §3.1).
       await sessions.deleteByUserId(user.id, { exceptSessionId: input.sessionId });

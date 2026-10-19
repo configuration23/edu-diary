@@ -1,6 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { completeSetup, createTestApp, createUserAndLogin, type TestApp } from './helpers/api';
+import {
+  completeSetup,
+  createTestApp,
+  createUserAndLogin,
+  login,
+  type TestApp,
+} from './helpers/api';
 import { createTestDatabase, hasTestDatabase, type TestDatabase } from './helpers/database';
 
 const describeWithDatabase = describe.skipIf(!hasTestDatabase);
@@ -126,5 +132,45 @@ describeWithDatabase('защита входа', () => {
     });
 
     expect(afterChange.statusCode).toBe(200);
+  });
+
+  it('пароль нельзя менять чаще одного раза в 6 часов', async () => {
+    const username = 'uchenik-chastota';
+    await createUserAndLogin(testApp.app, adminCookie, {
+      username,
+      fullName: 'Ученик Частота',
+      password: 'chastota-parol-2025',
+      roles: ['student'],
+      mustChangePassword: false,
+    });
+
+    const cookie = await login(testApp.app, username, 'chastota-parol-2025');
+
+    const first = await testApp.app.inject({
+      method: 'POST',
+      url: '/api/auth/change-password',
+      headers: { cookie },
+      payload: { currentPassword: 'chastota-parol-2025', newPassword: 'pervyy-novyy-parol-2025' },
+    });
+    expect(first.statusCode).toBe(200);
+
+    /** Вторая смена сразу — отказ с остатком времени: 6 часов ещё не прошли. */
+    const second = await testApp.app.inject({
+      method: 'POST',
+      url: '/api/auth/change-password',
+      headers: { cookie },
+      payload: {
+        currentPassword: 'pervyy-novyy-parol-2025',
+        newPassword: 'vtoroy-novyy-parol-2025',
+      },
+    });
+
+    expect(second.statusCode).toBe(429);
+    expect(second.headers['retry-after']).toBeDefined();
+
+    const minutes = (second.json() as { error: { details: { retryAfterMinutes: number } } }).error
+      .details.retryAfterMinutes;
+    expect(minutes).toBeGreaterThan(350);
+    expect(minutes).toBeLessThanOrEqual(360);
   });
 });

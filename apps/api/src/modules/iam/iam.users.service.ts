@@ -124,6 +124,8 @@ export interface UsersService {
   setTheme(id: string, theme: string): Promise<void>;
   /** Вид страниц: своя учётная запись, без прав администратора. */
   setViewMode(id: string, viewMode: string): Promise<void>;
+  /** Отметка о смене пароля человеком: ограничение частоты. Значение null снимает ограничение. */
+  setPasswordChangedAt(id: string, at: Date | null): Promise<void>;
   count(): Promise<number>;
 }
 
@@ -379,6 +381,11 @@ export function createUsersService(dependencies: UsersServiceDependencies): User
       await users.setViewMode(id, viewMode);
     },
 
+    async setPasswordChangedAt(id, at): Promise<void> {
+      await requireUser(id);
+      await users.setPasswordChangedAt(id, at);
+    },
+
     async resetPasswordByAdmin(id, password, options): Promise<void> {
       await applyPassword(
         id,
@@ -386,6 +393,12 @@ export function createUsersService(dependencies: UsersServiceDependencies): User
         { mustChangePassword: true, action: 'password_reset' },
         options,
       );
+
+      /**
+       * Ограничение частоты снимаем: пароль выдал администратор, и человек должен войти новым
+       * паролем сразу, а не ждать шесть часов.
+       */
+      await users.setPasswordChangedAt(id, null, options.executor);
 
       // Сброс пароля администратором отзывает все сессии пользователя.
       await sessions.revokeUserSessions(id, {}, options.executor);

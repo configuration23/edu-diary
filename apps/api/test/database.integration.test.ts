@@ -59,9 +59,9 @@ describeWithDatabase('работа с реальной базой', () => {
     if (!parsed.success) return;
 
     expect(parsed.data.status).toBe('ok');
-    expect(parsed.data.checks.database.status).toBe('ok');
-    expect(parsed.data.checks.migrations.status).toBe('ok');
-    expect(parsed.data.checks.migrations.pending).toBe(0);
-    expect(parsed.data.setup.initialized).toBe(false);
+
+    /** Наружу — только статус: подробности доступны вошедшим (F-09). */
+    expect(parsed.data.checks).toBeUndefined();
+    expect(parsed.data.setup).toBeUndefined();
   });
 });

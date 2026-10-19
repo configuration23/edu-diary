@@ -441,6 +441,21 @@ export async function buildApp({
     reply.header('x-request-id', request.id);
   });
 
+  /**
+   * API не кэшируем. Ответы содержат оценки, ФИО и посещаемость: промежуточный кэш или общий
+   * компьютер не должны оставлять их после выхода (находка F-10).
+   */
+  app.addHook('onSend', async (request, reply, payload) => {
+    const path = request.url.split('?')[0] ?? '';
+
+    if (path.startsWith('/api/')) {
+      reply.header('Cache-Control', 'no-store, private');
+      reply.header('Pragma', 'no-cache');
+    }
+
+    return payload;
+  });
+
   // Сессия: контекст запроса заполняется до маршрутов.
   app.addHook('onRequest', async (request) => {
     const token = request.cookies[SESSION_COOKIE_NAME];

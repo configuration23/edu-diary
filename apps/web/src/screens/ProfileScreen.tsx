@@ -265,11 +265,11 @@ export function ProfileScreen({
               </li>
               <li className="flex justify-between gap-3 border-b border-border py-1">
                 <span>Схема БД (миграций)</span>
-                <span className="font-mono">{api?.checks.migrations.applied ?? '—'}</span>
+                <span className="font-mono">{api?.checks?.migrations.applied ?? '—'}</span>
               </li>
               <li className="flex justify-between gap-3 border-b border-border py-1">
                 <span>Запущен</span>
-                <span>{api === undefined ? '—' : formatDateTime(api.startedAt)}</span>
+                <span>{api?.startedAt === undefined ? '—' : formatDateTime(api.startedAt)}</span>
               </li>
             </ul>
 
