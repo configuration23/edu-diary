@@ -123,8 +123,12 @@ describeWithDatabase('вход, сессии и пароли', () => {
       url: '/api/auth/login',
       payload: { username: 'otklyuchen', password: USER_PASSWORD },
     });
-    expect(attempt.statusCode).toBe(403);
-    expect(attempt.json()).toMatchObject({ error: { code: 'FORBIDDEN' } });
+    /**
+     * Ответ **такой же, как при неверном пароле**: иначе по коду видно, что логин существует, а это
+     * готовый список учёток для перебора. Настоящая причина остаётся в журнале.
+     */
+    expect(attempt.statusCode).toBe(401);
+    expect(attempt.json()).toMatchObject({ error: { code: 'UNAUTHORIZED' } });
   });
 
   it('разрешает администратору сбросить пароль и требует его смены', async () => {

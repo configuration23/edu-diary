@@ -234,4 +234,31 @@ describeWithDatabase('защита входа', () => {
     expect(blocked.statusCode).toBe(429);
     expect(blocked.headers['retry-after']).toBeDefined();
   });
+
+  it('несуществующий логин ведёт себя как существующий', async () => {
+    /**
+     * Владелец: разное поведение для существующих и несуществующих логинов недопустимо — это вектор
+     * разведки перед атакой. Проверяем одинаковые коды и одинаковый текст блокировки.
+     */
+    const attempt = (username: string) =>
+      testApp.app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        headers: { 'x-forwarded-for': '198.51.100.9' },
+        payload: { username, password: 'nesushchestvuyushchiy-parol-2025' },
+      });
+
+    /** Пять неудач по несуществующему логину — те же 401, что и по существующему. */
+    for (let index = 0; index < 5; index += 1) {
+      expect((await attempt('takogo-net-v-gorode')).statusCode).toBe(401);
+    }
+
+    const blocked = await attempt('takogo-net-v-gorode');
+    expect(blocked.statusCode).toBe(429);
+
+    /** Текст блокировки одинаков для любого логина: никаких «учётка не найдена» и точных сроков. */
+    expect((blocked.json() as { error: { message: string } }).error.message).toBe(
+      'Превышено количество попыток входа. Попробуйте повторить позже.',
+    );
+  });
 });

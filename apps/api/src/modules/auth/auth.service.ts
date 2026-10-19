@@ -11,7 +11,13 @@ import type { PasswordHasher } from '../../shared/password-hasher';
 import type { AuditService } from '../audit';
 import type { SessionRevokerPort, UsersService } from '../iam';
 import type { AuthRepository, SessionRecord } from './auth.repository';
-import { ipThrottleKey, type LoginThrottleRepository } from './login-throttle.repository';
+import {
+  ipThrottleKey,
+  IP_POLICY,
+  USER_POLICY,
+  userThrottleKey,
+  type LoginThrottleRepository,
+} from './login-throttle.repository';
 
 /** Сколько часов должно пройти между сменами пароля самим человеком (решение владельца). */
 export const PASSWORD_CHANGE_MIN_INTERVAL_HOURS = 6;
@@ -25,6 +31,15 @@ export const PASSWORD_CHANGE_MIN_INTERVAL_HOURS = 6;
  */
 
 export const SESSION_COOKIE_NAME = 'edu_diary_session';
+
+/**
+ * Единый ответ на блокировку.
+ *
+ * Без точного времени и без разницы между «учётка» и «адрес»: любой разнобой в тексте или сроке
+ * помогает различить существующий логин от несуществующего.
+ */
+export const TOO_MANY_ATTEMPTS_MESSAGE =
+  'Превышено количество попыток входа. Попробуйте повторить позже.';
 /**
  * Срок жизни сессии — два таймера (решение владельца).
  *
@@ -236,24 +251,30 @@ export function createAuthService(dependencies: AuthServiceDependencies): AuthSe
 
   const service: AuthService = {
     async login(input): Promise<LoginResult> {
-      const throttleKey = ipThrottleKey(input.meta.ip);
+      const ipKey = ipThrottleKey(input.meta.ip);
+      const userKey = userThrottleKey(input.username);
 
       /**
-       * Лимит по адресу проверяем **до** поиска учётной записи: иначе перебор по списку логинов не
-       * ограничивался бы ничем — каждая учётка получает свои пять попыток.
+       * Счётчики проверяются **до** поиска учётной записи и одинаково для любого логина: иначе по
+       * поведению блокировки видно, заведена ли учётная запись (вектор разведки), и перебор по
+       * списку логинов ничем не ограничен.
        */
-      const ipState = await throttle.state(throttleKey);
-      if (ipState.lockedUntil !== null) {
-        const retryAfterMinutes = Math.max(
-          1,
-          Math.ceil((ipState.lockedUntil.getTime() - Date.now()) / 60_000),
-        );
+      for (const [key, windowMinutes] of [
+        [userKey, USER_POLICY.windowMinutes],
+        [ipKey, IP_POLICY.windowMinutes],
+      ] as const) {
+        const state = await throttle.state(key, windowMinutes);
 
-        throw new AppError(
-          'RATE_LIMITED',
-          `Слишком много неудачных попыток с этого адреса. Повторите через ${retryAfterMinutes} мин`,
-          { details: { retryAfterMinutes } },
-        );
+        if (state.lockedUntil !== null) {
+          const retryAfterMinutes = Math.max(
+            1,
+            Math.ceil((state.lockedUntil.getTime() - Date.now()) / 60_000),
+          );
+
+          throw new AppError('RATE_LIMITED', TOO_MANY_ATTEMPTS_MESSAGE, {
+            details: { retryAfterMinutes },
+          });
+        }
       }
 
       const user = await users.findByUsername(input.username);
@@ -261,13 +282,22 @@ export function createAuthService(dependencies: AuthServiceDependencies): AuthSe
       if (user === null) {
         // Выравниваем время ответа: иначе по задержке видно, есть ли учётка.
         await hasher.verifyDummy(input.password);
-        /** Несуществующий логин тоже считается: иначе перебор по списку логинов бесплатен. */
-        await throttle.registerFailure(throttleKey);
+        /** Несуществующий логин считается так же, как существующий. */
+        await throttle.registerFailure(userKey, USER_POLICY);
+        await throttle.registerFailure(ipKey, IP_POLICY);
         throw new AppError('UNAUTHORIZED', 'Неверный логин или пароль');
       }
 
       if (!user.isActive) {
-        throw new AppError('FORBIDDEN', 'Учётная запись отключена');
+        /**
+         * Отключённая учётка отвечает **как неверный пароль**: иначе по ответу видно, что логин
+         * существует. Причина видна администратору в журнале, а не постороннему.
+         */
+        await hasher.verifyDummy(input.password);
+        await throttle.registerFailure(userKey, USER_POLICY);
+        await throttle.registerFailure(ipKey, IP_POLICY);
+
+        throw new AppError('UNAUTHORIZED', 'Неверный логин или пароль');
       }
 
       if (user.lockedUntil !== null && user.lockedUntil.getTime() > Date.now()) {
@@ -280,11 +310,9 @@ export function createAuthService(dependencies: AuthServiceDependencies): AuthSe
           Math.ceil((user.lockedUntil.getTime() - Date.now()) / 60_000),
         );
 
-        throw new AppError(
-          'RATE_LIMITED',
-          `Слишком много неудачных попыток входа. Повторите через ${retryAfterMinutes} мин`,
-          { details: { retryAfterMinutes } },
-        );
+        throw new AppError('RATE_LIMITED', TOO_MANY_ATTEMPTS_MESSAGE, {
+          details: { retryAfterMinutes },
+        });
       }
 
       const passwordMatches = await hasher.verify(user.passwordHash, input.password);
@@ -297,13 +325,14 @@ export function createAuthService(dependencies: AuthServiceDependencies): AuthSe
         };
 
         await users.registerFailedLogin(user.id, { actor });
-        /** Счётчик адреса: перебор по списку логинов должен упираться в лимит. */
-        await throttle.registerFailure(throttleKey);
+        await throttle.registerFailure(userKey, USER_POLICY);
+        await throttle.registerFailure(ipKey, IP_POLICY);
         throw new AppError('UNAUTHORIZED', 'Неверный логин или пароль');
       }
 
-      /** Успешный вход сбрасывает счётчик адреса: человек доказал, что он свой. */
-      await throttle.reset(throttleKey);
+      /** Успешный вход сбрасывает счётчики: человек доказал, что он свой. */
+      await throttle.reset(userKey);
+      await throttle.reset(ipKey);
 
       const actor: AuditActor = { userId: user.id, name: user.fullName, ip: input.meta.ip };
       const result = await withTransaction(db, undefined, async (tx) => {

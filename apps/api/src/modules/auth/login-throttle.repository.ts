@@ -30,21 +30,47 @@ export interface ThrottleState {
   failures: number;
 }
 
+/** Пороги счётчика: у адреса и у логина они разные. */
+export interface ThrottlePolicy {
+  threshold: number;
+  baseMinutes: number;
+  maxMinutes: number;
+  windowMinutes: number;
+}
+
+/** Адрес: 20 неудач за 15 минут, блокировка на 15 минут. */
+export const IP_POLICY: ThrottlePolicy = {
+  threshold: IP_FAILURES_LIMIT,
+  baseMinutes: IP_LOCK_MINUTES,
+  maxMinutes: IP_LOCK_MINUTES,
+  windowMinutes: IP_FAILURES_WINDOW_MINUTES,
+};
+
+/**
+ * Логин: та же лестница, что у учётной записи (5, 10, 20, 40… минут).
+ *
+ * Считается для **любого** логина, существует он или нет: иначе по поведению блокировки видно,
+ * заведена ли учётная запись — это вектор разведки перед атакой.
+ */
+export const USER_POLICY: ThrottlePolicy = {
+  threshold: 5,
+  baseMinutes: 5,
+  maxMinutes: 24 * 60,
+  windowMinutes: 24 * 60,
+};
+
 export interface LoginThrottleRepository {
-  /** Текущее состояние адреса: блокировка и счётчик за окно. */
-  state(key: string): Promise<ThrottleState>;
-  /** Записать неудачу: атомарный инкремент с учётом окна. */
-  registerFailure(key: string): Promise<ThrottleState>;
+  /** Текущее состояние ключа: блокировка и счётчик за окно. */
+  state(key: string, windowMinutes: number): Promise<ThrottleState>;
+  /** Записать неудачу: атомарный инкремент с учётом политики. */
+  registerFailure(key: string, policy: ThrottlePolicy): Promise<ThrottleState>;
   /** Успешный вход сбрасывает счётчик. */
   reset(key: string): Promise<void>;
 }
 
 export function createLoginThrottleRepository(db: Database): LoginThrottleRepository {
-  const windowInterval = sql.raw(`interval '${IP_FAILURES_WINDOW_MINUTES} minutes'`);
-  const lockInterval = sql.raw(`interval '${IP_LOCK_MINUTES} minutes'`);
-
   return {
-    async state(key: string): Promise<ThrottleState> {
+    async state(key: string, windowMinutes: number): Promise<ThrottleState> {
       const rows = await db.orm
         .select()
         .from(loginThrottle)
@@ -54,7 +80,7 @@ export function createLoginThrottleRepository(db: Database): LoginThrottleReposi
       const row = rows[0];
       if (row === undefined) return { lockedUntil: null, failures: 0 };
 
-      const fresh = row.updatedAt.getTime() > Date.now() - IP_FAILURES_WINDOW_MINUTES * 60_000;
+      const fresh = row.updatedAt.getTime() > Date.now() - windowMinutes * 60_000;
 
       return {
         lockedUntil:
@@ -65,11 +91,14 @@ export function createLoginThrottleRepository(db: Database): LoginThrottleReposi
       };
     },
 
-    async registerFailure(key: string): Promise<ThrottleState> {
+    async registerFailure(key: string, policy: ThrottlePolicy): Promise<ThrottleState> {
       /**
        * Одна инструкция: инкремент и, при превышении, блокировка. Так гонка параллельных попыток не
        * даёт «потерять» ни одну из них.
        */
+      const windowInterval = sql.raw(`interval '${policy.windowMinutes} minutes'`);
+      const baseInterval = sql.raw(`interval '${policy.baseMinutes} minutes'`);
+
       const rows = await db.orm.execute<{ failures: number; locked_until: Date | null }>(sql`
         insert into login_throttle (key, failures, updated_at)
         values (${key}, 1, now())
@@ -82,8 +111,19 @@ export function createLoginThrottleRepository(db: Database): LoginThrottleReposi
                 when (case
                         when login_throttle.updated_at < now() - ${windowInterval} then 1
                         else login_throttle.failures + 1
-                      end) >= ${IP_FAILURES_LIMIT}
-                  then now() + ${lockInterval}
+                      end) >= ${policy.threshold}
+                  then now() + ${baseInterval} * (
+                    least(
+                      power(
+                        2,
+                        (case
+                           when login_throttle.updated_at < now() - ${windowInterval} then 1
+                           else login_throttle.failures + 1
+                         end) - ${policy.threshold}
+                      ),
+                      ${policy.maxMinutes / policy.baseMinutes}
+                    )
+                  )::int
                 else login_throttle.locked_until
               end,
               updated_at = now()
@@ -93,7 +133,11 @@ export function createLoginThrottleRepository(db: Database): LoginThrottleReposi
       const row = rows[0];
       if (row === undefined) return { lockedUntil: null, failures: 0 };
 
-      return { failures: row.failures, lockedUntil: row.locked_until };
+      return {
+        failures: row.failures,
+        /** Сырой запрос отдаёт timestamp строкой: наружу — только Date. */
+        lockedUntil: row.locked_until === null ? null : new Date(row.locked_until),
+      };
     },
 
     async reset(key: string): Promise<void> {
@@ -105,6 +149,16 @@ export function createLoginThrottleRepository(db: Database): LoginThrottleReposi
 /** Ключ счётчика по адресу. */
 export function ipThrottleKey(ip: string | null): string {
   return `ip:${ip ?? 'unknown'}`;
+}
+
+/**
+ * Ключ счётчика по логину.
+ *
+ * Логин нормализуем так же, как при входе: иначе «Ivanov» и «ivanov» считались бы разными ключами.
+ * Считается для любого логина — существующего и нет: поведение должно быть одинаковым.
+ */
+export function userThrottleKey(username: string): string {
+  return `user:${username.trim().toLowerCase()}`;
 }
 
 export type { Executor };

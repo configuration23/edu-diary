@@ -406,15 +406,15 @@ export function createUsersService(dependencies: UsersServiceDependencies): User
 
     async registerFailedLogin(userId, options): Promise<FailedLoginState> {
       const current = await requireUser(userId);
-      const failedLoginCount = current.failedLoginCount + 1;
-      const lockMinutes =
-        failedLoginCount >= MAX_FAILED_LOGIN_ATTEMPTS ? lockMinutesFor(failedLoginCount) : 0;
-      const lockedUntil =
-        lockMinutes > 0 ? new Date(Date.now() + lockMinutes * 60_000) : current.lockedUntil;
+
+      /** Счётчик и блокировку пишет одна инструкция: параллельные попытки не теряются. */
+      const { failedLoginCount, lockedUntil } = await users.registerLoginFailureAtomic(userId, {
+        threshold: MAX_FAILED_LOGIN_ATTEMPTS,
+        baseMinutes: ACCOUNT_LOCK_MINUTES,
+        maxMinutes: ACCOUNT_LOCK_MAX_MINUTES,
+      });
 
       await withTransaction(db, options.executor, async (tx) => {
-        await users.registerLoginFailure(userId, { failedLoginCount, lockedUntil }, tx);
-
         await audit.record(
           {
             action: 'login_failed',
@@ -430,7 +430,8 @@ export function createUsersService(dependencies: UsersServiceDependencies): User
           {
             username: current.username,
             failedCount: failedLoginCount,
-            lockedUntil: lockMinutes > 0 ? lockedUntil : null,
+            lockedUntil:
+              lockedUntil !== null && lockedUntil.getTime() > Date.now() ? lockedUntil : null,
             actor: options.actor,
           },
           tx,

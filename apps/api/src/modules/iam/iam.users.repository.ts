@@ -80,11 +80,11 @@ export interface UsersRepository {
     input: { passwordHash: string; mustChangePassword: boolean },
     executor?: Executor,
   ): Promise<void>;
-  registerLoginFailure(
+  /** Атомарный инкремент: см. реализацию — иначе гонка обходит блокировку. */
+  registerLoginFailureAtomic(
     id: string,
-    input: { failedLoginCount: number; lockedUntil: Date | null },
-    executor?: Executor,
-  ): Promise<void>;
+    limits: { threshold: number; baseMinutes: number; maxMinutes: number },
+  ): Promise<{ failedLoginCount: number; lockedUntil: Date | null }>;
   registerLoginSuccess(id: string, executor?: Executor): Promise<void>;
   setRoles(userId: string, roleIds: readonly string[], executor?: Executor): Promise<void>;
   countUsers(): Promise<number>;
@@ -303,15 +303,48 @@ export function createUsersRepository(db: Database): UsersRepository {
         .where(eq(appUser.id, id));
     },
 
-    async registerLoginFailure(id, input, executor: Executor = db.orm): Promise<void> {
-      await executor
-        .update(appUser)
-        .set({
-          failedLoginCount: input.failedLoginCount,
-          lockedUntil: input.lockedUntil,
-          updatedAt: new Date(),
-        })
-        .where(eq(appUser.id, id));
+    /**
+     * Атомарный инкремент счётчика неудач.
+     *
+     * Раньше сервис читал значение, прибавлял единицу и писал обратно. Параллельные попытки читали
+     * одно и то же число, и счётчик не доходил до порога — это и есть обход блокировки параллельными
+     * запросами. Теперь всё в одной инструкции: инкремент и, при достижении порога, блокировка.
+     */
+    async registerLoginFailureAtomic(
+      id: string,
+      limits: { threshold: number; baseMinutes: number; maxMinutes: number },
+    ): Promise<{ failedLoginCount: number; lockedUntil: Date | null }> {
+      const rows = await db.orm.execute<{
+        failed_login_count: number;
+        locked_until: Date | null;
+      }>(sql`
+      update app_user
+      set failed_login_count = failed_login_count + 1,
+          locked_until = case
+            when failed_login_count + 1 >= ${limits.threshold}
+              then now() + make_interval(
+                mins => (
+                  least(
+                    ${limits.baseMinutes} * power(2, failed_login_count + 1 - ${limits.threshold}),
+                    ${limits.maxMinutes}
+                  )
+                )::int
+              )
+            else locked_until
+          end,
+          updated_at = now()
+      where id = ${id}
+      returning failed_login_count, locked_until
+    `);
+
+      const row = rows[0];
+      if (row === undefined) throw new Error('Не удалось записать неудачный вход');
+
+      return {
+        failedLoginCount: row.failed_login_count,
+        /** Сырой запрос отдаёт timestamp строкой: наружу — только Date. */
+        lockedUntil: row.locked_until === null ? null : new Date(row.locked_until),
+      };
     },
 
     async registerLoginSuccess(id: string, executor: Executor = db.orm): Promise<void> {
