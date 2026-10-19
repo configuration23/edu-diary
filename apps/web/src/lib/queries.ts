@@ -1549,14 +1549,32 @@ export function useHomeworkSubmissions(assignmentId: string | null) {
  */
 export function useUploadHomeworkFile() {
   return useMutation({
-    mutationFn: async (input: { file: File; kind: 'assignment' | 'submission' }) => {
+    mutationFn: async (input: {
+      file: File;
+      kind: 'assignment' | 'submission';
+      /**
+       * Задание, к которому относится файл.
+       *
+       * Нужно для имени: сервер называет файл «дата_логин_предмет.расширение», а предмет берёт из
+       * задания. Без него в имени останется «bez-predmeta».
+       */
+      assignmentId?: string;
+    }) => {
       const body = new FormData();
       body.append('file', input.file);
 
-      const response = await fetch(
-        input.kind === 'submission' ? '/api/homework/submission-files' : '/api/homework/files',
-        { method: 'POST', body, credentials: 'same-origin' },
-      );
+      const path =
+        input.kind === 'submission' ? '/api/homework/submission-files' : '/api/homework/files';
+      const query =
+        input.assignmentId === undefined
+          ? ''
+          : `?assignmentId=${encodeURIComponent(input.assignmentId)}`;
+
+      const response = await fetch(`${path}${query}`, {
+        method: 'POST',
+        body,
+        credentials: 'same-origin',
+      });
 
       if (!response.ok) {
         const parsed = (await response.json().catch(() => null)) as {

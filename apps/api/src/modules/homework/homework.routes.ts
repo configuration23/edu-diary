@@ -1,6 +1,8 @@
 import multipart from '@fastify/multipart';
+
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
+import { buildUploadName } from '@edu-diary/domain';
 import type { AccessScope } from '@edu-diary/domain';
 import {
   createHomeworkRequestSchema,
@@ -209,12 +211,37 @@ export function createHomeworkModule(dependencies: HomeworkModuleDependencies) {
         throw new AppError('FORBIDDEN', 'Недостаточно прав: homework:write');
       }
 
+      /**
+       * Ранний отказ по заявленному размеру: тело ещё не читается. Иначе сервер принимал 20 МБ, чтобы
+       * потом сообщить про лимит 10 МБ.
+       */
+      const declaredBytes = Number(request.headers['content-length'] ?? '0');
+      if (Number.isFinite(declaredBytes) && declaredBytes > MAX_UPLOAD_BYTES) {
+        throw new AppError('PAYLOAD_TOO_LARGE', 'Файл больше допустимого размера');
+      }
+
       const file = await request.file();
       if (file === undefined) throw new AppError('VALIDATION_FAILED', 'Файл не передан');
+
+      /**
+       * Предмет берём из задания, если оно указано в запросе: имя файла должно быть понятным
+       * («2026-10-19_uchenik-ivanov_matematika.pdf»), а не «IMG_0421».
+       */
+      const query = request.query as { assignmentId?: string };
+      const assignment =
+        typeof query.assignmentId === 'string' && query.assignmentId !== ''
+          ? await homeworkRepository.findAssignment(query.assignmentId)
+          : null;
 
       const limits = await dependencies.storageLimits();
       const uploaded = await files.upload({
         fileName: file.filename,
+        displayName: buildUploadName({
+          at: new Date(),
+          login: authOf(request).username,
+          subjectName: assignment?.subjectName ?? null,
+          originalFileName: file.filename,
+        }),
         body: await file.toBuffer(),
         uploadedBy: viewer.userId,
         maxFileMb: limits.maxFileMb,
