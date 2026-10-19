@@ -173,4 +173,40 @@ describeWithDatabase('защита входа', () => {
     expect(minutes).toBeGreaterThan(350);
     expect(minutes).toBeLessThanOrEqual(360);
   });
+
+  it('битый JSON — ошибка клиента, а не сбой сервера', async () => {
+    /**
+     * Находка F-07: тело с неверным JSON давало 500. Сервер не должен считать ошибку клиента
+     * внутренним сбоем — иначе мониторинг зашумлён, а человек видит «внутренняя ошибка».
+     */
+    const response = await testApp.app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      headers: { 'content-type': 'application/json' },
+      payload: '{ это не json',
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect((response.json() as { error: { code: string } }).error.code).toBe('VALIDATION_FAILED');
+  });
+
+  it('ученик не может менять роли учётных записей', async () => {
+    /** Находка F-13: раньше здесь был 500, и было непонятно, где именно проверяются права. */
+    const student = await createUserAndLogin(testApp.app, adminCookie, {
+      username: 'uchenik-roli',
+      fullName: 'Ученик Роли',
+      password: 'kolledzh-roli-2025',
+      roles: ['student'],
+    });
+
+    const response = await testApp.app.inject({
+      method: 'POST',
+      url: '/api/users/00000000-0000-7000-8000-000000000000/roles',
+      headers: { cookie: student.cookie },
+      payload: { roles: ['admin'] },
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect((response.json() as { error: { code: string } }).error.code).toBe('FORBIDDEN');
+  });
 });
