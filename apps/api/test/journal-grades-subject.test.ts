@@ -115,7 +115,11 @@ describeWithDatabase('оценки и посещение', () => {
       headers: admin,
       payload: {
         fullName: 'Ученик Оценок',
-        account: { username: 'uchenik-ocenki', password: 'kolledzh-ocenki-uchenik-2025' },
+        account: {
+          mustChangePassword: false,
+          username: 'uchenik-ocenki',
+          password: 'kolledzh-ocenki-uchenik-2025',
+        },
       },
     });
     studentId = (student.json() as Json).id as string;

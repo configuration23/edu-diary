@@ -182,6 +182,12 @@ export function ProfileScreen({ session }: { session: SessionResponseDto }) {
         Вид страниц — настройка сотрудников. Ученику и представителю менять нечего: спойлеры на их
         экранах не используются, и переключатель только задавал бы вопрос без ответа.
       */}
+      {session.user.mustChangePassword && (
+        <Alert tone="warning">
+          Вы вошли с временным паролем. Смените его ниже — до этого остальные разделы недоступны.
+        </Alert>
+      )}
+
       <Section title="Оформление">
         <ThemeChoice current={session.user.theme} />
         {!isLearner(session) && <ViewModeChoice current={session.user.viewMode} />}

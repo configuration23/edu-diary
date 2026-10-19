@@ -49,6 +49,13 @@ export const createUserRequestSchema = z.object({
   email: z.email().max(200).optional(),
   phone: z.string().max(40).optional(),
   roles: z.array(z.string().min(1).max(60)).max(20).default([]),
+  /**
+   * Требовать смену пароля при первом входе.
+   *
+   * По умолчанию `true`: пароль, который знает администратор, не должен оставаться действующим.
+   * `false` нужно для служебных учётных записей и подготовки данных — им смена не требуется.
+   */
+  mustChangePassword: z.boolean().optional(),
 });
 export type CreateUserRequestDto = z.infer<typeof createUserRequestSchema>;
 

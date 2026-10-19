@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 
 import type { SessionResponseDto } from '@edu-diary/contracts';
-import { Link, Outlet, useNavigate } from '@tanstack/react-router';
+import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
 
 import { NAVIGATION } from '../lib/access';
 import { Badge, Button } from './ui';
@@ -31,6 +31,22 @@ function useReturnHomeAfterLogout(succeeded: boolean): void {
   }, [succeeded, navigate]);
 }
 
+/**
+ * Временный пароль меняют сразу: пока флаг стоит, сервер отвечает `403` на всё, кроме профиля.
+ * Ведём человека туда сами — иначе он увидит пустые экраны с ошибками и не поймёт, что делать.
+ */
+function usePasswordChangeRedirect(mustChangePassword: boolean): void {
+  const navigate = useNavigate();
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+
+  useEffect(() => {
+    if (!mustChangePassword) return;
+    if (pathname === '/profile') return;
+
+    void navigate({ to: '/profile' });
+  }, [mustChangePassword, pathname, navigate]);
+}
+
 export function AppLayout({
   session,
   branding,
@@ -40,6 +56,7 @@ export function AppLayout({
 }) {
   const logout = useLogout();
   useReturnHomeAfterLogout(logout.isSuccess);
+  usePasswordChangeRedirect(session.user.mustChangePassword);
 
   return (
     <div className="min-h-screen bg-background text-foreground">

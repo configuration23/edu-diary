@@ -77,6 +77,7 @@ describeWithDatabase('блок «Об учебном заведении»', () =
       url: '/api/users',
       headers: { cookie: adminCookie },
       payload: {
+        mustChangePassword: false,
         username: 'uchenik-about',
         fullName: 'Ученик Проверочный',
         password: 'kollegiya-vesna-2025',

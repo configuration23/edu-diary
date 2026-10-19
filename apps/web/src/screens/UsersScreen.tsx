@@ -41,6 +41,8 @@ const createUserFormSchema = z.object({
   password: z.string().min(10, 'Минимум 10 символов').max(200),
   email: z.string().max(200).optional(),
   roles: z.array(z.string()).min(1, 'Выберите хотя бы одну роль'),
+  /** Требовать смену пароля при первом входе: по умолчанию да. */
+  mustChangePassword: z.boolean(),
 });
 
 type CreateUserForm = z.infer<typeof createUserFormSchema>;
@@ -215,7 +217,14 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
 
   const form = useForm<CreateUserForm>({
     resolver: zodResolver(createUserFormSchema),
-    defaultValues: { username: '', fullName: '', password: '', email: '', roles: ['teacher'] },
+    defaultValues: {
+      username: '',
+      fullName: '',
+      password: '',
+      email: '',
+      roles: ['teacher'],
+      mustChangePassword: true,
+    },
   });
 
   // В общей форме — только роли сотрудников: ученик заводится в разделе групп,
@@ -236,11 +245,23 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
       fullName: values.fullName.trim(),
       password: values.password,
       roles: values.roles,
+      mustChangePassword: values.mustChangePassword,
       ...(email === undefined || email === '' ? {} : { email }),
     });
 
-    form.reset({ username: '', fullName: '', password: '', email: '', roles: ['teacher'] });
-    setNotice('Учётная запись создана. Пароль временный: при первом входе его нужно сменить.');
+    form.reset({
+      username: '',
+      fullName: '',
+      password: '',
+      email: '',
+      roles: ['teacher'],
+      mustChangePassword: true,
+    });
+    setNotice(
+      values.mustChangePassword
+        ? 'Учётная запись создана. Пароль временный: при первом входе его нужно сменить.'
+        : 'Учётная запись создана. Смена пароля при первом входе не требуется.',
+    );
   });
 
   const canManage = session.permissions.some(
@@ -351,6 +372,18 @@ export function UsersScreen({ session }: { session: SessionResponseDto }) {
                     {createUser.isPending ? 'Создаём…' : 'Создать учётную запись'}
                   </Button>
                 </div>
+                {/*
+                  Смену пароля можно не требовать: служебной учётной записи (киоск, общий доступ) она
+                  мешает. По умолчанию флажок стоит — выданный администратором пароль не должен
+                  оставаться действующим.
+                */}
+                <div className="mt-3">
+                  <Checkbox
+                    label="Требовать смену пароля при первом входе"
+                    {...form.register('mustChangePassword')}
+                  />
+                </div>
+
                 {form.formState.errors.roles !== undefined && (
                   <span className="mt-1 block text-xs text-danger-foreground">
                     {form.formState.errors.roles.message}

@@ -68,6 +68,8 @@ export type ListStudentsResponseDto = z.infer<typeof listStudentsResponseSchema>
  * создавались одной операцией.
  */
 export const studentAccountRequestSchema = z.object({
+  /** Требовать смену пароля при первом входе (по умолчанию — да). */
+  mustChangePassword: z.boolean().optional(),
   username: z
     .string()
     .min(3)

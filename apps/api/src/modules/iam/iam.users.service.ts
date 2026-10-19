@@ -27,8 +27,24 @@ import type {
 
 /** Сколько подряд неудачных входов блокируют учётную запись. */
 export const MAX_FAILED_LOGIN_ATTEMPTS = 5;
-/** На сколько минут блокируется учётная запись. */
-export const ACCOUNT_LOCK_MINUTES = 15;
+
+/** Первая блокировка — 5 минут (решение владельца). */
+export const ACCOUNT_LOCK_MINUTES = 5;
+
+/** Потолок блокировки: сутки. Иначе после десятка попыток человек ждал бы месяцами. */
+export const ACCOUNT_LOCK_MAX_MINUTES = 24 * 60;
+
+/**
+ * Срок блокировки после N-й неудачной попытки.
+ *
+ * Владелец: первая блокировка 5 минут, каждая следующая неудача **удваивает** срок —
+ * 5, 10, 20, 40, 80 минут. Так перебор становится бессмысленным по времени, а человек, который
+ * просто перепутал раскладку, ждёт всего 5 минут.
+ */
+export function lockMinutesFor(failedCount: number): number {
+  const steps = Math.max(0, failedCount - MAX_FAILED_LOGIN_ATTEMPTS);
+  return Math.min(ACCOUNT_LOCK_MINUTES * 2 ** steps, ACCOUNT_LOCK_MAX_MINUTES);
+}
 
 export interface MutationOptions {
   actor: AuditActor;
@@ -378,10 +394,10 @@ export function createUsersService(dependencies: UsersServiceDependencies): User
     async registerFailedLogin(userId, options): Promise<FailedLoginState> {
       const current = await requireUser(userId);
       const failedLoginCount = current.failedLoginCount + 1;
+      const lockMinutes =
+        failedLoginCount >= MAX_FAILED_LOGIN_ATTEMPTS ? lockMinutesFor(failedLoginCount) : 0;
       const lockedUntil =
-        failedLoginCount >= MAX_FAILED_LOGIN_ATTEMPTS
-          ? new Date(Date.now() + ACCOUNT_LOCK_MINUTES * 60_000)
-          : current.lockedUntil;
+        lockMinutes > 0 ? new Date(Date.now() + lockMinutes * 60_000) : current.lockedUntil;
 
       await withTransaction(db, options.executor, async (tx) => {
         await users.registerLoginFailure(userId, { failedLoginCount, lockedUntil }, tx);
@@ -401,7 +417,7 @@ export function createUsersService(dependencies: UsersServiceDependencies): User
           {
             username: current.username,
             failedCount: failedLoginCount,
-            lockedUntil: failedLoginCount >= MAX_FAILED_LOGIN_ATTEMPTS ? lockedUntil : null,
+            lockedUntil: lockMinutes > 0 ? lockedUntil : null,
             actor: options.actor,
           },
           tx,

@@ -150,9 +150,19 @@ export function createAuthService(dependencies: AuthServiceDependencies): AuthSe
       }
 
       if (user.lockedUntil !== null && user.lockedUntil.getTime() > Date.now()) {
+        /**
+         * Срок сообщаем числом: «попробуйте позже» человек читает как «может, сейчас». Задержка
+         * растёт с каждой неудачей (5, 10, 20, 40 минут), поэтому без цифры непонятно, чего ждать.
+         */
+        const retryAfterMinutes = Math.max(
+          1,
+          Math.ceil((user.lockedUntil.getTime() - Date.now()) / 60_000),
+        );
+
         throw new AppError(
           'RATE_LIMITED',
-          'Слишком много неудачных попыток входа. Попробуйте позже',
+          `Слишком много неудачных попыток входа. Повторите через ${retryAfterMinutes} мин`,
+          { details: { retryAfterMinutes } },
         );
       }
 

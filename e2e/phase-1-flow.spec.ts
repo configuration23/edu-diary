@@ -107,6 +107,12 @@ test.describe.serial('Этап 1: настройка, вход, права', () 
 
     // Роли по умолчанию отмечен преподаватель — проверяем и оставляем.
     await expect(userForm.getByLabel('Преподаватель')).toBeChecked();
+    /**
+     * Смену пароля не требуем: сценарий входит этим преподавателем, а с флагом его увело бы в
+     * профиль. Сам гейт проверяется отдельно.
+     */
+    await userForm.getByLabel('Требовать смену пароля при первом входе').uncheck();
+
     await userForm.getByRole('button', { name: 'Создать учётную запись' }).click();
 
     await expect(page.getByText('Учётная запись создана', { exact: false })).toBeVisible();
@@ -393,7 +399,11 @@ test.describe.serial('Этап 1: настройка, вход, права', () 
     const created = await page.request.post('/api/students', {
       data: {
         fullName: 'Ученик Доступа',
-        account: { username: studentUsername, password: 'kolledzh-dostupa-2025' },
+        account: {
+          mustChangePassword: false,
+          username: studentUsername,
+          password: 'kolledzh-dostupa-2025',
+        },
       },
     });
     expect(created.ok(), await created.text()).toBe(true);

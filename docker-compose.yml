@@ -28,6 +28,9 @@ x-api-environment: &api-environment
   DATABASE_URL: postgres://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB is required}
   SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET is required - run npm run bootstrap:env}
   STORAGE_ENCRYPTION_KEY: ${STORAGE_ENCRYPTION_KEY:?STORAGE_ENCRYPTION_KEY is required - run npm run bootstrap:env}
+  # Cookie сессии с флагом Secure. Нужен там, где TLS снимается раньше приложения (роутер,
+  # внешний прокси): изнутри запрос всегда http, и флаг сам не появится.
+  COOKIE_SECURE: ${COOKIE_SECURE:-false}
 
 services:
   postgres:

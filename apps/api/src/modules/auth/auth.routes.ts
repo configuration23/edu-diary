@@ -46,7 +46,11 @@ function cookieOptions(request: FastifyRequest, maxAgeSeconds: number) {
     path: '/',
     httpOnly: true,
     sameSite: 'lax' as const,
-    secure: request.protocol === 'https',
+    /**
+     * `Secure` включается и тогда, когда TLS снимается раньше приложения (роутер, внешний прокси):
+     * в этом случае `request.protocol` всегда `http`, и флаг иначе не появится никогда.
+     */
+    secure: request.protocol === 'https' || process.env.COOKIE_SECURE === 'true',
     maxAge: maxAgeSeconds,
   };
 }

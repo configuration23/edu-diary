@@ -22,6 +22,10 @@
 		-Server
 	}
 
+	# Карты сборки не отдаём, даже если они остались от прошлой версии.
+	@maps path *.map
+	respond @maps 404
+
 	# API обслуживает Fastify.
 	handle /api/* {
 		reverse_proxy api:3000

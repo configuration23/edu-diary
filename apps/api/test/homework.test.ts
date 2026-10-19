@@ -254,6 +254,7 @@ describeWithDatabase('домашние задания', () => {
       url: '/api/users',
       headers: auth(adminCookie),
       payload: {
+        mustChangePassword: false,
         username: 'prepod-chuzhoy',
         fullName: 'Чужой Преподаватель',
         password: 'kolledzh-chuzhoy-2025',

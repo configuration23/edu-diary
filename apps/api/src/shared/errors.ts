@@ -141,6 +141,20 @@ export function registerErrorHandling(app: FastifyInstance): void {
   app.setErrorHandler((error: FastifyError, request: FastifyRequest, reply: FastifyReply) => {
     const { statusCode, body } = toErrorResponse(error);
 
+    /**
+     * На ответах с ограничением частоты ставим `Retry-After`: клиенту и промежуточным прокси нужно
+     * знать, когда повторять, иначе они повторяют сразу и усиливают нагрузку.
+     */
+    const details = body.error.details;
+    const retryAfterMinutes =
+      body.error.code === 'RATE_LIMITED' && typeof details === 'object' && details !== null
+        ? (details as { retryAfterMinutes?: unknown }).retryAfterMinutes
+        : undefined;
+
+    if (typeof retryAfterMinutes === 'number') {
+      reply.header('Retry-After', String(Math.max(1, Math.round(retryAfterMinutes * 60))));
+    }
+
     if (statusCode >= 500) {
       request.log.error({ err: error }, 'необработанная ошибка запроса');
     }

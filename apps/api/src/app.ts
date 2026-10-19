@@ -126,6 +126,7 @@ export async function buildApp({
         roles: readonly string[];
         email?: string;
         phone?: string;
+        mustChangePassword?: boolean;
       },
       executor?: Executor,
     ) {
@@ -141,6 +142,9 @@ export async function buildApp({
           roles: [...input.roles],
           ...(input.email === undefined ? {} : { email: input.email }),
           ...(input.phone === undefined ? {} : { phone: input.phone }),
+          ...(input.mustChangePassword === undefined
+            ? {}
+            : { mustChangePassword: input.mustChangePassword }),
         },
         { actor: SYSTEM_ACTOR, executor },
       );
@@ -442,6 +446,31 @@ export async function buildApp({
     const token = request.cookies[SESSION_COOKIE_NAME];
     request.auth =
       typeof token === 'string' && token !== '' ? await auth.resolveSession(token) : null;
+  });
+
+  /**
+   * Принудительная смена временного пароля (решение владельца, находка F-03).
+   *
+   * Пока `mustChangePassword` стоит, разрешены только «свои» маршруты: узнать себя, сменить пароль и
+   * выйти. Иначе флаг оставался украшением: человек с выданным паролем работал с системой бессрочно.
+   */
+  const PASSWORD_CHANGE_ALLOWED_PATHS = new Set([
+    '/api/auth/me',
+    '/api/auth/change-password',
+    '/api/auth/logout',
+  ]);
+
+  app.addHook('onRequest', async (request) => {
+    const auth = request.auth;
+    if (auth === null || !auth.mustChangePassword) return;
+
+    const path = request.url.split('?')[0] ?? '';
+    if (!path.startsWith('/api/')) return;
+    if (PASSWORD_CHANGE_ALLOWED_PATHS.has(path)) return;
+
+    throw new AppError('FORBIDDEN', 'Сначала смените временный пароль', {
+      details: { reason: 'PASSWORD_CHANGE_REQUIRED' },
+    });
   });
 
   // Гейт «система не настроена»: всё, кроме health и мастера, отвечает 503 (ADR-014).

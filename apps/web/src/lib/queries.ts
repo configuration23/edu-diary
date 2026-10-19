@@ -299,6 +299,8 @@ export function useCreateUser() {
       roles: string[];
       email?: string;
       phone?: string;
+      /** Требовать смену пароля при первом входе (по умолчанию на сервере — да). */
+      mustChangePassword?: boolean;
     }) => apiRequest('/api/users', userSummarySchema, { method: 'POST', body: input }),
     onSuccess: () => invalidateUsers(client),
   });
