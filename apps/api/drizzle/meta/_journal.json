@@ -141,6 +141,13 @@
       "when": 1792200000004,
       "tag": "0019_user_password_changed_at",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1792200000005,
+      "tag": "0020_session_absolute_expiry",
+      "breakpoints": true
     }
   ]
 }

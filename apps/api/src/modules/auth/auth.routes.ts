@@ -5,6 +5,8 @@ import {
   loginRequestSchema,
   sessionResponseSchema,
   type SessionResponseDto,
+  listSessionsResponseSchema,
+  revokeOtherSessionsResponseSchema,
 } from '@edu-diary/contracts';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
@@ -14,7 +16,7 @@ import { AppError } from '../../shared/errors';
 import { authOf } from '../../shared/guards';
 import {
   SESSION_COOKIE_NAME,
-  SESSION_TTL_HOURS,
+  SESSION_IDLE_MINUTES,
   type AuthService,
   type SessionMeta,
 } from './auth.service';
@@ -78,11 +80,16 @@ export function registerAuthRoutes(app: FastifyInstance, auth: AuthService): voi
       meta: sessionMeta(request),
     });
 
-    reply.setCookie(
-      SESSION_COOKIE_NAME,
-      result.token,
-      cookieOptions(request, SESSION_TTL_HOURS * 3600),
+    /**
+     * Срок cookie — по абсолютному пределу: сервер всё равно закроет сессию по простою, а браузер
+     * не должен терять cookie раньше, чем истечёт жёсткий срок.
+     */
+    const maxAgeSeconds = Math.max(
+      60,
+      Math.floor((result.absoluteExpiresAt.getTime() - Date.now()) / 1000),
     );
+
+    reply.setCookie(SESSION_COOKIE_NAME, result.token, cookieOptions(request, maxAgeSeconds));
 
     return toSessionDto(result.auth);
   });
@@ -122,6 +129,43 @@ export function registerAuthRoutes(app: FastifyInstance, auth: AuthService): voi
     await auth.changeViewMode(context.userId, body.viewMode);
 
     return { ok: true };
+  });
+
+  /**
+   * Свои устройства и входы.
+   *
+   * Человеку нужно видеть, откуда он вошёл, и уметь закрыть лишнее — это и есть управление
+   * сессиями без администратора.
+   */
+  app.get('/auth/sessions', async (request: FastifyRequest) => {
+    const context = authOf(request);
+
+    const items = await auth.listSessions(context.userId, context.sessionId);
+
+    return listSessionsResponseSchema.parse({ items, idleMinutes: SESSION_IDLE_MINUTES });
+  });
+
+  /** Завершить выбранную свою сессию. */
+  app.delete('/auth/sessions/:id', async (request: FastifyRequest, reply: FastifyReply) => {
+    const context = authOf(request);
+    const { id } = request.params as { id: string };
+
+    await auth.revokeSession(context.userId, id, actorFromRequest(request));
+
+    reply.status(204);
+    return null;
+  });
+
+  /** Завершить все сессии, кроме текущей. */
+  app.delete('/auth/sessions', async (request: FastifyRequest) => {
+    const context = authOf(request);
+    const removed = await auth.revokeOtherSessions(
+      context.userId,
+      context.sessionId,
+      actorFromRequest(request),
+    );
+
+    return revokeOtherSessionsResponseSchema.parse({ removed });
   });
 
   app.post('/auth/change-password', async (request: FastifyRequest) => {

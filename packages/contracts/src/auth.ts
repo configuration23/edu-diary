@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { permissionGrantSchema, roleSummarySchema, uuidSchema } from './common';
+import { isoDateTimeSchema, permissionGrantSchema, roleSummarySchema, uuidSchema } from './common';
 
 /** Вход, текущий пользователь, смена пароля (ARCHITECTURE.md §8). */
 
@@ -20,6 +20,37 @@ export const viewModeSchema = z.enum(['compact', 'expanded']);
 export type ViewMode = z.infer<typeof viewModeSchema>;
 
 export const updateViewModeRequestSchema = z.object({ viewMode: viewModeSchema });
+
+/**
+ * Своя сессия в списке «Устройства и входы».
+ *
+ * Токен и его хеш не отдаются никогда: список нужен, чтобы человек узнал свои устройства и закрыл
+ * лишнее, а не чтобы получить доступ.
+ */
+export const sessionSummarySchema = z.object({
+  id: uuidSchema,
+  /** Подпись устройства из User-Agent: «Chrome · Windows». */
+  device: z.string(),
+  ip: z.string().nullable(),
+  createdAt: isoDateTimeSchema,
+  lastSeenAt: isoDateTimeSchema,
+  /** Истечёт от простоя. */
+  expiresAt: isoDateTimeSchema,
+  /** Жёсткий предел: его активность не продлевает. */
+  absoluteExpiresAt: isoDateTimeSchema,
+  current: z.boolean(),
+});
+export type SessionSummaryDto = z.infer<typeof sessionSummarySchema>;
+
+export const listSessionsResponseSchema = z.object({
+  items: z.array(sessionSummarySchema),
+  /** Сколько минут бездействия завершают сессию: число берётся с сервера, чтобы подсказка не врала. */
+  idleMinutes: z.number().int().positive(),
+});
+
+export const revokeOtherSessionsResponseSchema = z.object({
+  removed: z.number().int().nonnegative(),
+});
 
 export const currentUserSchema = z.object({
   id: uuidSchema,

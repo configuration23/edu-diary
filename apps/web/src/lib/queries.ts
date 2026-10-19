@@ -31,6 +31,8 @@ import {
   listGroupsResponseSchema,
   listPermissionsResponseSchema,
   listRolesResponseSchema,
+  listSessionsResponseSchema,
+  revokeOtherSessionsResponseSchema,
   listRoomsResponseSchema,
   listSecurityEventsResponseSchema,
   listStudentsResponseSchema,
@@ -234,6 +236,36 @@ export function useUpdateViewMode(): UseMutationResult<void, Error, { viewMode: 
           : { ...current, user: { ...current.user, viewMode: variables.viewMode } },
       );
     },
+  });
+}
+
+/** Свои устройства и входы: список для профиля. */
+export function useSessions() {
+  return useQuery({
+    queryKey: ['sessions'],
+    queryFn: () => apiRequest('/api/auth/sessions', listSessionsResponseSchema),
+  });
+}
+
+/** Завершить выбранную свою сессию. */
+export function useRevokeSession() {
+  const client = useQueryClient();
+
+  return useMutation({
+    mutationFn: (sessionId: string) =>
+      apiSend(`/api/auth/sessions/${sessionId}`, { method: 'DELETE' }),
+    onSuccess: () => client.invalidateQueries({ queryKey: ['sessions'] }),
+  });
+}
+
+/** Завершить все сессии, кроме текущей. */
+export function useRevokeOtherSessions() {
+  const client = useQueryClient();
+
+  return useMutation({
+    mutationFn: () =>
+      apiRequest('/api/auth/sessions', revokeOtherSessionsResponseSchema, { method: 'DELETE' }),
+    onSuccess: () => client.invalidateQueries({ queryKey: ['sessions'] }),
   });
 }
 

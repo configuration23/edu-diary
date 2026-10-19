@@ -18,6 +18,8 @@ export const session = pgTable(
       .references(() => appUser.id, { onDelete: 'cascade' }),
     tokenHash: text('token_hash').notNull().unique(),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    /** Жёсткий предел: активность его не продлевает (решение владельца). */
+    absoluteExpiresAt: timestamp('absolute_expires_at', { withTimezone: true }).notNull(),
     lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow(),
     userAgent: text('user_agent'),
     ip: inet('ip'),

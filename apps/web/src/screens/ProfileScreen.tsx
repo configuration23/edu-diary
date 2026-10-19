@@ -5,6 +5,7 @@ import { CLIENT_VERSION } from '../lib/version';
 import { isSystemAdmin } from '../lib/access';
 import { Alert, Badge, Segmented, formatDateTime } from '../components/ui';
 import { ChangePasswordCard } from '../components/ChangePasswordCard';
+import { SessionsCard } from '../components/SessionsCard';
 import { SystemStatus, type HealthState } from '../components/SystemStatus';
 import { Page, PageHeader, Section } from '../components/layout';
 import { Spoiler } from '../components/Spoiler';
@@ -199,6 +200,8 @@ export function ProfileScreen({
         <ThemeChoice current={session.user.theme} />
         {!isLearner(session) && <ViewModeChoice current={session.user.viewMode} />}
       </Section>
+
+      <SessionsCard />
 
       <ChangePasswordCard
         {...(onPasswordChanged === undefined ? {} : { onChanged: onPasswordChanged })}

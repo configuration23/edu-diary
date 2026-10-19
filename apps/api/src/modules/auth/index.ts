@@ -17,7 +17,9 @@ export {
   createAuthService,
   SESSION_COOKIE_NAME,
   SESSION_RENEW_AFTER_MINUTES,
-  SESSION_TTL_HOURS,
+  SESSION_ABSOLUTE_DAYS_LEARNER,
+  SESSION_ABSOLUTE_HOURS_STAFF,
+  SESSION_IDLE_MINUTES,
 } from './auth.service';
 export type { AuthService, LoginResult, SessionMeta } from './auth.service';
 export { session } from './auth.schema';
