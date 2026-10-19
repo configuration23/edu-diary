@@ -342,7 +342,12 @@ function TemporaryPasswordScreen({ session }: { session: SessionResponseDto }) {
       </header>
 
       <main className="mx-auto max-w-5xl px-4 py-6">
-        <ProfileScreen session={session} />
+        {/*
+          После смены — «Обзор» с полной перезагрузкой: экран рисуется **вне** маршрутизатора, и без
+          неё первый переход оставался с прежним состоянием (владелец попадал на «страница не
+          найдена»).
+        */}
+        <ProfileScreen session={session} onPasswordChanged={() => window.location.replace('/')} />
       </main>
     </div>
   );

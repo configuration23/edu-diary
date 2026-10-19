@@ -30,7 +30,17 @@ const passwordFormSchema = z
     path: ['newPasswordRepeat'],
   });
 
-export function ChangePasswordCard() {
+export function ChangePasswordCard({
+  /**
+   * Что делать после успешной смены.
+   *
+   * В обычном профиле показываем сообщение «Пароль изменён». На экране временного пароля
+   * переходим на «Обзор»: там смена — служебный шаг, и оставаться на нём незачем.
+   */
+  onChanged,
+}: {
+  onChanged?: () => void;
+} = {}) {
   const [done, setDone] = useState(false);
   const change = useChangePassword();
 
@@ -56,6 +66,10 @@ export function ChangePasswordCard() {
             });
             form.reset({ currentPassword: '', newPassword: '', newPasswordRepeat: '' });
             setDone(true);
+
+            if (onChanged !== undefined) {
+              onChanged();
+            }
           } catch {
             // Текущий пароль стираем: если он неверный, повторять его вслепую незачем.
             form.setValue('currentPassword', '');

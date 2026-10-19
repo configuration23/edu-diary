@@ -136,7 +136,14 @@ function ViewModeChoice({ current }: { current: ViewMode }) {
   );
 }
 
-export function ProfileScreen({ session }: { session: SessionResponseDto }) {
+export function ProfileScreen({
+  session,
+  onPasswordChanged,
+}: {
+  session: SessionResponseDto;
+  /** Что делать после смены пароля: экран временного пароля уводит на «Обзор». */
+  onPasswordChanged?: () => void;
+}) {
   const health = useHealth();
   const api = health.data;
   const client = CLIENT_VERSION;
@@ -193,7 +200,9 @@ export function ProfileScreen({ session }: { session: SessionResponseDto }) {
         {!isLearner(session) && <ViewModeChoice current={session.user.viewMode} />}
       </Section>
 
-      <ChangePasswordCard />
+      <ChangePasswordCard
+        {...(onPasswordChanged === undefined ? {} : { onChanged: onPasswordChanged })}
+      />
 
       {/*
         «Ваш доступ» — спойлером (просьба владельца): список прав длинный и отодвигает остальное.
