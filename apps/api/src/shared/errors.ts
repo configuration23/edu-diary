@@ -24,6 +24,10 @@ const HTTP_STATUS_BY_CODE: Readonly<Record<ErrorCode, number>> = {
 const FASTIFY_CODE_MAP: Readonly<Record<string, ErrorCode>> = {
   FST_ERR_VALIDATION: 'VALIDATION_FAILED',
   FST_ERR_CTP_BODY_TOO_LARGE: 'PAYLOAD_TOO_LARGE',
+  /** Файл в multipart больше лимита: библиотека кидает это как 413, без карты получалось 500. */
+  FST_REQ_FILE_TOO_LARGE: 'PAYLOAD_TOO_LARGE',
+  FST_FILES_LIMIT: 'VALIDATION_FAILED',
+  FST_PARTS_LIMIT: 'VALIDATION_FAILED',
   FST_ERR_CTP_INVALID_MEDIA_TYPE: 'VALIDATION_FAILED',
   FST_ERR_CTP_EMPTY_JSON_BODY: 'VALIDATION_FAILED',
   /** Тело не является корректным JSON: это ошибка клиента, а не внутренний сбой. */

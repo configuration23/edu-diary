@@ -81,6 +81,11 @@ export function createFileService(dependencies: {
         throw new AppError('VALIDATION_FAILED', 'Файл пустой');
       }
 
+      /** Слишком большой файл — это 413, а не «неверный запрос»: статус говорит клиенту правду. */
+      if (input.body.length > input.maxFileMb * 1024 * 1024) {
+        throw new AppError('PAYLOAD_TOO_LARGE', `Файл больше ${String(input.maxFileMb)} МБ`);
+      }
+
       /** Проверки размера и расширения: те же правила, что на клиенте, но обязательные. */
       const verdict = checkFile({
         fileName: input.fileName,

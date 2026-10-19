@@ -7,6 +7,7 @@ import {
   createUserAndLogin,
   type TestApp,
 } from './helpers/api';
+import { configureTestStorage } from './helpers/api';
 import { createTestDatabase, hasTestDatabase, type TestDatabase } from './helpers/database';
 
 const describeWithDatabase = describe.skipIf(!hasTestDatabase);
@@ -308,5 +309,47 @@ describeWithDatabase('новости заведения', () => {
       payload: { title: '   ', body: 'Текст есть, заголовка нет.' },
     });
     expect(created.statusCode, created.body).toBe(400);
+  });
+
+  it('картинка новости принимается и в 2,5 МБ, и отдаёт 413 на слишком большой', async () => {
+    /**
+     * Дефект со стенда: фото с телефона давало `500`. Причина — `multer`-лимиты multipart по
+     * умолчанию (1 МБ) и непереведённый код ошибки библиотеки. Тест держит оба края.
+     */
+    await configureTestStorage(testApp.app, adminCookie);
+
+    const upload = async (bytes: Buffer) => {
+      const boundary = '----news-image';
+      const head = Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="photo.png"\r\nContent-Type: image/png\r\n\r\n`,
+      );
+      const tail = Buffer.from(`\r\n--${boundary}--\r\n`);
+
+      return testApp.app.inject({
+        method: 'POST',
+        url: '/api/news/images',
+        headers: {
+          cookie: adminCookie,
+          'content-type': `multipart/form-data; boundary=${boundary}`,
+        },
+        payload: Buffer.concat([head, bytes, tail]),
+      });
+    };
+
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==',
+      'base64',
+    );
+
+    const photo = Buffer.alloc(Math.round(2.5 * 1024 * 1024));
+    png.copy(photo);
+    const accepted = await upload(photo);
+    expect(accepted.statusCode, accepted.body).toBe(201);
+
+    /** Свыше настройки (10 МБ) — `413`, а не «внутренняя ошибка». */
+    const huge = Buffer.alloc(11 * 1024 * 1024);
+    png.copy(huge);
+    const rejected = await upload(huge);
+    expect(rejected.statusCode).toBe(413);
   });
 });
