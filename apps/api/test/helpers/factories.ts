@@ -213,7 +213,8 @@ export async function createTeacher(
     method: 'POST',
     url: '/api/users',
     cookie: context.adminCookie,
-    payload: { ...input, roles: ['teacher'] },
+    /** Учётка сразу активна: гейт временного пароля иначе закрывает сценарии. */
+    payload: { ...input, roles: ['teacher'], mustChangePassword: false },
   });
 
   await expectStatus(response, [201], 'Преподаватель не создан');
@@ -240,7 +241,7 @@ export async function createStudentWithAccount(
     cookie: context.adminCookie,
     payload: {
       fullName: input.fullName,
-      account: { username: input.username, password: input.password },
+      account: { username: input.username, password: input.password, mustChangePassword: false },
     },
   });
 

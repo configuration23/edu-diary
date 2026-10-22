@@ -69,6 +69,7 @@ async function login(page: Page, username: string, password: string): Promise<vo
 async function ensureTeacher(page: Page): Promise<string> {
   const response = await page.request.post('/api/users', {
     data: {
+      mustChangePassword: false,
       username: CURATOR.username,
       fullName: CURATOR.fullName,
       password: CURATOR.password,

@@ -13,9 +13,9 @@ import { AppLayout } from './components/AppLayout';
 import { NotFoundPage, PageGuard } from './components/PageGuard';
 import { AcademicContextProvider } from './components/AcademicContext';
 import { AppearanceProvider } from './components/AppearanceContext';
-import { Alert } from './components/ui';
+import { Alert, Button } from './components/ui';
 import { errorMessage } from './lib/api-client';
-import { useSession, useSetupStatus } from './lib/queries';
+import { useSession, useSetupStatus, useLogout } from './lib/queries';
 import { applyTheme, cacheTheme } from './lib/theme';
 import { AcademicProcessScreen } from './screens/AcademicProcessScreen';
 import { CatalogsScreen } from './screens/CatalogsScreen';
@@ -317,11 +317,52 @@ declare module '@tanstack/react-router' {
   }
 }
 
+/**
+ * Экран смены временного пароля.
+ *
+ * Пока флаг стоит, сервер закрывает почти всё, поэтому обычная раскладка с контекстами (годы,
+ * группы, оформление) не отрисуется: вместо просьбы сменить пароль человек увидел бы «не удалось
+ * получить состояние системы» (дефект, найденный владельцем на стенде).
+ */
+function TemporaryPasswordScreen({ session }: { session: SessionResponseDto }) {
+  const logout = useLogout();
+
+  return (
+    <div className="min-h-screen bg-background text-foreground">
+      <header className="border-b border-border bg-card">
+        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-3">
+          <span className="font-semibold">Электронный дневник</span>
+          <span className="flex items-center gap-3 text-sm">
+            <span className="text-muted-foreground">{session.user.fullName}</span>
+            <Button tone="secondary" onClick={() => void logout.mutateAsync()}>
+              Выйти
+            </Button>
+          </span>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-5xl px-4 py-6">
+        {/*
+          После смены — «Обзор» с полной перезагрузкой: экран рисуется **вне** маршрутизатора, и без
+          неё первый переход оставался с прежним состоянием (владелец попадал на «страница не
+          найдена»).
+        */}
+        <ProfileScreen session={session} onPasswordChanged={() => window.location.replace('/')} />
+      </main>
+    </div>
+  );
+}
+
 function AuthenticatedApp({ branding }: { branding: BrandingDto }) {
   const session = useSession();
 
   if (session.isLoading) return <Splash />;
   if (session.data == null) return <LoginScreen branding={branding} />;
+
+  /** Временный пароль: сначала меняем его, остальное приложение подождёт. */
+  if (session.data.user.mustChangePassword) {
+    return <TemporaryPasswordScreen session={session.data} />;
+  }
 
   return <RouterProvider router={router} />;
 }

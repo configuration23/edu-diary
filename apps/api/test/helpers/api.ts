@@ -136,13 +136,29 @@ export async function createUserAndLogin(
     fullName: string;
     password: string;
     roles: string[];
+    /** По умолчанию учётка активирована: смена пароля нужна только там, где её проверяют. */
+    mustChangePassword?: boolean;
   },
+  /**
+   * Дополнительные параметры входа.
+   *
+   * `mustChangePassword: true` нужен там, где проверяется гейт временного пароля: такую учётную
+   * запись нельзя «активировать» на месте, иначе проверять будет нечего.
+   */
+  options: { mustChangePassword?: boolean } = {},
 ): Promise<CreatedUser> {
   const created = await app.inject({
     method: 'POST',
     url: '/api/users',
     headers: { cookie: adminCookie },
-    payload: input,
+    /**
+     * Тестовым учёткам смена пароля не нужна: иначе каждый сценарий начинался бы с неё, а сервер
+     * (правильно) закрывал бы всё остальное до смены.
+     */
+    payload: {
+      ...input,
+      mustChangePassword: options.mustChangePassword ?? input.mustChangePassword ?? false,
+    },
   });
 
   if (created.statusCode !== 201) {

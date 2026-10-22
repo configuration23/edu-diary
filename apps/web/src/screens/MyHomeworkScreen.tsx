@@ -227,7 +227,11 @@ function HomeworkItem({ assignment }: { assignment: HomeworkAssignmentSummaryDto
                   setError(null);
 
                   try {
-                    const uploaded = await upload.mutateAsync({ file, kind: 'submission' });
+                    const uploaded = await upload.mutateAsync({
+                      file,
+                      kind: 'submission',
+                      assignmentId: assignment.id,
+                    });
                     setFiles((current) => [...current, uploaded]);
                   } catch (caught) {
                     setError(errorMessage(caught));

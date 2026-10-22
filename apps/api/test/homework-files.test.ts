@@ -117,7 +117,13 @@ describeWithDatabase('вложения домашних заданий', () => {
     expect(response.statusCode, response.body).toBe(201);
 
     const item = response.json() as Json;
-    expect(item.originalName).toBe('смета.pdf');
+
+    /**
+     * Имя строит сервер: «дата_логин_предмет.расширение» (решение владельца). От имени клиента
+     * остаётся только расширение, поэтому «смета.pdf» больше не сохраняется как есть.
+     */
+    expect(item.originalName).toMatch(/^\d{4}-\d{2}-\d{2}_[a-z0-9-]+_[a-z0-9-]+\.pdf$/);
+    expect(String(item.originalName)).not.toContain('смета');
     expect(item.sizeBytes).toBe(pdf.length);
     // Тип определён по содержимому, а не по расширению.
     expect(item.mimeType).toBe('application/pdf');

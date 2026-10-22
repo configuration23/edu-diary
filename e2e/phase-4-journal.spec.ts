@@ -124,6 +124,7 @@ test('Этап 4: журнал урока — оценки с причинами
   const teacher = await bodyOf<{ id: string }>(
     await page.request.post('/api/users', {
       data: {
+        mustChangePassword: false,
         username: TEACHER.username,
         fullName: TEACHER.fullName,
         password: TEACHER.password,
@@ -149,7 +150,11 @@ test('Этап 4: журнал урока — оценки с причинами
     await page.request.post('/api/students', {
       data: {
         fullName: STUDENT.fullName,
-        account: { username: STUDENT.username, password: STUDENT.password },
+        account: {
+          mustChangePassword: false,
+          username: STUDENT.username,
+          password: STUDENT.password,
+        },
       },
     }),
     'ученик',
@@ -361,6 +366,7 @@ test('Этап 4, шаг 3: удалённую оценку видно и мож
   const teacher = await bodyOf<{ id: string }>(
     await page.request.post('/api/users', {
       data: {
+        mustChangePassword: false,
         username: TEACHER_DELETED.username,
         fullName: TEACHER_DELETED.fullName,
         password: TEACHER_DELETED.password,
@@ -387,6 +393,7 @@ test('Этап 4, шаг 3: удалённую оценку видно и мож
       data: {
         fullName: `Ученик Удаления ${RUN}`,
         account: {
+          mustChangePassword: false,
           username: `e2e-uchenik-udalenie-${RUN}`,
           password: 'kolledzh-udalenie-uchenik-2025',
         },
@@ -506,6 +513,7 @@ test('Этап 4, шаг 2: пересчёт плюсов в оценку', asyn
   const teacher = await bodyOf<{ id: string }>(
     await page.request.post('/api/users', {
       data: {
+        mustChangePassword: false,
         username: `e2e-prepod-znaki-${RUN}`,
         fullName: `Преподаватель Знаков ${RUN}`,
         password: 'kolledzh-znaki-prepod-2025',
@@ -531,7 +539,11 @@ test('Этап 4, шаг 2: пересчёт плюсов в оценку', asyn
     await page.request.post('/api/students', {
       data: {
         fullName: `Ученик Знаков ${RUN}`,
-        account: { username: `e2e-uchenik-znaki-${RUN}`, password: 'kolledzh-znaki-uchenik-2025' },
+        account: {
+          mustChangePassword: false,
+          username: `e2e-uchenik-znaki-${RUN}`,
+          password: 'kolledzh-znaki-uchenik-2025',
+        },
       },
     }),
     'ученик',
@@ -702,6 +714,7 @@ test('Этап 4, шаг 4: аналитика по группе', async ({ page
 
   const teacher = await page.request.post('/api/users', {
     data: {
+      mustChangePassword: false,
       username: `e2e-prepod-analitika-${run}`,
       fullName: `Преподаватель Аналитики ${run}`,
       password: 'kolledzh-analitika-prepod-2025',
@@ -719,6 +732,7 @@ test('Этап 4, шаг 4: аналитика по группе', async ({ page
     data: {
       fullName: `Ученик Аналитики ${run}`,
       account: {
+        mustChangePassword: false,
         username: `e2e-uchenik-analitika-${run}`,
         password: 'kolledzh-analitika-uchenik-2025',
       },

@@ -249,6 +249,7 @@ describeWithDatabase('расписание и уроки', () => {
       url: '/api/users',
       headers: auth(),
       payload: {
+        mustChangePassword: false,
         username: 'prepod-raspisanie',
         fullName: 'Другой Преподаватель',
         password: 'kolledzh-drugoy-2025',
@@ -267,6 +268,8 @@ describeWithDatabase('расписание и уроки', () => {
       username: 'uchenik-raspisanie',
       // Пароль не содержит логин: этого требует политика паролей.
       password: 'kolledzh-uchenik-2025',
+      /** Учётка сразу активна: гейт временного пароля иначе закрывает сценарий. */
+      mustChangePassword: false,
     };
 
     const student = await testApp.app.inject({

@@ -171,6 +171,7 @@ test.describe('Этап 3: звонки, расписание, уроки', () =
     const teacher = await bodyOf<{ id: string }>(
       await page.request.post('/api/users', {
         data: {
+          mustChangePassword: false,
           username: TEACHER.username,
           fullName: TEACHER.fullName,
           password: TEACHER.password,
@@ -342,6 +343,7 @@ test.describe('Этап 3: звонки, расписание, уроки', () =
         data: {
           fullName: STUDENT.fullName,
           account: {
+            mustChangePassword: false,
             username: STUDENT.username,
             password: STUDENT.password,
           },

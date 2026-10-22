@@ -14,12 +14,15 @@ const STATUS_LABELS: Record<HealthResponse['status'], string> = {
   degraded: 'Сервер работает с ограничениями',
 };
 
-const DATABASE_LABELS: Record<HealthResponse['checks']['database']['status'], string> = {
+/** Подробности приходят только вошедшему: снаружи health отдаёт лишь статус. */
+type Checks = NonNullable<HealthResponse['checks']>;
+
+const DATABASE_LABELS: Record<Checks['database']['status'], string> = {
   ok: 'подключение есть',
   error: 'нет подключения',
 };
 
-const MIGRATIONS_LABELS: Record<HealthResponse['checks']['migrations']['status'], string> = {
+const MIGRATIONS_LABELS: Record<Checks['migrations']['status'], string> = {
   ok: 'применены',
   pending: 'не применены',
   unknown: 'состояние неизвестно',
@@ -59,8 +62,8 @@ export function SystemStatus({ state }: { state: HealthState }) {
   }
 
   const { health } = state;
-  const database = health.checks.database;
-  const migrations = health.checks.migrations;
+  const database = health.checks?.database;
+  const migrations = health.checks?.migrations;
 
   return (
     <section
@@ -68,31 +71,36 @@ export function SystemStatus({ state }: { state: HealthState }) {
       className="rounded-lg border border-border bg-card p-6 shadow-sm"
     >
       <h2 className="text-lg font-semibold">{STATUS_LABELS[health.status]}</h2>
-      <p className="mt-1 text-sm text-muted-foreground">Версия API: {health.version}</p>
+      {health.version !== undefined && (
+        <p className="mt-1 text-sm text-muted-foreground">Версия API: {health.version}</p>
+      )}
 
-      <dl className="mt-4 text-sm">
-        <Row
-          title="База данных"
-          value={`${DATABASE_LABELS[database.status]}${
-            database.latencyMs === null ? '' : `, ${database.latencyMs} мс`
-          }`}
-        />
-        <Row
-          title="Миграции"
-          value={`${MIGRATIONS_LABELS[migrations.status]} (применено: ${migrations.applied}, ожидает: ${migrations.pending})`}
-        />
-        <Row
-          title="Первичная настройка"
-          value={
-            health.setup.initialized === null
-              ? 'состояние неизвестно'
-              : health.setup.initialized
-                ? 'пройдена'
-                : 'не пройдена'
-          }
-        />
-        <Row title="Время работы API" value={`${health.uptimeSeconds} с`} />
-      </dl>
+      {/* Подробности приходят только вошедшему: без них показываем общий статус. */}
+      {database === undefined || migrations === undefined ? null : (
+        <dl className="mt-4 text-sm">
+          <Row
+            title="База данных"
+            value={`${DATABASE_LABELS[database.status]}${
+              database.latencyMs === null ? '' : `, ${database.latencyMs} мс`
+            }`}
+          />
+          <Row
+            title="Миграции"
+            value={`${MIGRATIONS_LABELS[migrations.status]} (применено: ${migrations.applied}, ожидает: ${migrations.pending})`}
+          />
+          <Row
+            title="Первичная настройка"
+            value={
+              health.setup?.initialized === null
+                ? 'состояние неизвестно'
+                : health.setup?.initialized
+                  ? 'пройдена'
+                  : 'не пройдена'
+            }
+          />
+          <Row title="Время работы API" value={`${health.uptimeSeconds ?? 0} с`} />
+        </dl>
+      )}
     </section>
   );
 }

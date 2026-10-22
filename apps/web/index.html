@@ -10,26 +10,7 @@
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231d4ed8'/%3E%3Cpath d='M9 8h10a4 4 0 0 1 4 4v12H13a4 4 0 0 1-4-4z' fill='white'/%3E%3C/svg%3E"
     />
     <title>Электронный дневник</title>
-    <script>
-      /**
-       * Тема до первого кадра: берём последний выбор из хранилища.
-       *
-       * Ответ сессии придёт позже и перекроет значение — здесь важно только не показать светлый экран
-       * тому, кто выбрал тёмный. Ошибки хранилища (приватный режим) молча игнорируем: без кэша будет
-       * один мигающий кадр, это не поломка.
-       */
-      (function () {
-        try {
-          var saved = localStorage.getItem('edu-diary:theme');
-          var dark =
-            saved === 'dark' ||
-            (saved !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-          if (dark) document.documentElement.dataset.theme = 'dark';
-        } catch (error) {
-          /* хранилище недоступно — остаёмся на светлой по умолчанию */
-        }
-      })();
-    </script>
+    <script src="/theme-init.js"></script>
   </head>
   <body>
     <div id="root"></div>

@@ -86,7 +86,14 @@ export async function buildApp({
     logger: createLoggerOptions(env),
     genReqId: (request) => resolveRequestId(request.headers['x-request-id']),
     trustProxy: true,
-    bodyLimit: 8 * 1024 * 1024,
+    /**
+     * JSON-API не принимает мегабайты: 256 КБ хватает любому запросу. Файлы идут отдельным
+     * multipart-маршрутом со своим лимитом, его это не касается.
+     */
+    bodyLimit: 256 * 1024,
+    /** Соединение не должно висеть вечно: это защита от медленного чтения тела. */
+    connectionTimeout: 30_000,
+    requestTimeout: 120_000,
   });
 
   await app.register(cookie);
@@ -126,6 +133,7 @@ export async function buildApp({
         roles: readonly string[];
         email?: string;
         phone?: string;
+        mustChangePassword?: boolean;
       },
       executor?: Executor,
     ) {
@@ -141,6 +149,9 @@ export async function buildApp({
           roles: [...input.roles],
           ...(input.email === undefined ? {} : { email: input.email }),
           ...(input.phone === undefined ? {} : { phone: input.phone }),
+          ...(input.mustChangePassword === undefined
+            ? {}
+            : { mustChangePassword: input.mustChangePassword }),
         },
         { actor: SYSTEM_ACTOR, executor },
       );
@@ -437,11 +448,60 @@ export async function buildApp({
     reply.header('x-request-id', request.id);
   });
 
+  /**
+   * API не кэшируем. Ответы содержат оценки, ФИО и посещаемость: промежуточный кэш или общий
+   * компьютер не должны оставлять их после выхода (находка F-10).
+   */
+  app.addHook('onSend', async (request, reply, payload) => {
+    const path = request.url.split('?')[0] ?? '';
+
+    if (path.startsWith('/api/')) {
+      reply.header('Cache-Control', 'no-store, private');
+      reply.header('Pragma', 'no-cache');
+    }
+
+    return payload;
+  });
+
   // Сессия: контекст запроса заполняется до маршрутов.
   app.addHook('onRequest', async (request) => {
     const token = request.cookies[SESSION_COOKIE_NAME];
     request.auth =
       typeof token === 'string' && token !== '' ? await auth.resolveSession(token) : null;
+  });
+
+  /**
+   * Принудительная смена временного пароля (решение владельца, находка F-03).
+   *
+   * Пока `mustChangePassword` стоит, разрешены только «свои» маршруты: узнать себя, сменить пароль и
+   * выйти. Иначе флаг оставался украшением: человек с выданным паролем работал с системой бессрочно.
+   */
+  const PASSWORD_CHANGE_ALLOWED_PATHS = new Set([
+    '/api/auth/me',
+    '/api/auth/change-password',
+    '/api/auth/logout',
+  ]);
+
+  /**
+   * Маршруты, без которых приложение не отрисуется: состояние системы, здоровье, оформление.
+   *
+   * Гейт временного пароля не должен ломать загрузку экрана: иначе человек видит «не удалось
+   * получить состояние системы» вместо просьбы сменить пароль (дефект, найденный владельцем).
+   */
+  const PASSWORD_CHANGE_ALLOWED_PREFIXES = ['/api/setup/', '/api/health', '/api/settings/'];
+
+  app.addHook('onRequest', async (request) => {
+    const auth = request.auth;
+    if (auth === null || !auth.mustChangePassword) return;
+
+    const path = request.url.split('?')[0] ?? '';
+    if (!path.startsWith('/api/')) return;
+    if (PASSWORD_CHANGE_ALLOWED_PATHS.has(path)) return;
+    if (PASSWORD_CHANGE_ALLOWED_PREFIXES.some((prefix) => path.startsWith(prefix))) return;
+
+    throw new AppError('FORBIDDEN', 'Сначала смените временный пароль', {
+      details: { reason: 'PASSWORD_CHANGE_REQUIRED' },
+    });
   });
 
   // Гейт «система не настроена»: всё, кроме health и мастера, отвечает 503 (ADR-014).

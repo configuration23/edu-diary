@@ -184,7 +184,14 @@ export function SetupScreen({ status }: { status: SetupStatusResponseDto }) {
     }
   });
 
-  const checks = status.checks;
+  /**
+   * Диагностика приходит, пока система не настроена. Если сервер её не прислал (уже настроено),
+   * показываем понятное «неизвестно» вместо падения.
+   */
+  const checks = status.checks ?? {
+    database: { status: 'error' as const, latencyMs: null, message: 'диагностика недоступна' },
+    migrations: { status: 'unknown' as const, applied: 0, pending: 0 },
+  };
 
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6">

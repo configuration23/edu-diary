@@ -135,7 +135,9 @@ export function HomeworkCard({
                     setError(errorMessage(caught));
                   }
                 }}
-                onUpload={async (file) => upload.mutateAsync({ file, kind: 'assignment' })}
+                onUpload={async (file) =>
+                  upload.mutateAsync({ file, kind: 'assignment', assignmentId: assignment.id })
+                }
                 removing={remove.isPending}
                 onRemove={async () => {
                   setError(null);

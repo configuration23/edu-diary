@@ -135,7 +135,11 @@ describeWithDatabase('удаление и восстановление отме�
       headers: auth(),
       payload: {
         fullName: 'Ученик Удаления',
-        account: { username: 'uchenik-udalenie', password: 'kolledzh-udalenie-2025' },
+        account: {
+          mustChangePassword: false,
+          username: 'uchenik-udalenie',
+          password: 'kolledzh-udalenie-2025',
+        },
       },
     });
     expect(student.statusCode, student.body).toBe(201);

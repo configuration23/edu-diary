@@ -87,7 +87,11 @@ describeWithDatabase('ученик и его учётная запись', () =>
   it('ученик создаётся сразу с учётной записью', async () => {
     const created = await createStudent({
       fullName: 'Петров Пётр Петрович',
-      account: { username: 'petrovpp', password: 'kolledzh-petrov-2025' },
+      account: {
+        mustChangePassword: false,
+        username: 'petrovpp',
+        password: 'kolledzh-petrov-2025',
+      },
     });
 
     expect(created.statusCode).toBe(201);
@@ -120,13 +124,17 @@ describeWithDatabase('ученик и его учётная запись', () =>
   it('повторное создание ученика с тем же логином даёт конфликт', async () => {
     const first = await createStudent({
       fullName: 'Второв Виктор Викторович',
-      account: { username: 'vtorovvv', password: 'kolledzh-vtorov-2025' },
+      account: {
+        mustChangePassword: false,
+        username: 'vtorovvv',
+        password: 'kolledzh-vtorov-2025',
+      },
     });
     expect(first.statusCode).toBe(201);
 
     const second = await createStudent({
       fullName: 'Дубль Дубль Дубльевич',
-      account: { username: 'vtorovvv', password: 'kolledzh-dubl-2025' },
+      account: { mustChangePassword: false, username: 'vtorovvv', password: 'kolledzh-dubl-2025' },
     });
 
     expect(second.statusCode).toBe(409);
@@ -141,7 +149,11 @@ describeWithDatabase('ученик и его учётная запись', () =>
 
     const created = await createStudent({
       fullName: 'Сидоров Сидор Сидорович',
-      account: { username: 'petrovpp', password: 'kolledzh-sidorov-2025' },
+      account: {
+        mustChangePassword: false,
+        username: 'petrovpp',
+        password: 'kolledzh-sidorov-2025',
+      },
     });
 
     expect(created.statusCode).toBe(409);
@@ -196,7 +208,11 @@ describeWithDatabase('ученик и его учётная запись', () =>
     // Занимаем логин и просим снова: должна появиться цифра.
     await createStudent({
       fullName: 'Чумаков Сергей Петрович',
-      account: { username: 'chumakovsp', password: 'kolledzh-chumakov-2025' },
+      account: {
+        mustChangePassword: false,
+        username: 'chumakovsp',
+        password: 'kolledzh-chumakov-2025',
+      },
     });
 
     const second = await testApp.app.inject({
@@ -240,7 +256,11 @@ describeWithDatabase('ученик и его учётная запись', () =>
   it('ученик видит только свои данные после создания учётной записи', async () => {
     const created = await createStudent({
       fullName: 'Орлова Ольга Ивановна',
-      account: { username: 'orlovaoo', password: 'kolledzh-orlova-2025' },
+      account: {
+        mustChangePassword: false,
+        username: 'orlovaoo',
+        password: 'kolledzh-orlova-2025',
+      },
     });
     const ownStudentId = (created.json() as Json).id as string;
 

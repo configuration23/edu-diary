@@ -38,10 +38,14 @@ describe('GET /api/health', () => {
     if (!parsed.success) return;
 
     expect(parsed.data.status).toBe('degraded');
-    expect(parsed.data.checks.database.status).toBe('error');
-    expect(parsed.data.checks.migrations.status).toBe('unknown');
-    expect(parsed.data.setup.initialized).toBeNull();
-    expect(parsed.data.version).toBe('test');
+
+    /**
+     * Подробности снаружи не отдаются (F-09): версия, uptime и состояние миграций — разведданные.
+     * Их видит только вошедший человек.
+     */
+    expect(parsed.data.checks).toBeUndefined();
+    expect(parsed.data.version).toBeUndefined();
+    expect(parsed.data.uptimeSeconds).toBeUndefined();
   });
 
   it('отдаёт 200 с состоянием миграций, когда БД доступна', async () => {
@@ -55,8 +59,10 @@ describe('GET /api/health', () => {
     expect(parsed.success, JSON.stringify(parsed.error?.issues)).toBe(true);
     if (!parsed.success) return;
 
-    expect(parsed.data.checks.database.status).toBe('ok');
-    expect(parsed.data.checks.database.latencyMs).toBeGreaterThanOrEqual(0);
-    expect(parsed.data.uptimeSeconds).toBeGreaterThanOrEqual(0);
+    /** Фейковая БД не сообщает состояние миграций, поэтому `degraded` — допустимый ответ. */
+    expect(['ok', 'degraded']).toContain(parsed.data.status);
+
+    /** Снаружи — только статус: остальное закрыто сессией. */
+    expect(parsed.data.checks).toBeUndefined();
   });
 });

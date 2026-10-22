@@ -24,8 +24,14 @@ const HTTP_STATUS_BY_CODE: Readonly<Record<ErrorCode, number>> = {
 const FASTIFY_CODE_MAP: Readonly<Record<string, ErrorCode>> = {
   FST_ERR_VALIDATION: 'VALIDATION_FAILED',
   FST_ERR_CTP_BODY_TOO_LARGE: 'PAYLOAD_TOO_LARGE',
+  /** Файл в multipart больше лимита: библиотека кидает это как 413, без карты получалось 500. */
+  FST_REQ_FILE_TOO_LARGE: 'PAYLOAD_TOO_LARGE',
+  FST_FILES_LIMIT: 'VALIDATION_FAILED',
+  FST_PARTS_LIMIT: 'VALIDATION_FAILED',
   FST_ERR_CTP_INVALID_MEDIA_TYPE: 'VALIDATION_FAILED',
   FST_ERR_CTP_EMPTY_JSON_BODY: 'VALIDATION_FAILED',
+  /** Тело не является корректным JSON: это ошибка клиента, а не внутренний сбой. */
+  FST_ERR_CTP_INVALID_JSON_BODY: 'VALIDATION_FAILED',
   FST_ERR_NOT_FOUND: 'NOT_FOUND',
   FST_ERR_BAD_URL: 'VALIDATION_FAILED',
 };
@@ -140,6 +146,20 @@ export function registerErrorHandling(app: FastifyInstance): void {
 
   app.setErrorHandler((error: FastifyError, request: FastifyRequest, reply: FastifyReply) => {
     const { statusCode, body } = toErrorResponse(error);
+
+    /**
+     * На ответах с ограничением частоты ставим `Retry-After`: клиенту и промежуточным прокси нужно
+     * знать, когда повторять, иначе они повторяют сразу и усиливают нагрузку.
+     */
+    const details = body.error.details;
+    const retryAfterMinutes =
+      body.error.code === 'RATE_LIMITED' && typeof details === 'object' && details !== null
+        ? (details as { retryAfterMinutes?: unknown }).retryAfterMinutes
+        : undefined;
+
+    if (typeof retryAfterMinutes === 'number') {
+      reply.header('Retry-After', String(Math.max(1, Math.round(retryAfterMinutes * 60))));
+    }
 
     if (statusCode >= 500) {
       request.log.error({ err: error }, 'необработанная ошибка запроса');

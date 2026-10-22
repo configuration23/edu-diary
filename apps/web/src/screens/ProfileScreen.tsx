@@ -5,6 +5,7 @@ import { CLIENT_VERSION } from '../lib/version';
 import { isSystemAdmin } from '../lib/access';
 import { Alert, Badge, Segmented, formatDateTime } from '../components/ui';
 import { ChangePasswordCard } from '../components/ChangePasswordCard';
+import { SessionsCard } from '../components/SessionsCard';
 import { SystemStatus, type HealthState } from '../components/SystemStatus';
 import { Page, PageHeader, Section } from '../components/layout';
 import { Spoiler } from '../components/Spoiler';
@@ -136,7 +137,14 @@ function ViewModeChoice({ current }: { current: ViewMode }) {
   );
 }
 
-export function ProfileScreen({ session }: { session: SessionResponseDto }) {
+export function ProfileScreen({
+  session,
+  onPasswordChanged,
+}: {
+  session: SessionResponseDto;
+  /** Что делать после смены пароля: экран временного пароля уводит на «Обзор». */
+  onPasswordChanged?: () => void;
+}) {
   const health = useHealth();
   const api = health.data;
   const client = CLIENT_VERSION;
@@ -182,12 +190,22 @@ export function ProfileScreen({ session }: { session: SessionResponseDto }) {
         Вид страниц — настройка сотрудников. Ученику и представителю менять нечего: спойлеры на их
         экранах не используются, и переключатель только задавал бы вопрос без ответа.
       */}
+      {session.user.mustChangePassword && (
+        <Alert tone="warning">
+          Вы вошли с временным паролем. Смените его ниже — до этого остальные разделы недоступны.
+        </Alert>
+      )}
+
       <Section title="Оформление">
         <ThemeChoice current={session.user.theme} />
         {!isLearner(session) && <ViewModeChoice current={session.user.viewMode} />}
       </Section>
 
-      <ChangePasswordCard />
+      <SessionsCard />
+
+      <ChangePasswordCard
+        {...(onPasswordChanged === undefined ? {} : { onChanged: onPasswordChanged })}
+      />
 
       {/*
         «Ваш доступ» — спойлером (просьба владельца): список прав длинный и отодвигает остальное.
@@ -250,11 +268,11 @@ export function ProfileScreen({ session }: { session: SessionResponseDto }) {
               </li>
               <li className="flex justify-between gap-3 border-b border-border py-1">
                 <span>Схема БД (миграций)</span>
-                <span className="font-mono">{api?.checks.migrations.applied ?? '—'}</span>
+                <span className="font-mono">{api?.checks?.migrations.applied ?? '—'}</span>
               </li>
               <li className="flex justify-between gap-3 border-b border-border py-1">
                 <span>Запущен</span>
-                <span>{api === undefined ? '—' : formatDateTime(api.startedAt)}</span>
+                <span>{api?.startedAt === undefined ? '—' : formatDateTime(api.startedAt)}</span>
               </li>
             </ul>
 

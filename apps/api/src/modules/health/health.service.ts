@@ -24,8 +24,14 @@ export interface HealthReport {
   body: HealthResponse;
 }
 
+/**
+ * @param revealDetails — отдавать ли версию, uptime и состояние миграций.
+ *   Снаружи (без входа) остаётся только `status`: этого хватает healthcheck'у и не хватает
+ *   разведке.
+ */
 export async function collectHealth(
   dependencies: HealthDependencies,
+  revealDetails = false,
   now: Date = new Date(),
 ): Promise<HealthReport> {
   const { db, settings, version, startedAt } = dependencies;
@@ -46,6 +52,13 @@ export async function collectHealth(
   }
 
   const healthy = ping.ok && migrations.status !== 'pending';
+
+  if (!revealDetails) {
+    return {
+      httpStatus: ping.ok ? 200 : 503,
+      body: healthResponseSchema.parse({ status: healthy ? 'ok' : 'degraded' }),
+    };
+  }
 
   const body = healthResponseSchema.parse({
     status: healthy ? 'ok' : 'degraded',

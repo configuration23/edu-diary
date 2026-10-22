@@ -150,6 +150,7 @@ describeWithDatabase('права и приватность', () => {
       url: '/api/users',
       headers: { cookie: teacherCookie },
       payload: {
+        mustChangePassword: false,
         username: 'novek',
         fullName: 'Новый Пользователь',
         password: 'parol-dlya-novogo-2025',

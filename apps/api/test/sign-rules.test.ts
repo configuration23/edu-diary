@@ -250,7 +250,11 @@ describeWithDatabase('пересчёт знаков в оценки', () => {
       headers: auth(),
       payload: {
         fullName: 'Ученик Пересчёта',
-        account: { username: 'uchenik-pereschet', password: 'kolledzh-pereschet-2025' },
+        account: {
+          mustChangePassword: false,
+          username: 'uchenik-pereschet',
+          password: 'kolledzh-pereschet-2025',
+        },
       },
     });
     expect(student.statusCode, student.body).toBe(201);

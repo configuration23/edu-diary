@@ -25,6 +25,13 @@ import { detectType, objectKey, type StorageAdapter } from '../storage';
 export interface UploadInput {
   fileName: string;
   /**
+   * Имя, под которым файл хранится и показывается.
+   *
+   * Строится сервером из даты, логина и предмета — от клиентского имени берётся только расширение.
+   * Так в имени не окажется пути, управляющих символов или чужой подписи.
+   */
+  displayName?: string | undefined;
+  /**
    * Куда записать метаданные. Материалы задания, файлы решения и картинки новостей — **разные
    * таблицы**: это документы разного назначения и разного автора. Общий у них только приём.
    */
@@ -74,6 +81,11 @@ export function createFileService(dependencies: {
         throw new AppError('VALIDATION_FAILED', 'Файл пустой');
       }
 
+      /** Слишком большой файл — это 413, а не «неверный запрос»: статус говорит клиенту правду. */
+      if (input.body.length > input.maxFileMb * 1024 * 1024) {
+        throw new AppError('PAYLOAD_TOO_LARGE', `Файл больше ${String(input.maxFileMb)} МБ`);
+      }
+
       /** Проверки размера и расширения: те же правила, что на клиенте, но обязательные. */
       const verdict = checkFile({
         fileName: input.fileName,
@@ -105,9 +117,11 @@ export function createFileService(dependencies: {
        * Здесь и была ошибка: материалы задания и файлы решения уходили в одну таблицу, потому что
        * сервис использовал репозиторий из зависимостей и не смотрел на `input.repository`.
        */
+      const displayName = input.displayName ?? input.fileName;
+
       const created = await input.repository.createPending({
         storageKey: key,
-        originalName: input.fileName,
+        originalName: displayName,
         sizeBytes: input.body.length,
         mimeType,
         uploadedBy: input.uploadedBy,
@@ -115,7 +129,7 @@ export function createFileService(dependencies: {
 
       return {
         id: created.id,
-        originalName: input.fileName,
+        originalName: displayName,
         sizeBytes: input.body.length,
         mimeType,
       };

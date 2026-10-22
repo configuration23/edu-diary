@@ -7,3 +7,4 @@ export * from './username';
 export * from './subject-code';
 export * from './journal';
 export * from './homework';
+export * from './upload-name';

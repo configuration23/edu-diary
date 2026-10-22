@@ -20,7 +20,23 @@
 		Referrer-Policy "same-origin"
 		-X-Powered-By
 		-Server
+
+		# Кликджекинг: чужой сайт не может встроить дневник в iframe и подменить действия.
+		X-Frame-Options "DENY"
+
+		# Строгая CSP: только свои скрипты и стили. Встроенный скрипт темы вынесен в
+		# /theme-init.js именно поэтому — иначе понадобился бы 'unsafe-inline'.
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'"
+
+		# Лишние возможности браузера не нужны: камера, микрофон, геолокация, платежи.
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+		Cross-Origin-Opener-Policy "same-origin"
+		Cross-Origin-Resource-Policy "same-origin"
 	}
+
+	# Карты сборки не отдаём, даже если они остались от прошлой версии.
+	@maps path *.map
+	respond @maps 404
 
 	# API обслуживает Fastify.
 	handle /api/* {

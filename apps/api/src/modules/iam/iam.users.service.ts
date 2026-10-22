@@ -27,8 +27,24 @@ import type {
 
 /** Сколько подряд неудачных входов блокируют учётную запись. */
 export const MAX_FAILED_LOGIN_ATTEMPTS = 5;
-/** На сколько минут блокируется учётная запись. */
-export const ACCOUNT_LOCK_MINUTES = 15;
+
+/** Первая блокировка — 5 минут (решение владельца). */
+export const ACCOUNT_LOCK_MINUTES = 5;
+
+/** Потолок блокировки: сутки. Иначе после десятка попыток человек ждал бы месяцами. */
+export const ACCOUNT_LOCK_MAX_MINUTES = 24 * 60;
+
+/**
+ * Срок блокировки после N-й неудачной попытки.
+ *
+ * Владелец: первая блокировка 5 минут, каждая следующая неудача **удваивает** срок —
+ * 5, 10, 20, 40, 80 минут. Так перебор становится бессмысленным по времени, а человек, который
+ * просто перепутал раскладку, ждёт всего 5 минут.
+ */
+export function lockMinutesFor(failedCount: number): number {
+  const steps = Math.max(0, failedCount - MAX_FAILED_LOGIN_ATTEMPTS);
+  return Math.min(ACCOUNT_LOCK_MINUTES * 2 ** steps, ACCOUNT_LOCK_MAX_MINUTES);
+}
 
 export interface MutationOptions {
   actor: AuditActor;
@@ -108,6 +124,8 @@ export interface UsersService {
   setTheme(id: string, theme: string): Promise<void>;
   /** Вид страниц: своя учётная запись, без прав администратора. */
   setViewMode(id: string, viewMode: string): Promise<void>;
+  /** Отметка о смене пароля человеком: ограничение частоты. Значение null снимает ограничение. */
+  setPasswordChangedAt(id: string, at: Date | null): Promise<void>;
   count(): Promise<number>;
 }
 
@@ -363,6 +381,11 @@ export function createUsersService(dependencies: UsersServiceDependencies): User
       await users.setViewMode(id, viewMode);
     },
 
+    async setPasswordChangedAt(id, at): Promise<void> {
+      await requireUser(id);
+      await users.setPasswordChangedAt(id, at);
+    },
+
     async resetPasswordByAdmin(id, password, options): Promise<void> {
       await applyPassword(
         id,
@@ -371,21 +394,27 @@ export function createUsersService(dependencies: UsersServiceDependencies): User
         options,
       );
 
+      /**
+       * Ограничение частоты снимаем: пароль выдал администратор, и человек должен войти новым
+       * паролем сразу, а не ждать шесть часов.
+       */
+      await users.setPasswordChangedAt(id, null, options.executor);
+
       // Сброс пароля администратором отзывает все сессии пользователя.
       await sessions.revokeUserSessions(id, {}, options.executor);
     },
 
     async registerFailedLogin(userId, options): Promise<FailedLoginState> {
       const current = await requireUser(userId);
-      const failedLoginCount = current.failedLoginCount + 1;
-      const lockedUntil =
-        failedLoginCount >= MAX_FAILED_LOGIN_ATTEMPTS
-          ? new Date(Date.now() + ACCOUNT_LOCK_MINUTES * 60_000)
-          : current.lockedUntil;
+
+      /** Счётчик и блокировку пишет одна инструкция: параллельные попытки не теряются. */
+      const { failedLoginCount, lockedUntil } = await users.registerLoginFailureAtomic(userId, {
+        threshold: MAX_FAILED_LOGIN_ATTEMPTS,
+        baseMinutes: ACCOUNT_LOCK_MINUTES,
+        maxMinutes: ACCOUNT_LOCK_MAX_MINUTES,
+      });
 
       await withTransaction(db, options.executor, async (tx) => {
-        await users.registerLoginFailure(userId, { failedLoginCount, lockedUntil }, tx);
-
         await audit.record(
           {
             action: 'login_failed',
@@ -401,7 +430,8 @@ export function createUsersService(dependencies: UsersServiceDependencies): User
           {
             username: current.username,
             failedCount: failedLoginCount,
-            lockedUntil: failedLoginCount >= MAX_FAILED_LOGIN_ATTEMPTS ? lockedUntil : null,
+            lockedUntil:
+              lockedUntil !== null && lockedUntil.getTime() > Date.now() ? lockedUntil : null,
             actor: options.actor,
           },
           tx,

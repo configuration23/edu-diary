@@ -40,6 +40,13 @@ export const appUser = pgTable('app_user', {
   theme: text('theme').notNull().default('system'),
   /** Вид страниц: `compact` — блоки в спойлерах, `expanded` — блоки подряд. */
   viewMode: text('view_mode').notNull().default('compact'),
+  /**
+   * Когда человек последний раз менял пароль сам.
+   *
+   * Нужно для ограничения частоты: не чаще одного раза в 6 часов (решение владельца).
+   * Сброс пароля администратором это поле очищает — иначе человек не смог бы войти с новым паролем.
+   */
+  passwordChangedAt: timestamp('password_changed_at', { withTimezone: true }),
   failedLoginCount: integer('failed_login_count').notNull().default(0),
   lockedUntil: timestamp('locked_until', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

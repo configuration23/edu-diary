@@ -118,7 +118,11 @@ describeWithDatabase('доступ преподавателя к журналу'
       headers: admin,
       payload: {
         fullName: 'Ученик Доступа',
-        account: { username: 'uchenik-dostupa', password: 'kolledzh-dostupa-2025' },
+        account: {
+          mustChangePassword: false,
+          username: 'uchenik-dostupa',
+          password: 'kolledzh-dostupa-2025',
+        },
       },
     });
     studentId = (student.json() as Json).id as string;
@@ -423,7 +427,11 @@ describeWithDatabase('отметки занятий для расписания'
       headers: { cookie: adminCookie },
       payload: {
         fullName: 'Ученик Отметок',
-        account: { username: 'uchenik-otmetki', password: 'kolledzh-otmetki-2025' },
+        account: {
+          mustChangePassword: false,
+          username: 'uchenik-otmetki',
+          password: 'kolledzh-otmetki-2025',
+        },
       },
     });
     const studentId = (student.json() as Json).id as string;

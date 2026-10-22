@@ -43,10 +43,17 @@ export type BrandingDto = z.infer<typeof brandingSchema>;
 
 export const setupStatusResponseSchema = z.object({
   initialized: z.boolean(),
-  checks: z.object({
-    database: databaseCheckSchema,
-    migrations: migrationsCheckSchema,
-  }),
+  /**
+   * Диагностика окружения — **только до настройки**: мастеру нужно показать, доступна ли БД и
+   * применены ли миграции. После настройки наружу уходит лишь название и логотип: версия схемы и
+   * задержка БД — разведданные.
+   */
+  checks: z
+    .object({
+      database: databaseCheckSchema,
+      migrations: migrationsCheckSchema,
+    })
+    .optional(),
   branding: brandingSchema,
 });
 export type SetupStatusResponseDto = z.infer<typeof setupStatusResponseSchema>;

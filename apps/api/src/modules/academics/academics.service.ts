@@ -90,6 +90,8 @@ export interface UserLookupPort {
       password: string;
       fullName: string;
       roles: readonly string[];
+      /** Требовать смену пароля при первом входе (по умолчанию — да). */
+      mustChangePassword?: boolean;
       email?: string;
       phone?: string;
     },
@@ -105,7 +107,16 @@ export interface CreateStudentInput {
   note?: string | null | undefined;
   userId?: string | null | undefined;
   /** Новая учётная запись ученика: необязательна (создаётся по необходимости). */
-  account?: { username: string; password: string; email?: string; phone?: string } | undefined;
+  account?:
+    | {
+        username: string;
+        password: string;
+        email?: string;
+        phone?: string;
+        /** Требовать смену пароля при первом входе (по умолчанию — да). */
+        mustChangePassword?: boolean;
+      }
+    | undefined;
 }
 
 export interface UpdateStudentInput {
@@ -221,7 +232,7 @@ export interface AcademicsService {
   /** Учётная запись ученику, созданному ранее (учётка — по необходимости). */
   createStudentAccount(
     studentId: string,
-    input: { username: string; password: string },
+    input: { username: string; password: string; mustChangePassword?: boolean },
     options: MutationOptions,
   ): Promise<StudentRecord>;
   updateStudent(
@@ -608,6 +619,9 @@ export function createAcademicsService(
                   password: account.password,
                   fullName: input.fullName,
                   roles: ['student'],
+                  ...(account.mustChangePassword === undefined
+                    ? {}
+                    : { mustChangePassword: account.mustChangePassword }),
                   ...(account.email === undefined ? {} : { email: account.email }),
                   ...(account.phone === undefined ? {} : { phone: account.phone }),
                 },
@@ -720,6 +734,13 @@ export function createAcademicsService(
                 password: input.password,
                 fullName: student.fullName,
                 roles: ['student'],
+                /**
+                 * Флаг берём из входа: это отдельная операция «выдать учётную запись», и здесь нет
+                 * объекта `account` — переменная с этим именем как раз создаётся этим вызовом.
+                 */
+                ...(input.mustChangePassword === undefined
+                  ? {}
+                  : { mustChangePassword: input.mustChangePassword }),
               },
               tx,
             ),

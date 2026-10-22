@@ -134,6 +134,27 @@
       "when": 1792200000003,
       "tag": "0018_user_view_mode",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1792200000004,
+      "tag": "0019_user_password_changed_at",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1792200000005,
+      "tag": "0020_session_absolute_expiry",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1792200000006,
+      "tag": "0021_login_throttle",
+      "breakpoints": true
     }
   ]
 }

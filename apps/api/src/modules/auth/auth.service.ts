@@ -11,6 +11,16 @@ import type { PasswordHasher } from '../../shared/password-hasher';
 import type { AuditService } from '../audit';
 import type { SessionRevokerPort, UsersService } from '../iam';
 import type { AuthRepository, SessionRecord } from './auth.repository';
+import {
+  ipThrottleKey,
+  IP_POLICY,
+  USER_POLICY,
+  userThrottleKey,
+  type LoginThrottleRepository,
+} from './login-throttle.repository';
+
+/** Сколько часов должно пройти между сменами пароля самим человеком (решение владельца). */
+export const PASSWORD_CHANGE_MIN_INTERVAL_HOURS = 6;
 
 /**
  * Вход, серверные сессии и смена пароля (ADR-004, SECURITY.md §3.1).
@@ -21,9 +31,49 @@ import type { AuthRepository, SessionRecord } from './auth.repository';
  */
 
 export const SESSION_COOKIE_NAME = 'edu_diary_session';
-export const SESSION_TTL_HOURS = 8;
-/** Сессия продлевается при активности, но не чаще раза в час. */
-export const SESSION_RENEW_AFTER_MINUTES = 60;
+
+/**
+ * Единый ответ на блокировку.
+ *
+ * Без точного времени и без разницы между «учётка» и «адрес»: любой разнобой в тексте или сроке
+ * помогает различить существующий логин от несуществующего.
+ */
+export const TOO_MANY_ATTEMPTS_MESSAGE =
+  'Превышено количество попыток входа. Попробуйте повторить позже.';
+/**
+ * Срок жизни сессии — два таймера (решение владельца).
+ *
+ * Простой: без запросов сессия умирает через 30 минут. Продление при активности пишется в базу не
+ * чаще раза в 5 минут: иначе каждый запрос стоил бы обновления строки.
+ */
+export const SESSION_IDLE_MINUTES = 30;
+export const SESSION_RENEW_AFTER_MINUTES = 5;
+
+/** Абсолютный предел: сотрудник — 12 часов, ученик и представитель — 30 дней. */
+export const SESSION_ABSOLUTE_HOURS_STAFF = 12;
+export const SESSION_ABSOLUTE_DAYS_LEARNER = 30;
+
+/**
+ * Абсолютный срок по ролям.
+ *
+ * Сотрудник работает в кабинете и перелогинится не в тягость; ученик заходит с телефона, и 12 часов
+ * означали бы вход каждый день. Роли проверяются по кодам: право тут ни при чём.
+ */
+export function sessionAbsoluteExpiry(createdAt: Date, roleCodes: readonly string[]): Date {
+  const isLearner = roleCodes.some((code) => code === 'student' || code === 'parent');
+  const ms = isLearner
+    ? SESSION_ABSOLUTE_DAYS_LEARNER * 24 * 3_600_000
+    : SESSION_ABSOLUTE_HOURS_STAFF * 3_600_000;
+
+  return new Date(createdAt.getTime() + ms);
+}
+
+/** Простой: сейчас плюс 30 минут, но не позже абсолютного предела. */
+export function sessionIdleExpiry(now: Date, absoluteExpiresAt: Date): Date {
+  const idle = new Date(now.getTime() + SESSION_IDLE_MINUTES * 60_000);
+
+  return idle.getTime() < absoluteExpiresAt.getTime() ? idle : absoluteExpiresAt;
+}
 
 export interface SessionMeta {
   userAgent: string | null;
@@ -36,10 +86,61 @@ export interface LoginInput {
   meta: SessionMeta;
 }
 
+/** Сессия для списка «Устройства и входы»: без токена и без хеша. */
+export interface SessionSummary {
+  id: string;
+  /** Человеческая подпись устройства: «Chrome · Windows». */
+  device: string;
+  ip: string | null;
+  createdAt: string;
+  lastSeenAt: string;
+  /** Истечёт от простоя. */
+  expiresAt: string;
+  /** Жёсткий предел: его активность не продлевает. */
+  absoluteExpiresAt: string;
+  /** Текущая сессия: её нельзя «завершить» отдельной кнопкой. */
+  current: boolean;
+}
+
+/**
+ * Подпись устройства из User-Agent.
+ *
+ * Это **не** отпечаток браузера: только грубая подпись для списка, чтобы человек узнал своё
+ * устройство. Хранится и отдаётся сам User-Agent, как и раньше.
+ */
+export function describeDevice(userAgent: string | null): string {
+  if (userAgent === null || userAgent.trim() === '') return 'Неизвестное устройство';
+
+  const browser =
+    [
+      ['Edg', 'Edge'],
+      ['YaBrowser', 'Яндекс.Браузер'],
+      ['OPR', 'Opera'],
+      ['Firefox', 'Firefox'],
+      ['Chrome', 'Chrome'],
+      ['Safari', 'Safari'],
+    ].find(([token]) => userAgent.includes(token as string))?.[1] ?? 'Браузер';
+
+  const os =
+    [
+      ['Android', 'Android'],
+      ['iPhone', 'iPhone'],
+      ['iPad', 'iPad'],
+      ['Windows', 'Windows'],
+      ['Mac OS X', 'macOS'],
+      ['Linux', 'Linux'],
+    ].find(([token]) => userAgent.includes(token as string))?.[1] ?? '';
+
+  return os === '' ? browser : `${browser} · ${os}`;
+}
+
 export interface LoginResult {
   token: string;
   auth: AuthContext;
+  /** Когда истечёт от простоя. */
   expiresAt: Date;
+  /** Жёсткий предел сессии: его активность не продлевает. */
+  absoluteExpiresAt: Date;
 }
 
 export interface AuthService extends SessionRevokerPort {
@@ -58,11 +159,20 @@ export interface AuthService extends SessionRevokerPort {
   ): Promise<void>;
   /** Создать сессию без пароля: используется мастером настройки. */
   createSessionFor(userId: string, meta: SessionMeta, executor?: Executor): Promise<LoginResult>;
+
+  /** Свои активные сессии: блок «Устройства и входы» в профиле. */
+  listSessions(userId: string, currentSessionId: string): Promise<SessionSummary[]>;
+  /** Завершить свою сессию; чужую — нельзя (вернётся «не найдено»). */
+  revokeSession(userId: string, sessionId: string, actor: AuditActor): Promise<void>;
+  /** Завершить все свои сессии, кроме текущей. */
+  revokeOtherSessions(userId: string, currentSessionId: string, actor: AuditActor): Promise<number>;
 }
 
 export interface AuthServiceDependencies {
   db: Database;
   sessions: AuthRepository;
+  /** Счётчик неудачных входов по адресу: против перебора по списку логинов. */
+  throttle: LoginThrottleRepository;
   users: UsersService;
   audit: AuditService;
   hasher: PasswordHasher;
@@ -84,7 +194,7 @@ function tokensEqual(left: string, right: string): boolean {
 }
 
 export function createAuthService(dependencies: AuthServiceDependencies): AuthService {
-  const { db, sessions, users, audit, hasher } = dependencies;
+  const { db, sessions, users, audit, hasher, throttle } = dependencies;
 
   const buildContext = async (sessionRecord: SessionRecord): Promise<AuthContext | null> => {
     const user = await users.getById(sessionRecord.userId);
@@ -112,15 +222,19 @@ export function createAuthService(dependencies: AuthServiceDependencies): AuthSe
     userId: string,
     meta: SessionMeta,
     executor: Executor | undefined,
+    roleCodes: readonly string[] = [],
   ): Promise<LoginResult> => {
     const token = createToken();
-    const expiresAt = new Date(Date.now() + SESSION_TTL_HOURS * 3_600_000);
+    const now = new Date();
+    const absoluteExpiresAt = sessionAbsoluteExpiry(now, roleCodes);
+    const expiresAt = sessionIdleExpiry(now, absoluteExpiresAt);
 
     const record = await sessions.insert(
       {
         userId,
         tokenHash: hashToken(token),
         expiresAt,
+        absoluteExpiresAt,
         userAgent: meta.userAgent,
         ip: meta.ip,
       },
@@ -132,28 +246,73 @@ export function createAuthService(dependencies: AuthServiceDependencies): AuthSe
       throw new AppError('FORBIDDEN', 'Учётная запись отключена');
     }
 
-    return { token, auth, expiresAt };
+    return { token, auth, expiresAt, absoluteExpiresAt };
   };
 
   const service: AuthService = {
     async login(input): Promise<LoginResult> {
+      const ipKey = ipThrottleKey(input.meta.ip);
+      const userKey = userThrottleKey(input.username);
+
+      /**
+       * Счётчики проверяются **до** поиска учётной записи и одинаково для любого логина: иначе по
+       * поведению блокировки видно, заведена ли учётная запись (вектор разведки), и перебор по
+       * списку логинов ничем не ограничен.
+       */
+      for (const [key, windowMinutes] of [
+        [userKey, USER_POLICY.windowMinutes],
+        [ipKey, IP_POLICY.windowMinutes],
+      ] as const) {
+        const state = await throttle.state(key, windowMinutes);
+
+        if (state.lockedUntil !== null) {
+          const retryAfterMinutes = Math.max(
+            1,
+            Math.ceil((state.lockedUntil.getTime() - Date.now()) / 60_000),
+          );
+
+          throw new AppError('RATE_LIMITED', TOO_MANY_ATTEMPTS_MESSAGE, {
+            details: { retryAfterMinutes },
+          });
+        }
+      }
+
       const user = await users.findByUsername(input.username);
 
       if (user === null) {
         // Выравниваем время ответа: иначе по задержке видно, есть ли учётка.
         await hasher.verifyDummy(input.password);
+        /** Несуществующий логин считается так же, как существующий. */
+        await throttle.registerFailure(userKey, USER_POLICY);
+        await throttle.registerFailure(ipKey, IP_POLICY);
         throw new AppError('UNAUTHORIZED', 'Неверный логин или пароль');
       }
 
       if (!user.isActive) {
-        throw new AppError('FORBIDDEN', 'Учётная запись отключена');
+        /**
+         * Отключённая учётка отвечает **как неверный пароль**: иначе по ответу видно, что логин
+         * существует. Причина видна администратору в журнале, а не постороннему.
+         */
+        await hasher.verifyDummy(input.password);
+        await throttle.registerFailure(userKey, USER_POLICY);
+        await throttle.registerFailure(ipKey, IP_POLICY);
+
+        throw new AppError('UNAUTHORIZED', 'Неверный логин или пароль');
       }
 
       if (user.lockedUntil !== null && user.lockedUntil.getTime() > Date.now()) {
-        throw new AppError(
-          'RATE_LIMITED',
-          'Слишком много неудачных попыток входа. Попробуйте позже',
+        /**
+         * Срок сообщаем числом: «попробуйте позже» человек читает как «может, сейчас». Задержка
+         * растёт с каждой неудачей (5, 10, 20, 40 минут), поэтому без цифры непонятно, чего ждать.
+         */
+        const retryAfterMinutes = Math.max(
+          1,
+          Math.ceil((user.lockedUntil.getTime() - Date.now()) / 60_000),
         );
+
+        throw new AppError('RATE_LIMITED', TOO_MANY_ATTEMPTS_MESSAGE, {
+          details: { retryAfterMinutes },
+        });
       }
 
       const passwordMatches = await hasher.verify(user.passwordHash, input.password);
@@ -166,13 +325,21 @@ export function createAuthService(dependencies: AuthServiceDependencies): AuthSe
         };
 
         await users.registerFailedLogin(user.id, { actor });
+        await throttle.registerFailure(userKey, USER_POLICY);
+        await throttle.registerFailure(ipKey, IP_POLICY);
         throw new AppError('UNAUTHORIZED', 'Неверный логин или пароль');
       }
+
+      /** Успешный вход сбрасывает счётчики: человек доказал, что он свой. */
+      await throttle.reset(userKey);
+      await throttle.reset(ipKey);
 
       const actor: AuditActor = { userId: user.id, name: user.fullName, ip: input.meta.ip };
       const result = await withTransaction(db, undefined, async (tx) => {
         await users.registerSuccessfulLogin(user.id, actor, tx);
-        return startSession(user.id, input.meta, tx);
+        const roleCodes = (await users.resolveAccess(user.id)).roles.map((role) => role.code);
+
+        return startSession(user.id, input.meta, tx, roleCodes);
       });
 
       return result;
@@ -200,7 +367,8 @@ export function createAuthService(dependencies: AuthServiceDependencies): AuthSe
 
       const renewAfter = SESSION_RENEW_AFTER_MINUTES * 60_000;
       if (Date.now() - record.lastSeenAt.getTime() > renewAfter) {
-        await sessions.renew(record.id, new Date(Date.now() + SESSION_TTL_HOURS * 3_600_000));
+        /** Активность продлевает простой, но **не** абсолютный предел. */
+        await sessions.renew(record.id, sessionIdleExpiry(new Date(), record.absoluteExpiresAt));
       }
 
       return auth;
@@ -233,6 +401,27 @@ export function createAuthService(dependencies: AuthServiceDependencies): AuthSe
         throw new AppError('UNAUTHORIZED', 'Неверный текущий пароль');
       }
 
+      /**
+       * Частоту смены ограничиваем (решение владельца): не чаще одного раза в 6 часов.
+       *
+       * Отметку снимает только сброс пароля администратором — иначе человек не смог бы войти с
+       * выданным паролем.
+       */
+      if (user.passwordChangedAt !== null) {
+        const limitMs = PASSWORD_CHANGE_MIN_INTERVAL_HOURS * 60 * 60 * 1000;
+        const elapsedMs = Date.now() - user.passwordChangedAt.getTime();
+
+        if (elapsedMs < limitMs) {
+          const retryAfterMinutes = Math.max(1, Math.ceil((limitMs - elapsedMs) / 60_000));
+
+          throw new AppError(
+            'RATE_LIMITED',
+            `Пароль можно менять не чаще одного раза в ${PASSWORD_CHANGE_MIN_INTERVAL_HOURS} часов. Повторите через ${retryAfterMinutes} мин`,
+            { details: { retryAfterMinutes } },
+          );
+        }
+      }
+
       const issues = validatePassword(input.newPassword, {
         username: user.username,
         fullName: user.fullName,
@@ -246,13 +435,74 @@ export function createAuthService(dependencies: AuthServiceDependencies): AuthSe
       }
 
       await users.setPassword(user.id, input.newPassword, { mustChangePassword: false }, { actor });
+      await users.setPasswordChangedAt(user.id, new Date());
 
       // Смена пароля отзывает остальные сессии (SECURITY.md §3.1).
       await sessions.deleteByUserId(user.id, { exceptSessionId: input.sessionId });
     },
 
+    async listSessions(userId, currentSessionId): Promise<SessionSummary[]> {
+      const rows = await sessions.listByUserId(userId);
+
+      return rows.map((row) => ({
+        id: row.id,
+        device: describeDevice(row.userAgent),
+        ip: row.ip,
+        createdAt: row.createdAt.toISOString(),
+        lastSeenAt: row.lastSeenAt.toISOString(),
+        expiresAt: row.expiresAt.toISOString(),
+        absoluteExpiresAt: row.absoluteExpiresAt.toISOString(),
+        current: row.id === currentSessionId,
+      }));
+    },
+
+    async revokeSession(userId, sessionId, actor): Promise<void> {
+      /** Ищем среди своих: чужая сессия должна выглядеть как «не найдено», а не как «нет прав». */
+      const rows = await sessions.listByUserId(userId);
+      if (!rows.some((row) => row.id === sessionId)) {
+        throw new AppError('NOT_FOUND', 'Сессия не найдена');
+      }
+
+      await sessions.deleteById(sessionId);
+
+      await audit.record(
+        {
+          action: 'logout',
+          entityKind: 'user',
+          entityId: userId,
+          context: { sessionId, reason: 'revoked_by_user' },
+        },
+        actor,
+      );
+    },
+
+    async revokeOtherSessions(userId, currentSessionId, actor): Promise<number> {
+      const rows = await sessions.listByUserId(userId);
+      const others = rows.filter((row) => row.id !== currentSessionId);
+
+      for (const row of others) {
+        await sessions.deleteById(row.id);
+      }
+
+      if (others.length > 0) {
+        await audit.record(
+          {
+            action: 'logout',
+            entityKind: 'user',
+            entityId: userId,
+            context: { reason: 'revoked_other_sessions', count: others.length },
+          },
+          actor,
+        );
+      }
+
+      return others.length;
+    },
+
     async createSessionFor(userId, meta, executor): Promise<LoginResult> {
-      return startSession(userId, meta, executor);
+      const roleCodes = (await users.resolveAccess(userId)).roles.map((role) => role.code);
+
+      return startSession(userId, meta, executor, roleCodes);
     },
 
     async revokeUserSessions(userId, options, executor): Promise<void> {

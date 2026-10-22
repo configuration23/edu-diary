@@ -31,6 +31,8 @@ import {
   listGroupsResponseSchema,
   listPermissionsResponseSchema,
   listRolesResponseSchema,
+  listSessionsResponseSchema,
+  revokeOtherSessionsResponseSchema,
   listRoomsResponseSchema,
   listSecurityEventsResponseSchema,
   listStudentsResponseSchema,
@@ -237,13 +239,50 @@ export function useUpdateViewMode(): UseMutationResult<void, Error, { viewMode: 
   });
 }
 
+/** Свои устройства и входы: список для профиля. */
+export function useSessions() {
+  return useQuery({
+    queryKey: ['sessions'],
+    queryFn: () => apiRequest('/api/auth/sessions', listSessionsResponseSchema),
+  });
+}
+
+/** Завершить выбранную свою сессию. */
+export function useRevokeSession() {
+  const client = useQueryClient();
+
+  return useMutation({
+    mutationFn: (sessionId: string) =>
+      apiSend(`/api/auth/sessions/${sessionId}`, { method: 'DELETE' }),
+    onSuccess: () => client.invalidateQueries({ queryKey: ['sessions'] }),
+  });
+}
+
+/** Завершить все сессии, кроме текущей. */
+export function useRevokeOtherSessions() {
+  const client = useQueryClient();
+
+  return useMutation({
+    mutationFn: () =>
+      apiRequest('/api/auth/sessions', revokeOtherSessionsResponseSchema, { method: 'DELETE' }),
+    onSuccess: () => client.invalidateQueries({ queryKey: ['sessions'] }),
+  });
+}
+
 export function useChangePassword(): UseMutationResult<
   void,
   Error,
   { currentPassword: string; newPassword: string }
 > {
+  const client = useQueryClient();
+
   return useMutation({
     mutationFn: (input) => apiSend('/api/auth/change-password', { method: 'POST', body: input }),
+    /**
+     * Сессию перезапрашиваем: сервер снимает признак временного пароля, и приложение должно
+     * увидеть это сразу, а не после перезагрузки страницы.
+     */
+    onSuccess: () => client.invalidateQueries({ queryKey: ['session'] }),
   });
 }
 
@@ -299,6 +338,8 @@ export function useCreateUser() {
       roles: string[];
       email?: string;
       phone?: string;
+      /** Требовать смену пароля при первом входе (по умолчанию на сервере — да). */
+      mustChangePassword?: boolean;
     }) => apiRequest('/api/users', userSummarySchema, { method: 'POST', body: input }),
     onSuccess: () => invalidateUsers(client),
   });
@@ -1508,14 +1549,32 @@ export function useHomeworkSubmissions(assignmentId: string | null) {
  */
 export function useUploadHomeworkFile() {
   return useMutation({
-    mutationFn: async (input: { file: File; kind: 'assignment' | 'submission' }) => {
+    mutationFn: async (input: {
+      file: File;
+      kind: 'assignment' | 'submission';
+      /**
+       * Задание, к которому относится файл.
+       *
+       * Нужно для имени: сервер называет файл «дата_логин_предмет.расширение», а предмет берёт из
+       * задания. Без него в имени останется «bez-predmeta».
+       */
+      assignmentId?: string;
+    }) => {
       const body = new FormData();
       body.append('file', input.file);
 
-      const response = await fetch(
-        input.kind === 'submission' ? '/api/homework/submission-files' : '/api/homework/files',
-        { method: 'POST', body, credentials: 'same-origin' },
-      );
+      const path =
+        input.kind === 'submission' ? '/api/homework/submission-files' : '/api/homework/files';
+      const query =
+        input.assignmentId === undefined
+          ? ''
+          : `?assignmentId=${encodeURIComponent(input.assignmentId)}`;
+
+      const response = await fetch(`${path}${query}`, {
+        method: 'POST',
+        body,
+        credentials: 'same-origin',
+      });
 
       if (!response.ok) {
         const parsed = (await response.json().catch(() => null)) as {

@@ -151,7 +151,11 @@ describeWithDatabase('журнал: оценки и посещаемость', (
       headers: auth(),
       payload: {
         fullName: 'Ученик Журнала',
-        account: { username: 'uchenik-zhurnal', password: 'kolledzh-uchenik-2025' },
+        account: {
+          mustChangePassword: false,
+          username: 'uchenik-zhurnal',
+          password: 'kolledzh-uchenik-2025',
+        },
       },
     });
     expect(student.statusCode, student.body).toBe(201);

@@ -24,17 +24,25 @@ export const migrationsCheckSchema = z.object({
 
 export const healthResponseSchema = z.object({
   status: healthStatusSchema,
-  version: z.string(),
-  startedAt: z.string(),
-  uptimeSeconds: z.number().nonnegative(),
-  checks: z.object({
-    database: databaseCheckSchema,
-    migrations: migrationsCheckSchema,
-  }),
-  setup: z.object({
-    /** null — состояние неизвестно (БД недоступна или миграции не применены). */
-    initialized: z.boolean().nullable(),
-  }),
+  /**
+   * Технические подробности отдаются только вошедшим: версия, uptime и состояние миграций —
+   * разведданные для атакующего (находка F-09). Снаружи виден лишь `status`.
+   */
+  version: z.string().optional(),
+  startedAt: z.string().optional(),
+  uptimeSeconds: z.number().nonnegative().optional(),
+  checks: z
+    .object({
+      database: databaseCheckSchema,
+      migrations: migrationsCheckSchema,
+    })
+    .optional(),
+  setup: z
+    .object({
+      /** null — состояние неизвестно (БД недоступна или миграции не применены). */
+      initialized: z.boolean().nullable(),
+    })
+    .optional(),
 });
 
 export type HealthStatus = z.infer<typeof healthStatusSchema>;

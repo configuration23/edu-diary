@@ -8,7 +8,7 @@ import type { FastifyInstance } from 'fastify';
 
 import { normalizeIp } from '../../shared/actor';
 import type { AuthService } from '../auth';
-import { SESSION_COOKIE_NAME, SESSION_TTL_HOURS } from '../auth';
+import { SESSION_COOKIE_NAME } from '../auth';
 import type { SetupService } from './setup.service';
 
 /**
@@ -20,7 +20,14 @@ export function registerSetupRoutes(
   setup: SetupService,
   auth: AuthService,
 ): void {
-  app.get('/setup/status', async () => setupStatusResponseSchema.parse(await setup.status()));
+  app.get('/setup/status', async () => {
+    const status = await setup.status();
+
+    /** После настройки наружу — только название и логотип: состояние БД и миграции не показываем. */
+    return setupStatusResponseSchema.parse(
+      status.initialized ? { initialized: true, branding: status.branding } : status,
+    );
+  });
 
   app.post('/setup/complete', async (request, reply) => {
     const body = setupCompleteRequestSchema.parse(request.body);
@@ -45,7 +52,11 @@ export function registerSetupRoutes(
       httpOnly: true,
       sameSite: 'lax',
       secure: request.protocol === 'https',
-      maxAge: SESSION_TTL_HOURS * 3600,
+      /**
+       * Срок cookie — по абсолютному пределу сессии: сервер всё равно закроет её по простою, а
+       * браузер не должен терять cookie раньше жёсткого срока.
+       */
+      maxAge: Math.max(60, Math.floor((session.absoluteExpiresAt.getTime() - Date.now()) / 1000)),
     });
 
     const response: SetupCompleteResponseDto = setupCompleteResponseSchema.parse({

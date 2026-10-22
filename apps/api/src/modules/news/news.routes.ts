@@ -29,6 +29,14 @@ import { createNewsService, type NewsService, type NewsViewer } from './news.ser
  * таблицу, иначе привязка картинки искала бы её среди материалов заданий.
  */
 
+/**
+ * Верхняя граница приёма файла.
+ *
+ * Это защита памяти сервера, а не правило для человека: настройка «до 10 МБ» проверяется доменом.
+ * Умолчание библиотеки (1 МБ) меньше любого фото с телефона — из-за него и был `500`.
+ */
+const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
+
 export function createNewsModule(dependencies: {
   db: Parameters<typeof createNewsRepository>[0];
   /**
@@ -45,7 +53,13 @@ export function createNewsModule(dependencies: {
   const files: FileService = createFileService({ adapter: dependencies.storageAdapter });
 
   return async function newsModule(app: FastifyInstance): Promise<void> {
-    await app.register(multipart);
+    /**
+     * Без явных лимитов действует умолчание библиотеки — 1 МБ, и превышение приходит как
+     * исключение multipart. Для фото этого мало: телефоны отдают 3–8 МБ.
+     */
+    await app.register(multipart, {
+      limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 },
+    });
 
     const service: NewsService = createNewsService({ repository, images: imageRepository });
 
@@ -60,6 +74,12 @@ export function createNewsModule(dependencies: {
       { preHandler: requirePermission('news:write', 'all') },
       async (request, reply) => {
         const viewer = viewerOf(request);
+
+        /** Тело ещё не читаем: заявленный размер больше предела — сразу 413. */
+        const declaredBytes = Number(request.headers['content-length'] ?? '0');
+        if (Number.isFinite(declaredBytes) && declaredBytes > MAX_UPLOAD_BYTES) {
+          throw new AppError('PAYLOAD_TOO_LARGE', 'Файл больше допустимого размера');
+        }
 
         const file = await request.file();
         if (file === undefined) throw new AppError('VALIDATION_FAILED', 'Файл не передан');
