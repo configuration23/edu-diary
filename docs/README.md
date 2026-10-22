@@ -12,17 +12,22 @@
 | 4 | [DECISIONS.md](DECISIONS.md) | 33 записи ADR: что решили, почему, какие следствия | когда возникает вопрос «а почему так?» |
 | 5 | [ROADMAP.md](ROADMAP.md) | 8 этапов с критериями приёмки, порядок работ | в начале каждой итерации |
 | 6 | [DEVELOPMENT.md](DEVELOPMENT.md) | правила разработки, тестирования и развёртывания: границы модулей, контракты, миграции, тесты, шлюзы, коммиты, логи, собранные грабли | перед первой правкой и при разборе «как у нас принято» |
-| 7 | [PHASE-2-PLAN.md](PHASE-2-PLAN.md) | план закрытого Этапа 2: 8 внутренних шагов, что и где сделано | при разборе решений Этапа 2 |
-| 8 | [PHASE-3-PLAN.md](PHASE-3-PLAN.md) | план Этапа 3 (расписание и уроки): состав и решения | при разборе решений Этапа 3 |
-| 9 | [SCHEDULE-PLAN.md](SCHEDULE-PLAN.md) | согласованный план по расписанию и урокам после разбора концепции владельца; что делаем, что отложили и почему | перед работой над расписанием |
-| 10 | [PHASE-2-FIXES.md](PHASE-2-FIXES.md) | четыре партии правок по замечаниям с приёмки Этапа 2 | перед доработками Этапа 2 |
-| 11 | [PHASE-3-FIXES.md](PHASE-3-FIXES.md) | журнал правок по замечаниям к Этапу 3 (часть — уже сделана, часть — на проверке) | перед доработками Этапа 3 |
-| 12 | [VERSIONING.md](VERSIONING.md) | правило версий: что и когда растёт, где смотреть версию | при выпуске этапа |
-| 13 | [BACKLOG.md](BACKLOG.md) | отложенные работы и открытые решения, включая «ИБ: будущие работы» | перед планированием итерации |
-| 14 | [UI-KIT.md](UI-KIT.md) | правила раскладки, примитивы, вид «компактно/развёрнуто» | при правках интерфейса |
-| 15 | [UI-DECISIONS.md](UI-DECISIONS.md) | решения по оформлению и их причины | когда непонятно, «почему так выглядит» |
-| 16 | [UI-INVENTORY.md](UI-INVENTORY.md) | перечень экранов и элементов | при ревизии интерфейса |
-| 17 | [PHASE-6-PLAN.md](PHASE-6-PLAN.md) | план Этапа 6 (компоновка интерфейса) | при разборе решений Этапа 6 |
+| 7 | [BACKLOG.md](BACKLOG.md) | **единственный источник отложенного**: идеи, замечания, открытые решения, работы по ИБ | перед планированием итерации |
+| 8 | [VERSIONING.md](VERSIONING.md) | правило версий: что и когда растёт, где смотреть версию | при выпуске этапа |
+| 9 | [PHASE-2-PLAN.md](PHASE-2-PLAN.md) (done) | план Этапа 2: 8 внутренних шагов, что и где сделано | при разборе решений Этапа 2 |
+| 10 | [PHASE-2-FIXES.md](PHASE-2-FIXES.md) (done) | четыре партии правок по замечаниям с приёмки Этапа 2 | при разборе доработок Этапа 2 |
+| 11 | [PHASE-3-PLAN.md](PHASE-3-PLAN.md) (done) | план Этапа 3 (расписание и уроки) | при разборе решений Этапа 3 |
+| 12 | [SCHEDULE-PLAN.md](SCHEDULE-PLAN.md) (done) | согласованный план по расписанию и урокам; что делали, что отложили и почему | при разборе решений Этапа 3 |
+| 13 | [PHASE-3-FIXES.md](PHASE-3-FIXES.md) (done) | журнал правок по замечаниям к Этапу 3 | при разборе доработок Этапа 3 |
+| 14 | [PHASE-4-PLAN.md](PHASE-4-PLAN.md) (done) | план Этапа 4 (журнал); шаг «выгрузка и печать» отложен | при разборе решений Этапа 4 |
+| 15 | [PHASE-5-PLAN.md](PHASE-5-PLAN.md) (done) | план Этапа 5 (домашние задания и вложения) | при разборе решений Этапа 5 |
+| 16 | [PHASE-6-PLAN.md](PHASE-6-PLAN.md) (done) | план Этапа 6 (компоновка интерфейса) | при разборе решений Этапа 6 |
+| 17 | [SECURITY-PLAN.md](SECURITY-PLAN.md) | дополнительный этап «ИБ»: что вошло, что осталось, найденные дефекты | при разборе работ по ИБ |
+| 18 | [PHASE-7-PLAN.md](PHASE-7-PLAN.md) | Этап 7 «Эксплуатация»: состав и критерии приёмки, план ещё не начат | перед работой над этапом 7 |
+| 19 | [PHASE-8-PLAN.md](PHASE-8-PLAN.md) | Этап 8 «Ограниченный тест на живых людях» | перед пилотом |
+| 20 | [UI-KIT.md](UI-KIT.md) | правила раскладки, примитивы, вид «компактно/развёрнуто» | при правках интерфейса |
+| 21 | [UI-DECISIONS.md](UI-DECISIONS.md) | решения по оформлению и их причины | когда непонятно, «почему так выглядит» |
+| 22 | [UI-INVENTORY.md](UI-INVENTORY.md) | перечень экранов и элементов | при ревизии интерфейса |
 
 ## Состояние
 
@@ -30,15 +35,16 @@
 
 | Этап | Состояние | Где смотреть |
 |---|---|---|
-| 0. Фундамент репозитория | **готов**, в `main` | `README.md`, `.github/workflows/ci.yml`, `tools/quality/` |
-| 1. Мастер настройки, вход, пользователи и права | **готов**, в `main` | `apps/api/src/modules/{setup,auth,iam,audit,security,privacy}`, ADR-014…028 |
-| 2. Учебный год, группы, ученики, справочники | **готов**, в `main` | `apps/api/src/modules/{academics,staffing,settings}`, `PHASE-2-PLAN.md`, `PHASE-2-FIXES.md`, ADR-029…031 |
-| 3. Расписание и уроки | **принят владельцем**, в `main` (PR #9) | `apps/api/src/modules/schedule`, `apps/web/src/screens/{ScheduleScreen,ScheduleTemplateScreen,LessonsScreen,SubstitutionsScreen}.tsx`, `PHASE-3-PLAN.md`, `SCHEDULE-PLAN.md`, `PHASE-3-FIXES.md`, ADR-006…009, ADR-030…032 |
-| 4. Журнал: оценки и посещаемость | **закрыт владельцем**, ветка `feat/phase-4-journal` (шаг «выгрузка и печать» отложен) | `apps/api/src/modules/journal`, `packages/domain/src/journal.ts`, `packages/contracts/src/journal.ts`, `apps/web/src/screens/{LessonJournalScreen,GradesAttendanceScreen,ScheduleScreen}.tsx`, `PHASE-4-PLAN.md`, ADR-010, ADR-011 |
-| 5. Домашние задания и вложения | **сделан**, проверен на стенде владельца | `apps/api/src/modules/homework`, `apps/web/src/screens/{MyHomeworkScreen,SubmittedWorksScreen}.tsx`, `PHASE-5-PLAN.md`, `ARCHITECTURE.md` §7 |
-| 6. Компоновка интерфейса | **сделан** | `apps/web/src/components/ui`, `UI-KIT.md`, `UI-DECISIONS.md`, `UI-INVENTORY.md` |
-| 7. Эксплуатация | не начат | `ROADMAP.md`, `ARCHITECTURE.md` §12 |
-| ИБ (внешнее тестирование) | **в работе**, ветка `security/hardening` | `SECURITY.md` («Состояние работ по ИБ»), `BACKLOG.md` («ИБ: будущие работы») |
+| 0. Фундамент репозитория (done) | **готов**, в `main` | `README.md`, `.github/workflows/ci.yml`, `tools/quality/` |
+| 1. Мастер настройки, вход, пользователи и права (done) | **готов**, в `main` | `apps/api/src/modules/{setup,auth,iam,audit,security,privacy}`, ADR-014…028 |
+| 2. Учебный год, группы, ученики, справочники (done) | **готов**, в `main` | `apps/api/src/modules/{academics,staffing,settings}`, `PHASE-2-PLAN.md`, `PHASE-2-FIXES.md`, ADR-029…031 |
+| 3. Расписание и уроки (done) | **принят владельцем**, в `main` (PR #9) | `apps/api/src/modules/schedule`, `apps/web/src/screens/{ScheduleScreen,ScheduleTemplateScreen,LessonsScreen,SubstitutionsScreen}.tsx`, `PHASE-3-PLAN.md`, `SCHEDULE-PLAN.md`, `PHASE-3-FIXES.md`, ADR-006…009, ADR-030…032 |
+| 4. Журнал: оценки и посещаемость (done) | **закрыт владельцем** (шаг «выгрузка и печать» отложен) | `apps/api/src/modules/journal`, `packages/domain/src/journal.ts`, `packages/contracts/src/journal.ts`, `apps/web/src/screens/{LessonJournalScreen,GradesAttendanceScreen,ScheduleScreen}.tsx`, `PHASE-4-PLAN.md`, ADR-010, ADR-011 |
+| 5. Домашние задания и вложения (done) | **сделан**, проверен на стенде владельца | `apps/api/src/modules/homework`, `apps/web/src/screens/{MyHomeworkScreen,SubmittedWorksScreen}.tsx`, `PHASE-5-PLAN.md`, `ARCHITECTURE.md` §7 |
+| 6. Компоновка интерфейса (done) | **сделан** | `apps/web/src/components/ui`, `UI-KIT.md`, `UI-DECISIONS.md`, `UI-INVENTORY.md` |
+| 7. Эксплуатация | **не начат** | [`PHASE-7-PLAN.md`](PHASE-7-PLAN.md) |
+| 8. Ограниченный тест на живых людях | **не начат** | [`PHASE-8-PLAN.md`](PHASE-8-PLAN.md) |
+| ИБ (внешнее тестирование, дополнительный этап) | **в работе**, ветка `security/hardening` | `SECURITY.md` («Состояние работ по ИБ»), `BACKLOG.md` («ИБ: будущие работы») |
 
 Что уже есть в работающем виде: мастер первого запуска, вход с ролями и правами, пользователи,
 аудит изменений и доступа, события безопасности, согласия и политика обработки ПДн; учебные годы с
